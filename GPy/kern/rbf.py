@@ -171,7 +171,7 @@ class rbf(kernpart):
             self._psi1 = self.variance*np.exp(self._psi1_exponent)
 
             #psi2
-            self._psi2_denom = 2.*S[:,None,None,:]/self.lengthscale2+1. # N,M,M,Q
+            self._psi2_denom = 2.*S[:,None,None,:]/self.lengthscale2 + 1. # N,1,1,Q
             self._psi2_mudist = mu[:,None,None,:]-self._psi2_Zhat #N,M,M,Q
             self._psi2_mudist_sq = np.square(self._psi2_mudist)/(self.lengthscale2*self._psi2_denom)
             self._psi2_exponent = np.sum(-self._psi2_Zdist_sq/4. -self._psi2_mudist_sq -0.5*np.log(self._psi2_denom),-1) #N,M,M
