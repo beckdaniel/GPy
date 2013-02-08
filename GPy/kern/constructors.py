@@ -21,7 +21,8 @@ from periodic_Matern52 import periodic_Matern52 as periodic_Matern52part
 from product_orthogonal import product_orthogonal as product_orthogonalpart
 #TODO these s=constructors are not as clean as we'd like. Tidy the code up
 #using meta-classes to make the objects construct properly wthout them.
-
+from icm import icm as icmpart
+from coreg_kern import coreg_kern
 
 def rbf(D,variance=1., lengthscale=None,ARD=False):
     """
@@ -245,10 +246,15 @@ def periodic_Matern52(D,variance=1., lengthscale=None, period=2*np.pi,n_freq=10,
 def product_orthogonal(k1,k2):
     """
      Construct a product kernel
-     
+
     :param k1, k2: the kernels to multiply
     :type k1, k2: kernpart
     :rtype: kernel object
     """
     part = product_orthogonalpart(k1,k2)
     return kern(k1.D+k2.D, [part])
+
+def icm(base_kern,R,index=None):
+    part = icmpart(base_kern,R=R)
+    D = base_kern.D
+    return coreg_kern(D,[part],index=index)
