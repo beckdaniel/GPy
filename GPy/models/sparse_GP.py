@@ -202,6 +202,10 @@ class sparse_GP(GP):
         else:
             Kxx = self.kern.Kdiag(Xnew)
             var = Kxx - np.sum(Kx*np.dot(self.Kmmi - self.C/self.scale_factor**2, Kx),0)
+            #NOTE var has some negative values
+            if var[var<0].size >= 1:
+                print "NEGATIVE VALUES IN VAR"
+                var[var<0] = 0
 
         return mu,var[:,None]
 
