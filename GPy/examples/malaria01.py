@@ -59,7 +59,7 @@ for d,n in zip(districts,range(len(districts))):
 likelihoods = []
 
 
-distribution = GPy.likelihoods.likelihood_functions.Poisson()
+#distribution = GPy.likelihoods.likelihood_functions.Poisson()
 for y in Y_list:
     likelihoods.append(GPy.likelihoods.Gaussian(y))
     #likelihoods.append(GPy.likelihoods.EP(y,distribution))
@@ -69,21 +69,18 @@ noise = GPy.kern.white(1)
 base = rbf + noise
 kernel = GPy.kern.icm(base,R,index=0)
 
-m = GPy.models.multioutput_GP(X_list=X_list,likelihood_list=likelihoods,kernel=kernel)
-m.kern._set_params(np.array([1.,100.,1,1e-4,1e-4,1e-4,10.]))
-#m.ensure_default_constraints()
-#m.unconstrain("rbf_var")
+m = GPy.models.multioutput_GP(X_list=X_list,likelihood_list=likelihoods,kernel=kernel,M_i = 10)
+m.ensure_default_constraints()
+m.unconstrain('rbf_var')
 m.constrain_fixed('rbf_var',1.)
-#m.constrain_positive('rbf_var')
-m.constrain_positive('noise')
-m.constrain_positive('white_var')
-#m.constrain_fixed('len',60)
-m.constrain_positive('len')
 m.constrain_positive('kappa')
 m.constrain_positive('W')
-print "Coregionalization matrix"
+m.constrain_fixed('iip',m.Z[:,m.input_cols].flatten())
+m.set('len',100)
+m.set('W',9)
+print m
 print m.checkgrad(verbose=True)
 #m.update_likelihood_approximation()
-m.optimize()
-m.plot()
+#m.optimize()
+#m.plot()
 print m

@@ -5,9 +5,9 @@ import GPy
 pb.ion()
 pb.close('all')
 
-X1 = np.arange(0,100,5)[:,None]
-X2 = np.arange(150,250,5)[:,None]
-X3 = np.arange(300,400,5)[:,None]
+X1 = np.hstack([np.arange(0,100,5)[:,None],np.arange(0,100,5)[:,None]])
+X2 = np.hstack([np.arange(150,250,5)[:,None],np.arange(0,100,5)[:,None]])
+X3 = np.hstack([np.arange(300,400,5)[:,None],np.arange(0,100,5)[:,None]])
 X_list_ = [X1,X2,X3]
 X_list = [np.hstack([np.ones((20,1))*i,x]) for i,x in zip(range(3),X_list_)]
 X_ = np.vstack(X_list_)
@@ -31,21 +31,9 @@ likelihood2 = GPy.likelihoods.Gaussian(Y2)
 likelihood3 = GPy.likelihoods.Gaussian(Y3)
 likelihood_list = [likelihood1,likelihood2,likelihood3]
 
-#pb.plot(X1,Y1,'kx')
-#pb.plot(X2,Y2,'rx')
-#pb.plot(X3,Y3,'bx')
-
-base = GPy.kern.rbf(1)
+base = GPy.kern.rbf(2)
 kernel = GPy.kern.icm(base,3,index=0)
 
-#print "Base"
-#print base.K(X_)
-#print "Multikern"
-#print kernel.K(X)
-
-"""
-#pb.figure()
-# create simple GP model
 m = GPy.models.multioutput_GP(X_list,likelihood_list,M_i = 3)
 # optimize
 m.ensure_default_constraints()
@@ -54,36 +42,27 @@ m.constrain_fixed('rbf_var',1.)
 m.constrain_positive('kappa')
 m.constrain_positive('W')
 m.constrain_fixed('iip',m.Z[:,m.input_cols].flatten())
+#m.set('W',1)
+print m.get('W')
+m.set('len',2.)
 print m.checkgrad(verbose=1)
 m.optimize()
 print 'Coregionalization matrix'
 print m.kern.parts[0].B
-#pb.subplot(211)
-#m.plot_f()
-#pb.subplot(212)
-#m.plot()
 print m
-#y0,y1 = pb.ylim()
-#x0,x1 = pb.xlim()
-"""
-
 
 print "mGP"
-
+"""
 q = GPy.models.mGP(X_list,likelihood_list)
 q.ensure_default_constraints()
 q.unconstrain('rbf_var')
 q.constrain_fixed('rbf_var',1.)
 q.constrain_positive('kappa')
 q.constrain_positive('W')
+q.set('len',60)
 print q.checkgrad(verbose=1)
 q.optimize()
 print 'Coregionalization matrix'
 print q.kern.parts[0].B
-#pb.subplot(211)
-#m.plot_f()
-#pb.subplot(212)
-#q.plot()
 print q
-#y0,y1 = pb.ylim()
-#x0,x1 = pb.xlim()
+"""

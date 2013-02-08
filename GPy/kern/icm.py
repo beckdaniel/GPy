@@ -29,10 +29,9 @@ class icm(kernpart):
         self.D = self.base_kern.D
         self.R = R
         #self.W = np.ones((self.D,self.R)) * .70710678
-        #self.W = np.zeros((self.D,self.R))
-        self.W = np.ones((self.D,self.R))*1e-4
-        #self.W = np.arange(self.D*self.R).reshape(self.D,self.R) + 1
-        self.kappa = 1.
+        self.W = np.arange(self.D*self.R).reshape(self.D,self.R)
+        #self.W = np.ones((self.D,self.R))
+        self.kappa = 10.
         self.Nparam = self.base_kern.Nparam + self.D*self.R + 1
         self._set_params(np.hstack([self.base_kern._get_params(),self.W.flatten(),self.kappa]))
 
@@ -80,59 +79,34 @@ class icm(kernpart):
         i_cov, I_cov = self._cross_ref(X_i)
         if X2 is None: X2 = X
         j_cov, J_cov = self._cross_ref(X2_i)
-        dtheta = 0
+        dtheta_base = 0
+        dkappa = 0
         PK = np.zeros((self.R,self.R))
         for i,I in zip(i_cov,I_cov):
             for j,J in zip(j_cov,J_cov):
-                dtheta += self.B[i,j]*self.base_kern.dK_dtheta(partial[I,J],X[I,:],X2[J,:]) #NOTE target?
-                # dW #NOTE we are assuming partial is symmetric
+                dtheta_base += self.B[i,j]*self.base_kern.dK_dtheta(partial[I,J],X[I,:],X2[J,:]) #NOTE target?
                 PK[i,j] += np.sum(partial[I,J]*self.base_kern.K(X[I,:],X2[J,:])) #ARD?
-                dW = 2*np.sum(PK[:,None,:]*self.W[None,:,:],-1).flatten(1)
-                #for k in range(self.D):
-                #    #dW[k,i] += np.sum(self.W[k,j] * PK_ij)
-        #dW = self.dK_dW(partial,X,X2,target,X_i,X2_i).flatten()
-        dkappa= self.dK_dkappa(partial,X,X2,target,X_i,X2_i)
-        target += np.hstack([dtheta,dW,dkappa])
-
-    def dK_dW(self,partial,X,X2,target,X_i,X2_i): #TODO include in dK_dtheta
-        i_cov, I_cov = self._cross_ref(X_i)
-        if X2 is None: X2 = X
-        j_cov, J_cov = self._cross_ref(X2_i)
-        dWB = np.zeros((self.D,self.R))
-        for i,I in zip(i_cov,I_cov):
-            for j,J in zip(j_cov,J_cov):
-                PK_ij = partial[I,J]*self.base_kern.K(X[I,:],X2[J,:]) #ARD?
-                for k in range(self.D):
-                    dWB[k,i] += np.sum(self.W[k,j] * PK_ij)
-        dWB2 = np.zeros((self.D,self.R)) #FIXME compute efficiently
-        for i,I in zip(i_cov,I_cov):
-            for j,J in zip(j_cov,J_cov):
-                PK_ji = partial[J,I]*self.base_kern.K(X[J,:],X2[I,:]) #ARD?
-                for k in range(self.D):
-                    dWB2[k,i] += np.sum(self.W[k,j] * PK_ij)
-        return dWB + dWB2
-
-    def dK_dkappa(self,partial,X,X2,target,X_i,X2_i): #TODO include in dK_dtheta
-        i_cov, I_cov = self._cross_ref(X_i)
-        if X2 is None: X2 = X
-        j_cov, J_cov = self._cross_ref(X2_i)
-        dkappa = 0
-        for i,I,j,J in zip(i_cov,I_cov,j_cov,J_cov):
-                dkappa += np.sum(partial[I,J]*self.base_kern.K(X[I,:],X2[J,:])) #ARD?
-        return dkappa
+                #dW = 2*np.sum(PK[:,None,:]*self.W[None,:,:],-1).flatten(1)
+                if i == j:
+                    dkappa += np.sum(partial[I,J]*self.base_kern.K(X[I,:],X2[J,:])) #ARD?
+        dW = 2*np.sum(PK[:,None,:]*self.W[None,:,:],-1).flatten(1)
+        target += np.hstack([dtheta_base,dW,dkappa])
 
     def dKdiag_dtheta(self,partial,X,target,X_i):
         i_cov, I_cov = self._cross_ref(X_i)
         dtheta = 0
         dkappa = 0
         dW = np.zeros((self.D,self.R))
+        PK = np.zeros(self.R)[:,None]
         for i,I in zip(i_cov,I_cov):
             dtheta += self.B[i,i] * self.base_kern.dKdiag_dtheta(partial[I],X[I,:])
-            dkappa += np.sum(partial+self.base_kern.Kdiag(X))
+            dkappa += np.sum(partial[I]*self.base_kern.Kdiag(X[I,:]))
             PK_ij = partial[I]*self.base_kern.Kdiag(X[I,:]) #ARD?
+            PK[i] += np.sum(partial[I]*self.base_kern.Kdiag(X[I,:])) #ARD?
             for k in range(self.D):
                 dW[k,i] += 2*np.sum(self.W[k,i] * PK_ij)
-        print np.hstack([dtheta,dW.flatten(),dkappa])
+        dW2 = (PK * dW.T).flatten(1)
+        a =kjk
         target +=  np.hstack([dtheta,dW.flatten(),dkappa])
 
     def dK_dX(self,partial,X,X2,target,X_i,X2_i): #NOTE only gradients wrt X, or also X2?
@@ -154,11 +128,14 @@ class icm(kernpart):
     #---------------------------------------#
 
     def psi0(self,Z,mu,S,target,Z_i,mu_i,S_i): #NOTE WTF???
+        raise NotImplementedError
+        """
         zi_cov, zI_cov = self._cross_ref(Z_i)
         mui_cov, muI_cov = self._cross_ref(mu_i)
         si_cov, sI_cov = self._cross_ref(S_i)
         for zi,zI,mui,muI,si,sI in zip(zi_cov,zI_cov,mui_cov,muI_cov,si_cov,sI_cov):
             target[muI] += self.B[zi,zi]*self.base_kern.psi0(Z[zI,:],mu[muI,:],S[sI,:]) #NOTE target?
+        """
 
     def dpsi0_dtheta(self,partial,Z,mu,S,target):
         raise NotImplementedError

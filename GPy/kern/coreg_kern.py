@@ -88,7 +88,7 @@ class coreg_kern(kern):
         [p.dKdiag_dtheta(partial[s],X[s,i_s],target[ps],X_i=X_i[s]) for p,i_s,s,ps in zip(self.parts,self.input_slices,slices,self.param_slices)]
         return target
 
-    def dK_dX(self,partial,X,X2=None,slices1=None,slices2=None):
+    def dK_dX(self,partial,X,X2=None,slices1=None,slices2=None): #FIXME
         if X2 is None:
             X2 = X
         slices1, slices2 = self._process_slices(slices1,slices2)
@@ -107,6 +107,8 @@ class coreg_kern(kern):
         return target
 
     def psi0(self,Z,mu,S,slices=None):
+        raise NotImplementedError
+        """
         slices = self._process_slices(slices,False)
         Z,Z_i = self._extract_index(Z)
         mu,mu_i = self._extract_index(mu)
@@ -114,3 +116,8 @@ class coreg_kern(kern):
         target = np.zeros(mu.shape[0])
         [p.psi0(Z,mu[s],S[s],target[s],Z_i=Z_i[s],mu_i=mu_i[s],S_i=S_i[s]) for p,s in zip(self.parts,slices)]
         return target
+        """
+
+
+
+

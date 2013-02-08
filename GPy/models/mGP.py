@@ -5,14 +5,12 @@
 import numpy as np
 import pylab as pb
 from GP import GP
-from sparse_GP import sparse_GP
 from .. import likelihoods
 from .. import kern
 from ..util.plot import gpplot,x_frame1D,x_frame2D, Tango
 from ..likelihoods import EP
 
-#class multioutput_GP(GP):
-class multioutput_GP(sparse_GP):
+class mGP(GP):
     """
     Multiple output Gaussian Process with different likelihoods
 
@@ -33,19 +31,13 @@ class multioutput_GP(sparse_GP):
     """
     #TODO allow mixed likelihoods (i.e. non-gaussian)
 
-    def __init__(self,X_list,likelihood_list,kernel=None,Z_list=None,M_i=10,normalize_X=False, Xslices_list=None):
+    def __init__(self,X_list,likelihood_list,kernel=None,normalize_X=False, Xslices_list=None):
 
-        X = np.vstack(X_list)
+        X = np.vstack (X_list)
         Y = np.vstack([l.Y for l in likelihood_list])
         likelihood = likelihoods.Gaussian(Y)
         #distribution = likelihoods.likelihood_functions.Poisson()
         #likelihood = likelihoods.EP(Y,distribution)
-
-        if Z_list is None:
-            Z = np.vstack([np.random.permutation(Xi.copy())[:M_i] for Xi in X_list])
-        else:
-            Z = np.vstack([Z_list])
-            assert Z.shape[1]==X.shape[1]
 
         if kernel is None:
             base = kern.rbf(X.shape[1]-1)
@@ -54,20 +46,15 @@ class multioutput_GP(sparse_GP):
         Xslices = None #FIXME
 
 
-        self.Zos = self._get_output_slices(Z,kernel)
-        self.Xos = self._get_output_slices(X,kernel)
+        GP.__init__(self, X, likelihood, kernel, normalize_X=False)#, Xslices)
 
-        #GP.__init__(self, X, likelihood, kernel, normalize_X=False)#, Xslices)
-        sparse_GP.__init__(self, X, likelihood, kernel,Z, normalize_X=False)#, Xslices)
-
-
-    def _get_output_slices(self,X,kernel):
-        self.R = kernel.parts[0].R
-        self.index = kernel.index
-        _range = range(X.shape[1])
+    def _get_output_slices(self,X):
+        self.R = self.kern.parts[0].R
+        self.index = self.kern.index
+        _range = range(self.D + 1)
         _range.pop(self.index)
         self.input_cols = np.array(_range)
-        self._I = X[:,self.index] #TODO change in MGP.py
+        self._I = self.X[:,self.index]
         used_terms = []
         self.output_nums = np.array([s for s in self._I if s not in used_terms and not used_terms.append(s)])
         assert all([self.R >= s for s in self.output_nums]), "Coregionalization matrix rank is smaller than number of outputs"
@@ -79,23 +66,6 @@ class multioutput_GP(sparse_GP):
 
     def _index_on(self,X,index):
         return np.hstack([X[:,self.input_cols<self.index],index,X[:,self.input_cols>self.index]])
-
-
-    def _set_params(self, p):
-        _Z,_I = self._index_off(self.Z)
-        _Z = p[:self.M*(self.Q-1)].reshape(self.M,self.Q-1)
-        self.Z = self._index_on(_Z,_I)
-        self.kern._set_params(p[_Z.size:_Z.size+self.kern.Nparam])
-        self.likelihood._set_params(p[_Z.size+self.kern.Nparam:])
-        self._computations()
-
-    def _get_params(self):
-        _Z,_I = self._index_off(self.Z)
-        return np.hstack([_Z.flatten(),GP._get_params(self)])
-
-    def _get_param_names(self):
-        _Z,_I = self._index_off(self.Z)
-        return sum([['iip_%i_%i'%(i,j) for i in range(_Z.shape[0])] for j in range(_Z.shape[1])],[]) + GP._get_param_names(self)
 
 
     def predict(self,Xnew, slices=None, full_cov=False):
