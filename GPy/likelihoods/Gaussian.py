@@ -38,13 +38,13 @@ class Gaussian(likelihood):
 
     def predictive_values(self,mu,var):
         """
-        Un-normalise the prediction and add the likelihood variance, then return the 5%, 95% interval
+        Un-normalise the prediction and add the likelihood variance, then return the 95% interval
         """
         mean = mu*self._std + self._mean
         true_var = (var + self._variance)*self._std**2
-        _5pc = mean + - 2.*np.sqrt(true_var)
-        _95pc = mean + 2.*np.sqrt(true_var)
-        return mean, _5pc, _95pc
+        _25pc = mean - 2.*np.sqrt(true_var)
+        _975pc = mean + 2.*np.sqrt(true_var)
+        return mean, _25pc, _975pc
 
     def fit_full(self):
         """
