@@ -37,12 +37,15 @@ try:
 except ImportError:
     print "no sphinx"
 
-sys.path.insert(0, os.getcwd() + "/..")
+#sys.path.insert(0, os.getcwd() + "/..")
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('..'))
+#sys.path.insert(0, os.path.abspath('../GPy'))
+
+#print "sys.path.after:", sys.path
+
 
 # If your extensions are in another directory, add it here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
@@ -112,7 +115,7 @@ for mod_name in MOCK_MODULES:
 # ----------------------- READTHEDOCS ------------------
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
-#import GPy
+import GPy
 
 if on_rtd:
     sys.path.append("../GPy")
