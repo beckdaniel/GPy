@@ -176,7 +176,7 @@ class GP(model):
         #now push through likelihood TODO
         mean, _025pm, _975pm = self.likelihood.predictive_values(mu, var)
 
-        return mean, var, _025pm, _975pm
+        return mean[:,None], var, _025pm[:,None], _975pm[:,None]
 
 
     def plot_f(self, samples=0, plot_limits=None, which_data='all', which_functions='all', resolution=None, full_cov=False):
@@ -226,13 +226,16 @@ class GP(model):
 
         elif self.X.shape[1] == 2:
             resolution = resolution or 50
-            Xnew, xmin, xmax, xx, yy = x_frame2D(self.X, plot_limits,resolution)
+            Xnew, xx, yy, x, y, xmin, xmax = x_frame2D(self.X, plot_limits,resolution)
             m,v = self._raw_predict(Xnew, slices=which_functions)
-            m = m.reshape(resolution,resolution).T
-            pb.contour(xx,yy,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
-            pb.scatter(Xorig[:,0],Xorig[:,1],40,Yorig,linewidth=0,cmap=pb.cm.jet,vmin=m.min(), vmax=m.max())
+            m = m.reshape(resolution,resolution)
+            pb.contour(x,y,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
+            pb.scatter(self.X[:,0],self.X[:,1],40,self.likelihood.Y,linewidth=0,cmap=pb.cm.jet,vmin=m.min(), vmax=m.max())
             pb.xlim(xmin[0],xmax[0])
             pb.ylim(xmin[1],xmax[1])
+            if hasattr(self,'Z'):
+                pb.scatter(self.Z[:,0],self.Z[:,1],'kx',mew=1.5,markersize=12)
+
         else:
             raise NotImplementedError, "Cannot define a frame with more than two input dimensions"
 
@@ -244,9 +247,7 @@ class GP(model):
             which_data = slice(None)
 
         if self.X.shape[1] == 1:
-
             Xu = self.X * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
-
             Xnew, xmin, xmax = x_frame1D(Xu, plot_limits=plot_limits)
             m, var, lower, upper = self.predict(Xnew, slices=which_functions)
             gpplot(Xnew,m, lower, upper)
@@ -259,16 +260,19 @@ class GP(model):
                 Zu = self.Z*self._Xstd + self._Xmean
                 pb.plot(Zu,Zu*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
 
-        elif self.X.shape[1]==2: #FIXME
+        elif self.X.shape[1]==2:
             resolution = resolution or 50
-            Xnew, xx, yy, xmin, xmax = x_frame2D(self.X, plot_limits,resolution)
-            x, y = np.linspace(xmin[0],xmax[0],resolution), np.linspace(xmin[1],xmax[1],resolution)
+            Xu = self.X * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
+            Xnew, xx, yy, x, y, xmin, xmax = x_frame2D(Xu, plot_limits,resolution)
             m, var, lower, upper = self.predict(Xnew, slices=which_functions)
-            m = m.reshape(resolution,resolution).T
+            m = m.reshape(resolution,resolution)
             pb.contour(x,y,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
-            Yf = self.likelihood.Y.flatten()
-            pb.scatter(self.X[:,0], self.X[:,1], 40, Yf, cmap=pb.cm.jet,vmin=m.min(),vmax=m.max(), linewidth=0.)
+            pb.scatter(Xu[which_data,0], Xu[which_data,1], 40, self.likelihood.Y, cmap=pb.cm.jet,vmin=m.min(),vmax=m.max(), linewidth=0.)
             pb.xlim(xmin[0],xmax[0])
             pb.ylim(xmin[1],xmax[1])
+            if hasattr(self,'Z'):
+                Zu = self.Z*self._Xstd + self._Xmean
+                pb.scatter(Zu[:,0],Zu[:,1],'kx',mew=1.5,markersize=12)
+
         else:
             raise NotImplementedError, "Cannot define a frame with more than two input dimensions"

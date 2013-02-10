@@ -43,12 +43,12 @@ kernel = GPy.kern.icm(base,3,index=0)
 #print "Multikern"
 #print kernel.K(X)
 
-"""
 #pb.figure()
 # create simple GP model
-m = GPy.models.multioutput_GP(X_list,likelihood_list,M_i = 3)
+m = GPy.models.multioutput_GP(X_list,likelihood_list,M_i = 3,normalize_X=True)
 # optimize
 m.ensure_default_constraints()
+m.set('len',.1)
 m.unconstrain('rbf_var')
 m.constrain_fixed('rbf_var',1.)
 m.constrain_positive('kappa')
@@ -59,15 +59,14 @@ m.optimize()
 print 'Coregionalization matrix'
 print m.kern.parts[0].B
 #pb.subplot(211)
-#m.plot_f()
+m.plot()
 #pb.subplot(212)
 #m.plot()
 print m
 #y0,y1 = pb.ylim()
 #x0,x1 = pb.xlim()
+
 """
-
-
 print "mGP"
 
 q = GPy.models.mGP(X_list,likelihood_list)
@@ -83,7 +82,8 @@ print q.kern.parts[0].B
 #pb.subplot(211)
 #m.plot_f()
 #pb.subplot(212)
-#q.plot()
+q.plot()
 print q
 #y0,y1 = pb.ylim()
 #x0,x1 = pb.xlim()
+"""

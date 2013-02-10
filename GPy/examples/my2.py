@@ -31,8 +31,8 @@ noise = GPy.kern.white(1)
 kernel = rbf + noise
 
 # create simple GP model
-#m = GPy.models.sparse_GP_regression(X, Y, kernel, M=M,normalize_Y=True,normalize_X=True)
-m = GPy.models.GP_regression(X, Y, kernel, normalize_Y=True,normalize_X=True)
+m = GPy.models.sparse_GP_regression(X, Y, kernel, M=M,normalize_Y=True,normalize_X=True)
+#m = GPy.models.GP_regression(X, Y, kernel, normalize_Y=True,normalize_X=True)
 
 m.constrain_positive('(variance|lengthscale|precision)')
 #m.constrain_fixed('iip',m.Z.flatten())

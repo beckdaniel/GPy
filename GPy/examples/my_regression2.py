@@ -33,7 +33,7 @@ likelihood_list = [likelihood1,likelihood2,likelihood3]
 
 base = GPy.kern.rbf(2)
 kernel = GPy.kern.icm(base,3,index=0)
-
+"""
 m = GPy.models.multioutput_GP(X_list,likelihood_list,M_i = 3)
 # optimize
 m.ensure_default_constraints()
@@ -65,4 +65,4 @@ q.optimize()
 print 'Coregionalization matrix'
 print q.kern.parts[0].B
 print q
-"""
+q.plot_f()

@@ -11,7 +11,6 @@ from .. import kern
 from ..util.plot import gpplot,x_frame1D,x_frame2D, Tango
 from ..likelihoods import EP
 
-#class multioutput_GP(GP):
 class multioutput_GP(sparse_GP):
     """
     Multiple output Gaussian Process with different likelihoods
@@ -37,14 +36,14 @@ class multioutput_GP(sparse_GP):
 
         X = np.vstack(X_list)
         Y = np.vstack([l.Y for l in likelihood_list])
-        likelihood = likelihoods.Gaussian(Y)
+        likelihood = likelihoods.Gaussian(Y,normalize=True)
         #distribution = likelihoods.likelihood_functions.Poisson()
         #likelihood = likelihoods.EP(Y,distribution)
 
         if Z_list is None:
             Z = np.vstack([np.random.permutation(Xi.copy())[:M_i] for Xi in X_list])
         else:
-            Z = np.vstack([Z_list])
+            Z = np.vstack(Z_list)
             assert Z.shape[1]==X.shape[1]
 
         if kernel is None:
@@ -53,13 +52,26 @@ class multioutput_GP(sparse_GP):
 
         Xslices = None #FIXME
 
-
         self.Zos = self._get_output_slices(Z,kernel)
         self.Xos = self._get_output_slices(X,kernel)
 
+        # Normalize: better to normalize befor passing to sparse_GP
+        if normalize_X:
+            _Xmean = X.mean(0)[None,:]
+            _Xstd = X.std(0)[None,:]
+            _Xmean[:,self.index] = 0 # Index column shouldn't be normilized
+            _Xstd[:,self.index] = 1 # Index column shouldn't be normilized
+            X = (X.copy() - _Xmean) / _Xstd
+            #if hasattr(self,'Z'):
+            Z = (Z.copy() - _Xmean) / _Xstd
+        else:
+            _Xmean = np.zeros((1,X.shape[1]))
+            _Xstd = np.ones((1,X.shape[1]))
+
         #GP.__init__(self, X, likelihood, kernel, normalize_X=False)#, Xslices)
         sparse_GP.__init__(self, X, likelihood, kernel,Z, normalize_X=False)#, Xslices)
-
+        self._Xmean = _Xmean
+        self._Xstd = _Xstd
 
     def _get_output_slices(self,X,kernel):
         self.R = kernel.parts[0].R
@@ -80,7 +92,6 @@ class multioutput_GP(sparse_GP):
     def _index_on(self,X,index):
         return np.hstack([X[:,self.input_cols<self.index],index,X[:,self.input_cols>self.index]])
 
-
     def _set_params(self, p):
         _Z,_I = self._index_off(self.Z)
         _Z = p[:self.M*(self.Q-1)].reshape(self.M,self.Q-1)
@@ -97,45 +108,6 @@ class multioutput_GP(sparse_GP):
         _Z,_I = self._index_off(self.Z)
         return sum([['iip_%i_%i'%(i,j) for i in range(_Z.shape[0])] for j in range(_Z.shape[1])],[]) + GP._get_param_names(self)
 
-
-    def predict(self,Xnew, slices=None, full_cov=False):
-        """
-        Predict the function(s) at the new point(s) Xnew.
-
-        Arguments
-        ---------
-        :param Xnew: The points at which to make a prediction
-        :type Xnew: np.ndarray, Nnew x self.Q
-        :param slices:  specifies which outputs kernel(s) the Xnew correspond to (see below)
-        :type slices: (None, list of slice objects, list of ints)
-        :param full_cov: whether to return the folll covariance matrix, or just the diagonal
-        :type full_cov: bool
-        :rtype: posterior mean,  a Numpy array, Nnew x self.D
-        :rtype: posterior variance, a Numpy array, Nnew x 1 if full_cov=False, Nnew x Nnew otherwise
-        :rtype: lower and upper boundaries of the 95% confidence intervals, Numpy arrays,  Nnew x self.D
-
-        .. Note:: "slices" specifies how the the points X_new co-vary wich the training points.
-
-             - If None, the new points covary throigh every kernel part (default)
-             - If a list of slices, the i^th slice specifies which data are affected by the i^th kernel part
-             - If a list of booleans, specifying which kernel parts are active
-
-           If full_cov and self.D > 1, the return shape of var is Nnew x Nnew x self.D. If self.D == 1, the return shape is Nnew x Nnew.
-           This is to allow for different normalisations of the output dimensions.
-
-        """
-        #normalise X values
-        Xnew, index_ = self._index_off(Xnew)
-        Xnew = (Xnew.copy() - self._Xmean) / self._Xstd
-        Xnew = self._index_on(Xnew,index_)
-
-        #predict
-        mu, var = self._raw_predict(Xnew, slices, full_cov)
-
-        #now push through likelihood TODO
-        mean, _025pm, _975pm = self.likelihood.predictive_values(mu, var)
-
-        return mean, var, _025pm, _975pm
 
     def plot_f(self, samples=0, plot_limits=None, which_data='all', which_functions='all', resolution=None, full_cov=False):
         """
@@ -163,31 +135,28 @@ class multioutput_GP(sparse_GP):
             which_data = slice(None)
 
         if self.D == 1:
-            output_slices = self._get_output_slices(self.X)
-            Xnew = []
-            for os,on in zip(output_slices,self.output_nums):
-                X_, index_ = self._index_off(self.X[os,:])
-                Xnew, xmin, xmax = x_frame1D(X_, plot_limits=plot_limits)
+            for os,on,oz in zip(self.Xos,self.output_nums,self.Zos):
+                Xu, index_ = self._index_off(self.X[os,:])
+                Xnew, xmin, xmax = x_frame1D(Xu, plot_limits=plot_limits)
                 I_ = np.repeat(on,resolution or 200)[:,None]
                 Xnew = self._index_on(Xnew,I_)
-                #Xnew_ = self._index_on(Xnew_,I_)
-                #Xnew.append(Xnew_)
-            #Xnew = np.vstack(Xnew)
-            #xmin,xmax = Xnew.min(),Xnew.max()
                 pb.figure()
                 if samples == 0:
                     m,v = self._raw_predict(Xnew, slices=which_functions)
-                    gpplot(Xnew[:,self.input_cols],m,m-2*np.sqrt(v),m+2*np.sqrt(v))
-                else:
+                    gpplot(Xnew[which_data,self.input_cols],m,m-2*np.sqrt(v),m+2*np.sqrt(v))
+                else: #FIXME
                     m,v = self._raw_predict(Xnew, slices=which_functions,full_cov=True)
                     Ysim = np.random.multivariate_normal(m.flatten(),v,samples)
-                    gpplot(Xnew[:,self.input_cols],m,m-2*np.sqrt(np.diag(v)[:,None]),m+2*np.sqrt(np.diag(v))[:,None])
+                    gpplot(Xnew[which_data,self.input_cols],m[which_data,:],m[which_data,:]-2*np.sqrt(np.diag(v)[which_data,:]),m+2*np.sqrt(np.diag(v))[which_data,:])
                     for i in range(samples):
                         pb.plot(Xnew[:,self.input_cols],Ysim[i,:],Tango.coloursHex['darkBlue'],linewidth=0.25)
 
                 pb.plot(self.X[which_data,self.input_cols],self.likelihood.Y[which_data],'kx',mew=1.5)
                 pb.xlim(xmin,xmax)
-
+                ymin,ymax = min(np.append(self.likelihood.Y,m-2*np.sqrt(np.diag(v)[:,None]))), max(np.append(self.likelihood.Y,m+2*np.sqrt(np.diag(v)[:,None])))
+                ymin, ymax = ymin - 0.1*(ymax - ymin), ymax + 0.1*(ymax - ymin)
+                pb.ylim(ymin,ymax)
+                pb.plot(self.Z,self.Z*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
         elif self.D == 2: #FIXME
             resolution = resolution or 50
             Xnew, xmin, xmax, xx, yy = x_frame2D(self.X, plot_limits,resolution)
@@ -208,25 +177,24 @@ class multioutput_GP(sparse_GP):
             which_data = slice(None)
 
         if self.D == 1:
-
-            output_slices = self._get_output_slices(self.X)
-            Xnew = []
-            for os,on in zip(output_slices,self.output_nums):
-                X_, index_ = self._index_off(self.X[os,:])
-                Xnew, xmin, xmax = x_frame1D(X_, plot_limits=plot_limits)
+            Xnew = [] #needed?
+            for os,on,oz in zip(self.Xos,self.output_nums,self.Zos):
+                Xu = self.X[os,:] * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
+                Xu, index_ = self._index_off(Xu)
+                Xnew, xmin, xmax = x_frame1D(Xu, plot_limits=plot_limits)
                 I_ = np.repeat(on,resolution or 200)[:,None]
                 Xnew = self._index_on(Xnew,I_)
-                #Xnew.append(Xnew_)
-                #Xnew = np.vstack(Xnew)
-                #xmin,xmax = Xnew.min(),Xnew.max()
                 pb.figure()
                 m, var, lower, upper = self.predict(Xnew, slices=which_functions)
                 gpplot(Xnew[:,self.input_cols],m, lower, upper)
-                pb.plot(self.X[which_data,self.input_cols],self.likelihood.data[which_data],'kx',mew=1.5)
+                pb.plot(Xu,self.likelihood.data[os],'kx',mew=1.5)
                 ymin,ymax = min(np.append(self.likelihood.data,lower)), max(np.append(self.likelihood.data,upper))
                 ymin, ymax = ymin - 0.1*(ymax - ymin), ymax + 0.1*(ymax - ymin)
                 pb.xlim(xmin,xmax)
                 pb.ylim(ymin,ymax)
+                Zu = self.Z * self._Xstd + self._Xmean
+                Zu, index_ = self._index_off(Zu)
+                pb.plot(Zu,Zu*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
 
         elif self.X.shape[1]==2:
             resolution = resolution or 50

@@ -100,6 +100,7 @@ def x_frame2D(X,plot_limits=None,resolution=None):
         raise ValueError, "Bad limits for plotting"
 
     resolution = resolution or 50
-    xx,yy = np.mgrid[xmin[0]:xmax[0]:1j*resolution,xmin[1]:xmax[1]:1j*resolution]
+    x, y = np.linspace(xmin[0],xmax[0],resolution), np.linspace(xmin[1],xmax[1],resolution)
+    xx,yy = np.meshgrid(x,y)
     Xnew = np.vstack((xx.flatten(),yy.flatten())).T
-    return Xnew, xx, yy, xmin, xmax
+    return Xnew, xx, yy, x, y, xmin, xmax
