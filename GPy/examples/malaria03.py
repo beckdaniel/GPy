@@ -103,10 +103,10 @@ m.ensure_default_constraints()
 m.unconstrain('rbf_var')
 m.constrain_fixed('rbf_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
 m.constrain_positive('kappa')
-m.constrain_positive('W')
+#m.constrain_positive('W')
 m.constrain_fixed('iip',m.Z[:,m.input_cols].flatten()) #No need to optimize this
 m.set('len',.1) #NOTE the model works better initializing lengthscale as .1
-
+m.set('W',np.random.rand(0,1,2*R))
 # Optimize
 print m.checkgrad(verbose=True)
 m.optimize()
