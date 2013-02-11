@@ -176,7 +176,7 @@ class GP(model):
         #now push through likelihood TODO
         mean, _025pm, _975pm = self.likelihood.predictive_values(mu, var)
 
-        return mean[:,None], var, _025pm[:,None], _975pm[:,None]
+        return mean, var, _025pm, _975pm
 
 
     def plot_f(self, samples=0, plot_limits=None, which_data='all', which_functions='all', resolution=None, full_cov=False):

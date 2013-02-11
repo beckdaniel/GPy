@@ -18,9 +18,12 @@ data structure:
 The model is applied to  Districts that are geographicaly close to each other
 W is a 2 x R matrix
 ---------------------------------------------
-Masindi <-                            Luweero
+Masindi <-                            Luwero
            Mpigi - Wakiso - Kampala - Mukono
 """
+#NOTE this test doesn't consider ndvi
+#NOTE this test doesn't include weather data
+
 import numpy as np
 import pylab as pb
 import shelve
@@ -40,7 +43,7 @@ def string2date(string):
 filename='../../../playground/malaria/allDataWithoutWeather_20130125'
 df=shelve.open(filename)
 #districts = df.keys()
-districts = ['Masindi','Mpigi']#,'Wakiso','Kampala','Mukono','Luwero']
+districts = ['Masindi','Mpigi','Wakiso','Kampala','Mukono','Luwero','Tororo']
 
 X_list = [] # Input list
 
@@ -124,6 +127,8 @@ m.optimize()
 
 # Plots
 #m.plot()
-m.plot_HD(1,1)
+for r in range(R):
+    pb.figure()
+    m.plot_HD(input_col=1,output_num=r)
 print m
 print np.round(m.kern.parts[0].B,2)

@@ -211,6 +211,7 @@ class multioutput_GP(sparse_GP):
             raise NotImplementedError, "Cannot define a frame with more than two input dimensions"
 
     def plot_HD(self,input_col,output_num,plot_limits=None,which_data='all',which_functions='all',resolution=None,full_cov=False):
+        # input_col \in self.input_cols
         if which_functions=='all':
             which_functions = [True]*self.kern.Nparts
         if which_data=='all':
@@ -224,16 +225,15 @@ class multioutput_GP(sparse_GP):
         I_ = np.repeat(output_num,resolution or 200)[:,None]
         Xnew = self._index_on(Xnew,I_)
         m, var, lower, upper = self.predict(Xnew, slices=which_functions)
-        a = kjkjk
-        gpplot(Xnew[:,self.input_cols],m, lower, upper)
-        pb.plot(Xu,self.likelihood.data[os],'kx',mew=1.5)
-        ymin,ymax = min(np.append(self.likelihood.data[os],lower)), max(np.append(self.likelihood.data[os],upper))
-        ymin, ymax = ymin - 0.1*(ymax - ymin), ymax + 0.1*(ymax - ymin)
-        pb.xlim(xmin,xmax)
-        pb.ylim(ymin,ymax)
+        Xu = self._index_on(Xu,index_)
+        gpplot(Xnew[:,input_col],m, lower, upper)
+        pb.plot(Xu[:,input_col],self.likelihood.data[os],'kx',mew=1.5)
+        #ymin,ymax = min(np.append(self.likelihood.data[os],lower)), max(np.append(self.likelihood.data[os],upper))
+        #ymin, ymax = ymin - 0.1*(ymax - ymin), ymax + 0.1*(ymax - ymin)
+        #pb.xlim(xmin,xmax)
+        #pb.ylim(ymin,ymax)
         Zu = self.Z * self._Xstd + self._Xmean
-        Zu, index_ = self._index_off(Zu)
-        pb.plot(Zu,Zu*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
+        pb.plot(Zu[:,input_col],Zu[:,input_col]*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
 
 
     def x_frameHD(self,X,input_col,plot_limits=None,resolution=None):
@@ -250,7 +250,7 @@ class multioutput_GP(sparse_GP):
             raise ValueError, "Bad limits for plotting"
 
         Xnew = np.hstack([np.repeat(mean_i,resolution or 200)[:,None] for mean_i in xmean.flatten()])
-        Xnew_i = np.linspace(xmin[input_col],xmax[input_col],resolution or 200)[:,None]
-        Xnew[:,input_col] = Xnew_i.flatten()
+        Xnew_i = np.linspace(xmin[0],xmax[0],resolution or 200)[:,None] #FIXME xmin[input_col -1]
+        Xnew[:,0] = Xnew_i.flatten() #FIXME
         return Xnew, xmin[input_col], xmax[input_col]
 
