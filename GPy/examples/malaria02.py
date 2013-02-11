@@ -7,6 +7,9 @@ W is a 2 x R matrix
 Masindi <-                            Luweero
            Mpigi - Wakiso - Kampala - Mukono
 """
+#NOTE this test just considers incidences
+#NOTE this test doesn't use the last dataset
+#NOTE error in reference date definition
 
 import numpy as np
 import pylab as pb

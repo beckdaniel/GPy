@@ -2,6 +2,10 @@
 Multioutput GP for malaria counts
 dataset: ../../../playground/malaria/allMalariaData
 """
+#NOTE this test just considers incidences
+#NOTE this test doesn't use the last dataset
+#NOTE error in reference date definition
+#NOTE this test doesn't define W as a 2 x R matrix
 
 import numpy as np
 import pylab as pb
@@ -50,7 +54,7 @@ for d,n in zip(districts,range(len(districts))):
                 correct_value = False
             if correct_value:
                 #newX = (new_date[-1] - new_date[0]).days
-                X.append((new_date[-1] - new_date[0]).days)
+                X.append((new_date[-1] - new_date[0]).days) #NOTE this is wrong, reference date should not change for each output
     assert len(X) == len(Y)
     X = np.array(X)[:,None]
     Y = np.array(Y)[:,None]

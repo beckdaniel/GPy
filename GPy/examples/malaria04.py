@@ -21,7 +21,6 @@ W is a 2 x R matrix
 Masindi <-                            Luweero
            Mpigi - Wakiso - Kampala - Mukono
 """
-
 import numpy as np
 import pylab as pb
 import shelve
@@ -41,11 +40,16 @@ def string2date(string):
 filename='../../../playground/malaria/allDataWithoutWeather_20130125'
 df=shelve.open(filename)
 #districts = df.keys()
-districts = ['Masindi','Mpigi','Wakiso','Kampala','Mukono','Luwero']
+districts = ['Masindi','Mpigi']#,'Wakiso','Kampala','Mukono','Luwero']
+
+X_list = [] # Input list
 
 # Format dates and number of incidences
 date_inc = []
 incidences = []
+altitude = []
+longitude = []
+latitude = []
 start_date = datetime.date(2003,01,01) # Reference date, i.e. time zero
 for d,n in zip(districts,range(len(districts))):
     N = len(df[d]['malaria'].keys())
@@ -67,10 +71,16 @@ for d,n in zip(districts,range(len(districts))):
                     date_inc[-1].append((new_date[-1] - start_date).days)
                     incidences[-1].append(float(incidence_i))
 
+    num_obs = len(incidences[-1])
+    output_number = np.repeat(n,num_obs)[:,None] # This is the index column for the coreg_kernel
     incidences[-1] = np.array(incidences[-1])[:,None]
     date_inc[-1] = np.array(date_inc[-1])[:,None]
-    output_number = np.repeat(n,date_inc[-1].size)[:,None] # This is the index column for the coreg_kernel
-    date_inc[-1] = np.hstack([output_number,date_inc[-1]])
+    #date_inc[-1] = np.hstack([output_number,date_inc[-1]])
+    longitude.append(np.repeat(df[d]['longitude'],num_obs)[:,None])
+    latitude.append(np.repeat(df[d]['latitude'],num_obs)[:,None])
+    X_list.append(np.hstack([output_number,date_inc[-1],longitude[-1],latitude[-1]]))
+
+
 
 #Set number of districts to work with (i.e. number of outputs)
 R = len(districts)
@@ -82,19 +92,21 @@ for y in incidences:
 
 # Define the inducing inputs
 M = R #NOTE: the model won't work properly if M is different from R
-Zindex = [np.repeat(i,M)[:,None] for i in range(len(date_inc))]
-_Z = [np.linspace(0,1300,M)[:,None] for a in range(M)]
-Z_date_inc = [np.hstack([_i,_Z]) for _i,_Z in zip(Zindex,_Z)]
+Z_index = [np.repeat(i,M)[:,None] for i in range(len(X_list))]
+Z_date_inc = [np.linspace(0,1300,M)[:,None] for x in X_list ]
+Z_longitude = [ x[:M,:] for x in longitude]
+Z_latitude = [ x[:M,:] for x in latitude]
+Z_list = [ np.hstack([a,b,c,d]) for a,b,c,d in zip(Z_index,Z_date_inc,Z_longitude,Z_latitude) ]
 
 # Define coreg_kern and base kernels
-rbf = GPy.kern.rbf(1)
-bias = GPy.kern.bias(1)
-noise = GPy.kern.white(1)
+rbf = GPy.kern.rbf(3)
+bias = GPy.kern.bias(3)
+noise = GPy.kern.white(3)
 base = rbf + noise #+ bias
 kernel = GPy.kern.icm(base,R,index=0,Dw=2)
 
 # Define the model
-m = GPy.models.multioutput_GP(X_list=date_inc,likelihood_list=likelihoods,kernel=kernel,Z_list=Z_date_inc,normalize_X=True) #NOTE: better to normalize X and Y
+m = GPy.models.multioutput_GP(X_list, likelihoods, kernel,Z_list, normalize_X=True) #NOTE: better to normalize X and Y
 
 # Constraints
 m.scale_factor = 1.
@@ -111,6 +123,7 @@ print m.checkgrad(verbose=True)
 m.optimize()
 
 # Plots
-m.plot()
+#m.plot()
+m.plot_HD(1,1)
 print m
 print np.round(m.kern.parts[0].B,2)

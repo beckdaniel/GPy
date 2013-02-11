@@ -21,6 +21,7 @@ W is a 2 x R matrix
 Masindi <-                            Luweero
            Mpigi - Wakiso - Kampala - Mukono
 """
+#NOTE this test just considers incidences
 
 import numpy as np
 import pylab as pb
