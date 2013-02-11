@@ -52,7 +52,6 @@ for d,n in zip(districts,range(len(districts))):
                 print "Unexpected value: %s - %s - %s" %(d,i,df[d][i])
                 correct_value = False
             if correct_value:
-                #newX = (new_date[-1] - new_date[0]).days
                 X.append((new_date[-1] - new_date[0]).days)
     assert len(X) == len(Y)
     X = np.array(X)[:,None]
