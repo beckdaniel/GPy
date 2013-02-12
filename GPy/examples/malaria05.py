@@ -1,6 +1,7 @@
 """
 Multioutput GP for malaria counts
-dataset: ../../../playground/malaria/allDataWithoutWeather_20130125
+dataset 1: ../../../playground/malaria/allDataWithoutWeather_20130125
+dataset 2: ../../../playground/malaria/allWeatherStationData_20130211
 data structure:
 - district:
     - malaria:
@@ -47,12 +48,12 @@ X_list = [] # Input list
 
 # Read data
 file_1='../../../playground/malaria/allDataWithoutWeather_20130125'
-file_2='../../../playground/malaria/allWeatherStationData_20130124'
+file_2='../../../playground/malaria/allWeatherStationData_20130211'
 start_date = datetime.date(2003,01,05) # Reference date, i.e. time zero
 
 df=shelve.open(file_1)
 hk=shelve.open(file_2)
-
+"""
 # Format allDataWithoutWeather_20130125
 #districts = df.keys()
 districts = ['Masindi','Mpigi','Wakiso','Kampala','Mukono','Luwero','Tororo']
@@ -87,29 +88,117 @@ for d,n in zip(districts,range(len(districts))):
     output_number = np.repeat(n,num_obs)[:,None] # This is the index column for the coreg_kernel
     incidences[-1] = np.array(incidences[-1])[:,None]
     date_inc[-1] = np.array(date_inc[-1])[:,None]
-    #date_inc[-1] = np.hstack([output_number,date_inc[-1]])
+    altitude.append(np.repeat(df[d]['altitude'],num_obs)[:,None])
     longitude.append(np.repeat(df[d]['longitude'],num_obs)[:,None])
     latitude.append(np.repeat(df[d]['latitude'],num_obs)[:,None])
     X_list.append(np.hstack([output_number,date_inc[-1],longitude[-1],latitude[-1]]))
-
+"""
 # Format weather data
 locations = hk.keys()
 S_longitude = []
 S_latitude = []
+S_date = []
+humid_06 = []
+humid_12 = []
+temp_max = []
+temp_min = []
 for loc in locations:
     S_longitude.append(hk[loc]['longitude'])
     S_latitude.append(hk[loc]['latitude'])
+    S_date.append([])
+    new_date = []
+    h_06 = []
+    h_12 = []
+    t_min = []
+    t_max = []
+    humid_06.append([])
+    humid_12.append([])
+    temp_min.append([])
+    temp_max.append([])
     years = hk[loc].keys()
     years.sort()
     years = years[:-2] #Remove longitude and latitude
     for year_i in years:
         months = hk[loc][year_i].keys()
         months.sort()
-        #for month_i in months:
+        for month_i in months:
+            days = hk[loc][year_i].keys()
+            days.sort()
+            for day_i in days:
+                new_date.append(datetime.date(int(year_i),int(month_i),int(day_i)))
+                S_date[-1].append( (new_date[-1]-start_date).days )
+                h_06.append(hk[loc][year_i][month_i][day_i]['humid_06'])
+                if type(h_06[-1]) is unicode:
+                    h_06[-1] = None
+                h_12.append(hk[loc][year_i][month_i][day_i]['humid_12'])
+                if type(h_12[-1]) is unicode:
+                    h_12[-1] = None
+                t_min.append(hk[loc][year_i][month_i][day_i]['temp_max'])
+                t_max.append(hk[loc][year_i][month_i][day_i]['temp_min'])
+    weeks = range(0,1716,7)
+    h_06 = np.array(h_06)
+    h_12 = np.array(h_12)
+    t_min = np.array(t_min)
+    t_max = np.array(t_max)
+    for week_i in weeks:
+         _range = np.arange(len(S_date[-1]))
+         _tmp = np.array(S_date[-1])
+         _range = _range[_tmp <= week_i]
+         _tmp = _tmp[_range]
+         _range = _range[_tmp > week_i-7]
+         _tmp = _tmp[_range]
+
+         # humid_06
+         last_week = np.array(filter(None,np.array(h_06)[_range])) #Remove None elements
+         if last_week.size > 3: #At least 4 days of the week
+             humid_06[-1].append(last_week.mean())
+         else:
+             humid_06[-1].append(None)
+
+         # humid_12
+         last_week = np.array(filter(None,np.array(h_12)[_range])) #Remove None elements
+         if last_week.size > 3: #At least 4 days of the week
+             humid_12[-1].append(last_week.mean())
+         else:
+             humid_12[-1].append(None)
+
+         # temp_min
+         last_week = np.array(filter(None,np.array(t_min)[_range])) #Remove None elements
+         if last_week.size > 3: #At least 4 days of the week
+             temp_min[-1].append(last_week.mean())
+         else:
+             temp_min[-1].append(None)
+
+         # temp_max
+         last_week = np.array(filter(None,np.array(t_max)[_range])) #Remove None elements
+         if last_week.size > 3: #At least 4 days of the week
+             temp_max[-1].append(last_week.mean())
+         else:
+             temp_max[-1].append(None)
+
+weather = []
+weeks = np.array(weeks)[:,None]
+for j in range(len(locations)):
+    humid_06[j] = np.array(humid_06[j])[:,None]
+    humid_12[j] = np.array(humid_12[j])[:,None]
+    temp_min[j] = np.array(temp_min[j])[:,None]
+    temp_max[j] = np.array(temp_max[j])[:,None]
+    print humid_06[j].shape,humid_12[j].shape,temp_min[j].shape,temp_max[j].shape
+    weather.append(np.hstack([weeks,humid_06[j],humid_12[j],temp_min[j],temp_max[j]]))
+
+weather2 = []
+for weather_i in weather:
+    weather2.append([])
+    for wi in weather_i:
+        a = kjk
+        if wi.all():
+            weather2.append(wi)
+    weather2[-1].append(wi)
+
 
 """
     years.sort()
-    for year_i 
+    for year_i
 
 
 #Set number of districts to work with (i.e. number of outputs)
