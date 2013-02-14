@@ -22,8 +22,6 @@ W is a 2 x R matrix
 Masindi <-                            Luwero
            Mpigi - Wakiso - Kampala - Mukono
 """
-#NOTE this test doesn't consider ndvi
-#NOTE this test doesn't include weather data
 
 import numpy as np
 import pylab as pb
@@ -46,6 +44,7 @@ def rm_dpl(index):
 
 X_list = [] # Input list
 
+data_wo_weather = []
 # Read data
 file_1='../../../playground/malaria/allDataWithoutWeather_20130125'
 file_2='../../../playground/malaria/allWeatherStationData_20130211'
@@ -53,7 +52,7 @@ start_date = datetime.date(2003,01,05) # Reference date, i.e. time zero
 
 df=shelve.open(file_1)
 hk=shelve.open(file_2)
-"""
+
 # Format allDataWithoutWeather_20130125
 #districts = df.keys()
 districts = ['Masindi','Mpigi','Wakiso','Kampala','Mukono','Luwero','Tororo']
@@ -62,6 +61,12 @@ incidences = []
 altitude = []
 longitude = []
 latitude = []
+ndvi = []
+
+year_ = []
+month_ = []
+day_ = []
+
 for d,n in zip(districts,range(len(districts))):
     N = len(df[d]['malaria'].keys())
     new_date = []
@@ -69,20 +74,33 @@ for d,n in zip(districts,range(len(districts))):
     incidences.append([])
     years = df[d]['malaria'].keys()
     years.sort()
+    ndvi_ =[]
+    y_ = []
+    m_ = []
+    d_ = []
     for year_i in years:
         months = df[d]['malaria'][year_i].keys()
         months.sort()
         for month_i in months:
             days = df[d]['malaria'][year_i][month_i].keys()
             days.sort()
+
             for day_i in days:
                 incidence_i = df[d]['malaria'][year_i][month_i][day_i]
                 if incidence_i is not None:
                     new_date.append(datetime.date(int(year_i),int(month_i),int(day_i)))
                     date_inc[-1].append((new_date[-1] - start_date).days)
                     incidences[-1].append(float(incidence_i))
-                    if (new_date[-1] - start_date).days == 312:
-                        print year_i,month_i,day_i
+
+                    m_.append(month_i)
+                    y_.append(year_i)
+                    d_.append(day_i)
+                    if day_i <= 10:
+                        ndvi_.append(df[d]['ndvi'][year_i][month_i][0])
+                    elif day_i <=20:
+                        ndvi_.append(df[d]['ndvi'][year_i][month_i][1])
+                    else:
+                        ndvi_.append(df[d]['ndvi'][year_i][month_i][2])
 
     num_obs = len(incidences[-1])
     output_number = np.repeat(n,num_obs)[:,None] # This is the index column for the coreg_kernel
@@ -91,8 +109,13 @@ for d,n in zip(districts,range(len(districts))):
     altitude.append(np.repeat(df[d]['altitude'],num_obs)[:,None])
     longitude.append(np.repeat(df[d]['longitude'],num_obs)[:,None])
     latitude.append(np.repeat(df[d]['latitude'],num_obs)[:,None])
+    ndvi.append(np.array(ndvi_)[:,None])
     X_list.append(np.hstack([output_number,date_inc[-1],longitude[-1],latitude[-1]]))
-"""
+    data_wo_weather.append(np.hstack([incidences[-1],output_number,date_inc[-1],longitude[-1],latitude[-1],altitude[-1],ndvi[-1]]))
+    year_.append(np.array(y_)[:,None])
+    month_.append(np.array(m_)[:,None])
+    day_.append(np.array(d_)[:,None])
+
 # Format weather data
 locations = hk.keys()
 S_longitude = []
@@ -149,52 +172,72 @@ for loc in locations:
          _tmp = _tmp[_range]
 
          # humid_06
+         if 0 in np.array(h_06)[_range]:
+             a = KJkj
          last_week = np.array(filter(None,np.array(h_06)[_range])) #Remove None elements
          if last_week.size > 3: #At least 4 days of the week
              humid_06[-1].append(last_week.mean())
          else:
-             humid_06[-1].append(None)
+             humid_06[-1].append(-100)
 
          # humid_12
+         if 0 in np.array(h_12)[_range]:
+             a = KJkj
          last_week = np.array(filter(None,np.array(h_12)[_range])) #Remove None elements
          if last_week.size > 3: #At least 4 days of the week
              humid_12[-1].append(last_week.mean())
          else:
-             humid_12[-1].append(None)
+             humid_12[-1].append(-100)
 
          # temp_min
+         if 0 in np.array(t_min)[_range]:
+             a = KJkj
          last_week = np.array(filter(None,np.array(t_min)[_range])) #Remove None elements
          if last_week.size > 3: #At least 4 days of the week
              temp_min[-1].append(last_week.mean())
          else:
-             temp_min[-1].append(None)
+             temp_min[-1].append(-100)
 
          # temp_max
+         if 0 in np.array(t_max)[_range]:
+             a = KJkj
          last_week = np.array(filter(None,np.array(t_max)[_range])) #Remove None elements
          if last_week.size > 3: #At least 4 days of the week
              temp_max[-1].append(last_week.mean())
          else:
-             temp_max[-1].append(None)
+             temp_max[-1].append(-100)
 
-weather = []
+weather_weekly = []
 weeks = np.array(weeks)[:,None]
 for j in range(len(locations)):
     humid_06[j] = np.array(humid_06[j])[:,None]
     humid_12[j] = np.array(humid_12[j])[:,None]
     temp_min[j] = np.array(temp_min[j])[:,None]
     temp_max[j] = np.array(temp_max[j])[:,None]
-    print humid_06[j].shape,humid_12[j].shape,temp_min[j].shape,temp_max[j].shape
-    weather.append(np.hstack([weeks,humid_06[j],humid_12[j],temp_min[j],temp_max[j]]))
+    weather_weekly.append(np.hstack([weeks,humid_06[j],humid_12[j],temp_min[j],temp_max[j]]))
 
-weather2 = []
-for weather_i in weather:
-    weather2.append([])
+weather_final = []
+for weather_i in weather_weekly:
+    weather_final.append([])
     for wi in weather_i:
-        a = kjk
-        if wi.all():
-            weather2.append(wi)
-    weather2[-1].append(wi)
+        if -100 not in wi:
+            weather_final[-1].append(wi[None,:])
+    weather_final[-1] = np.vstack(weather_final[-1])
 
+data = []
+stations_loc = np.hstack([np.array(S_longitude)[:,None],np.array(S_latitude)[:,None]])
+_range = np.arange(stations_loc.shape[0])
+for d,j in zip(districts,range(len(districts))):
+    data.append([])
+    district_loc = np.array([df[d]['longitude'],df[d]['latitude']])[None,:]
+    distance = np.sqrt(np.sum((district_loc - stations_loc)**2,-1))
+    min = distance.min()
+    station = _range[distance == min]
+    for row_i in weather_final[station]:
+        if row_i[0] in data_wo_weather[j][:,2].flatten():
+            tmp = np.arange(data_wo_weather[j][:,2].size)[data_wo_weather[j][:,2].flatten() == row_i[0]]
+            data[-1].append(np.hstack([row_i,data_wo_weather[j][tmp,:].flatten()])) #cols 0 and 2 + 5
+    data[-1] = np.vstack(data[-1])
 
 """
     years.sort()

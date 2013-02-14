@@ -55,7 +55,7 @@ class multioutput_GP(sparse_GP):
         self.Zos = self._get_output_slices(Z,kernel)
         self.Xos = self._get_output_slices(X,kernel)
 
-        # Normalize: better to normalize befor passing to sparse_GP
+        # Normalize: better to normalize before passing to sparse_GP
         if normalize_X:
             _Xmean = X.mean(0)[None,:]
             _Xstd = X.std(0)[None,:]
