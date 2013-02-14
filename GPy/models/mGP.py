@@ -34,8 +34,10 @@ class mGP(GP):
     def __init__(self,X_list,likelihood_list,kernel=None,normalize_X=False, Xslices_list=None):
 
         X = np.vstack (X_list)
-        Y = np.vstack([l.Y for l in likelihood_list])
-        likelihood = likelihoods.Gaussian(Y,normalize=True)
+        #Y = np.vstack([l.Y for l in likelihood_list])
+        self.likelihoods = [likelihoods.Gaussian(l.Y,normalize=True) for l in likelihood_list]
+        Y = np.vstack([l.Y for l in self.likelihoods])
+        likelihood = likelihoods.Gaussian(Y,normalize=False)
         #distribution = likelihoods.likelihood_functions.Poisson()
         #likelihood = likelihoods.EP(Y,distribution)
 
@@ -58,6 +60,8 @@ class mGP(GP):
             _Xstd = np.ones((1,X.shape[1]))
 
         GP.__init__(self, X, likelihood, kernel, normalize_X=False)#, Xslices)
+        self._Xmean = _Xmean
+        self._Xstd = _Xstd
 
     def _get_output_slices(self,X,kernel):
         self.R = kernel.parts[0].R
@@ -72,166 +76,37 @@ class mGP(GP):
         nx = np.arange(self._I.size)
         return [slice(nx[self._I == s][0],1+nx[self._I == s][-1]) for s in self.output_nums]
 
-    """
-    def _get_output_slices(self,X):
-        self.R = self.kern.parts[0].R
-        self.index = self.kern.index
-        _range = range(self.D + 1)
-        _range.pop(self.index)
-        self.input_cols = np.array(_range)
-        self._I = self.X[:,self.index]
-        used_terms = []
-        self.output_nums = np.array([s for s in self._I if s not in used_terms and not used_terms.append(s)])
-        assert all([self.R >= s for s in self.output_nums]), "Coregionalization matrix rank is smaller than number of outputs"
-        nx = np.arange(self._I.size)
-        return [slice(nx[self._I == s][0],1+nx[self._I == s][-1]) for s in self.output_nums]
-    """
-
     def _index_off(self,X):
         return X[:,self.input_cols], X[:,self.index][:,None]
 
     def _index_on(self,X,index):
         return np.hstack([X[:,self.input_cols<self.index],index,X[:,self.input_cols>self.index]])
 
+    def predict(self,Xnew, slices=None, full_cov=False,which_likelihood=None):
+        #normalise X values
+        Xnew = (Xnew.copy() - self._Xmean) / self._Xstd
+        mu, var = self._raw_predict(Xnew, slices, full_cov)
 
-    """
-    def plot_f(self, samples=0, plot_limits=None, which_data='all', which_functions='all', resolution=None, full_cov=False):
-        if which_functions=='all':
-            which_functions = [True]*self.kern.Nparts
-        if which_data=='all':
-            which_data = slice(None)
-
-        if self.D == 1:
-            output_slices = self._get_output_slices(self.X)
-            Xnew = []
-            for os,on in zip(output_slices,self.output_nums):
-                X_, index_ = self._index_off(self.X[os,:])
-                Xnew, xmin, xmax = x_frame1D(X_, plot_limits=plot_limits)
-                I_ = np.repeat(on,resolution or 200)[:,None]
-                Xnew = self._index_on(Xnew,I_)
-                #Xnew_ = self._index_on(Xnew_,I_)
-                #Xnew.append(Xnew_)
-            #Xnew = np.vstack(Xnew)
-            #xmin,xmax = Xnew.min(),Xnew.max()
-                pb.figure()
-                if samples == 0:
-                    m,v = self._raw_predict(Xnew, slices=which_functions)
-                    gpplot(Xnew[:,self.input_cols],m,m-2*np.sqrt(v),m+2*np.sqrt(v))
-                else:
-                    m,v = self._raw_predict(Xnew, slices=which_functions,full_cov=True)
-                    Ysim = np.random.multivariate_normal(m.flatten(),v,samples)
-                    gpplot(Xnew[:,self.input_cols],m,m-2*np.sqrt(np.diag(v)[:,None]),m+2*np.sqrt(np.diag(v))[:,None])
-                    for i in range(samples):
-                        pb.plot(Xnew[:,self.input_cols],Ysim[i,:],Tango.coloursHex['darkBlue'],linewidth=0.25)
-
-                pb.plot(self.X[which_data,self.input_cols],self.likelihood.Y[which_data],'kx',mew=1.5)
-                pb.xlim(xmin,xmax)
-                if hasattr(self,'Z'):
-                    pb.scatter(self.Z[:,0],self.Z[:,1],'kx',mew=1.5,markersize=12)
-
-        elif self.X.shape[1] == 2:
-            resolution = resolution or 50
-            Xnew, xx, yy, x, y, xmin, xmax = x_frame2D(self.X, plot_limits,resolution)
-            m,v = self._raw_predict(Xnew, slices=which_functions)
-            m = m.reshape(resolution,resolution)
-            pb.contour(x,y,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
-            pb.scatter(self.X[:,0],self.X[:,1],40,self.likelihood.Y,linewidth=0,cmap=pb.cm.jet,vmin=m.min(), vmax=m.max())
-            pb.xlim(xmin[0],xmax[0])
-            pb.ylim(xmin[1],xmax[1])
-            if hasattr(self,'Z'):
-                pb.scatter(self.Z[:,0],self.Z[:,1],'kx',mew=1.5,markersize=12)
-
+        #now push through likelihood
+        if which_likelihood is not None:
+            mean, _025pm, _975pm = self.likelihoods[which_likelihood].predictive_values(mu, var)
         else:
-            raise NotImplementedError, "Cannot define a frame with more than two input dimensions"
+            mean, _025pm, _975pm = self.likelihood.predictive_values(mu, var)
 
-    
-    def plot(self,samples=0,plot_limits=None,which_data='all',which_functions='all',resolution=None,full_cov=False):
-        # TODO include samples
-        if which_functions=='all':
-            which_functions = [True]*self.kern.Nparts
-        if which_data=='all':
-            which_data = slice(None)
+        return mean, var, _025pm, _975pm
 
-        if self.D == 1:
-            output_slices = self._get_output_slices(self.X)
-            Xnew = []
-            for os,on in zip(output_slices,self.output_nums):
-                X_, index_ = self._index_off(self.X[os,:])
-                Xu = X_ * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
 
-                Xnew, xmin, xmax = x_frame1D(X_, plot_limits=plot_limits)
-                I_ = np.repeat(on,resolution or 200)[:,None]
-                Xnew = self._index_on(Xnew,I_)
-                #Xnew.append(Xnew_)
-                #Xnew = np.vstack(Xnew)
-                #xmin,xmax = Xnew.min(),Xnew.max()
-                pb.figure()
-                m, var, lower, upper = self.predict(Xnew, slices=which_functions)
-                gpplot(Xnew[:,self.input_cols],m, lower, upper)
-                pb.plot(self.X[which_data,self.input_cols],self.likelihood.data[which_data],'kx',mew=1.5)
-                ymin,ymax = min(np.append(self.likelihood.data,lower)), max(np.append(self.likelihood.data,upper))
-                ymin, ymax = ymin - 0.1*(ymax - ymin), ymax + 0.1*(ymax - ymin)
-                pb.xlim(xmin,xmax)
-                pb.ylim(ymin,ymax)
-                if hasattr(self,'Z'):
-                    Zu = self.Z*self._Xstd + self._Xmean
-                    pb.plot(Zu,Zu*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
-
-        elif self.X.shape[1]==2: #FIXME
-            for os,on in zip(output_slices,self.output_nums):
-                resolution = resolution or 50
-                X_, index_ = self._index_off(self.X[os,:])
-
-                Xu = self.X * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
-
-                Xnew, xx, yy, x, y, xmin, xmax = x_frame2D(X_, plot_limits=plot_limits)
-                I_ = np.repeat(on,resolution**2)[:,None]
-                Xnew = self._index_on(Xnew,I_)
-
-                Xu = self.X * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
-                Xnew, xx, yy, x, y, xmin, xmax = x_frame2D(Xu, plot_limits,resolution)
-                m, var, lower, upper = self.predict(Xnew, slices=which_functions)
-                m = m.reshape(resolution,resolution)
-                pb.contour(x,y,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
-                pb.scatter(Xu[which_data,0], Xu[which_data,1], 40, self.likelihood.Y, cmap=pb.cm.jet,vmin=m.min(),vmax=m.max(), linewidth=0.)
-                pb.xlim(xmin[0],xmax[0])
-                pb.ylim(xmin[1],xmax[1])
-                if hasattr(self,'Z'):
-                    Zu = self.Z*self._Xstd + self._Xmean
-                    pb.scatter(Zu[:,0],Zu[:,1],'kx',mew=1.5,markersize=12)
-
-        else:
-            raise NotImplementedError, "Cannot define a frame with more than two input dimensions"
-    """
 
     def plot_f(self, samples=0, plot_limits=None, which_data='all', which_functions='all', resolution=None, full_cov=False):
-        """
-        Plot the GP's view of the world, where the data is normalised and the likelihood is Gaussian
-
-        :param samples: the number of a posteriori samples to plot
-        :param which_data: which if the training data to plot (default all)
-        :type which_data: 'all' or a slice object to slice self.X, self.Y
-        :param plot_limits: The limits of the plot. If 1D [xmin,xmax], if 2D [[xmin,ymin],[xmax,ymax]]. Defaluts to data limits
-        :param which_functions: which of the kernel functions to plot (additively)
-        :type which_functions: list of bools
-        :param resolution: the number of intervals to sample the GP on. Defaults to 200 in 1D and 50 (a 50x50 grid) in 2D
-
-        Plot the posterior of the GP.
-          - In one dimension, the function is plotted with a shaded region identifying two standard deviations.
-          - In two dimsensions, a contour-plot shows the mean predicted function
-          - In higher dimensions, we've no implemented this yet !TODO!
-
-        Can plot only part of the data and part of the posterior functions using which_data and which_functions
-        Plot the data's view of the world, with non-normalised values and GP predictions passed through the likelihood
-        """
+        #FIXME: which_data
         if which_functions=='all':
             which_functions = [True]*self.kern.Nparts
         if which_data=='all':
             which_data = slice(None)
 
-        if self.D == 1:
-            #for os,on,oz in zip(self.Xos,self.output_nums,self.Zos):
+        if self.X.shape[1] == 2:
             for os,on in zip(self.Xos,self.output_nums):
+            #for os,on,oz in zip(self.Xos,self.output_nums,self.Zos):
                 Xu, index_ = self._index_off(self.X[os,:])
                 Xnew, xmin, xmax = x_frame1D(Xu, plot_limits=plot_limits)
                 I_ = np.repeat(on,resolution or 200)[:,None]
@@ -239,29 +114,38 @@ class mGP(GP):
                 pb.figure()
                 if samples == 0:
                     m,v = self._raw_predict(Xnew, slices=which_functions)
-                    gpplot(Xnew[which_data,self.input_cols],m,m-2*np.sqrt(v),m+2*np.sqrt(v))
-                else: #FIXME
+                    gpplot(Xnew[:,self.input_cols],m,m-2*np.sqrt(v),m+2*np.sqrt(v))
+                else:
                     m,v = self._raw_predict(Xnew, slices=which_functions,full_cov=True)
                     Ysim = np.random.multivariate_normal(m.flatten(),v,samples)
-                    gpplot(Xnew[which_data,self.input_cols],m[which_data,:],m[which_data,:]-2*np.sqrt(np.diag(v)[which_data,:]),m+2*np.sqrt(np.diag(v))[which_data,:])
+                    gpplot(Xnew[:,self.input_cols],m,m-2*np.sqrt(np.diag(v)[:,None]),m+2*np.sqrt(np.diag(v)[:,None]))
                     for i in range(samples):
                         pb.plot(Xnew[:,self.input_cols],Ysim[i,:],Tango.coloursHex['darkBlue'],linewidth=0.25)
 
-                pb.plot(self.X[which_data,self.input_cols],self.likelihood.Y[which_data],'kx',mew=1.5)
+                pb.plot(self.X[os,self.input_cols],self.likelihood.Y[os],'kx',mew=1.5)
                 pb.xlim(xmin,xmax)
-                ymin,ymax = min(np.append(self.likelihood.Y,m-2*np.sqrt(np.diag(v)[:,None]))), max(np.append(self.likelihood.Y,m+2*np.sqrt(np.diag(v)[:,None])))
+                ymin,ymax = min(np.append(self.likelihood.Y,m-2*np.sqrt(np.diag(v)[:,None]))), max(np.append(self.likelihood.Y[os],m+2*np.sqrt(np.diag(v)[:,None])))
                 ymin, ymax = ymin - 0.1*(ymax - ymin), ymax + 0.1*(ymax - ymin)
                 pb.ylim(ymin,ymax)
-                pb.plot(self.Z,self.Z*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
-        elif self.D == 2: #FIXME
+                #pb.plot(self.Z,self.Z*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
+
+        elif self.X.shape[1] == 3:
             resolution = resolution or 50
-            Xnew, xmin, xmax, xx, yy = x_frame2D(self.X, plot_limits,resolution)
-            m,v = self._raw_predict(Xnew, slices=which_functions)
-            m = m.reshape(resolution,resolution).T
-            pb.contour(xx,yy,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
-            pb.scatter(Xorig[:,0],Xorig[:,1],40,Yorig,linewidth=0,cmap=pb.cm.jet,vmin=m.min(), vmax=m.max())
-            pb.xlim(xmin[0],xmax[0])
-            pb.ylim(xmin[1],xmax[1])
+            for os,on in zip(self.Xos,self.output_nums):
+                Xu, index_ = self._index_off(self.X[os,:])
+                Xnew, xx, yy, x, y, xmin, xmax = x_frame2D(Xu, plot_limits,resolution)
+                I_ = np.repeat(on,resolution**2)[:,None]
+                Xnew = self._index_on(Xnew,I_)
+                m,v = self._raw_predict(Xnew, slices=which_functions)
+                m = m.reshape(resolution,resolution)
+                pb.figure()
+                pb.contour(x,y,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
+                pb.scatter(Xu[:,0],Xu[:,1],40,self.likelihood.Y[os],linewidth=0,cmap=pb.cm.jet,vmin=m.min(), vmax=m.max())
+                pb.xlim(xmin[0],xmax[0])
+                pb.ylim(xmin[1],xmax[1])
+                #if hasattr(self,'Z'):
+                #    pb.scatter(self.Z[:,0],self.Z[:,1],'kx',mew=1.5,markersize=12)
+
         else:
             raise NotImplementedError, "Cannot define a frame with more than two input dimensions"
 
@@ -272,17 +156,16 @@ class mGP(GP):
         if which_data=='all':
             which_data = slice(None)
 
-        if self.D == 1:
-            Xnew = [] #needed?
-            #for os,on,oz in zip(self.Xos,self.output_nums,self.Zos):
+        if self.X.shape[1] == 2:
             for os,on in zip(self.Xos,self.output_nums):
+            #for os,on,oz in zip(self.Xos,self.output_nums,self.Zos):
                 Xu = self.X[os,:] * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
                 Xu, index_ = self._index_off(Xu)
                 Xnew, xmin, xmax = x_frame1D(Xu, plot_limits=plot_limits)
                 I_ = np.repeat(on,resolution or 200)[:,None]
                 Xnew = self._index_on(Xnew,I_)
                 pb.figure()
-                m, var, lower, upper = self.predict(Xnew, slices=which_functions)
+                m, var, lower, upper = self.predict(Xnew, slices=which_functions,which_likelihood=None) #FIXME
                 gpplot(Xnew[:,self.input_cols],m, lower, upper)
                 pb.plot(Xu,self.likelihood.data[os],'kx',mew=1.5)
                 ymin,ymax = min(np.append(self.likelihood.data[os],lower)), max(np.append(self.likelihood.data[os],upper))
@@ -293,19 +176,25 @@ class mGP(GP):
                 #Zu, index_ = self._index_off(Zu)
                 #pb.plot(Zu,Zu*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
 
-        elif self.X.shape[1]==2:
+        elif self.X.shape[1] == 3:
             resolution = resolution or 50
-            Xnew, xx, yy, xmin, xmax = x_frame2D(self.X, plot_limits,resolution)
-            x, y = np.linspace(xmin[0],xmax[0],resolution), np.linspace(xmin[1],xmax[1],resolution)
-            m, var, lower, upper = self.predict(Xnew, slices=which_functions)
-            m = m.reshape(resolution,resolution).T
-            pb.contour(x,y,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
-            Yf = self.likelihood.Y.flatten()
-            pb.scatter(self.X[:,0], self.X[:,1], 40, Yf, cmap=pb.cm.jet,vmin=m.min(),vmax=m.max(), linewidth=0.)
-            pb.xlim(xmin[0],xmax[0])
-            pb.ylim(xmin[1],xmax[1])
-        else:
-            raise NotImplementedError, "Cannot define a frame with more than two input dimensions"
+            for os,on in zip(self.Xos,self.output_nums):
+                Xu = self.X[os,:] * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
+                Xu, index_ = self._index_off(Xu)
+                Xnew, xx, yy, x, y, xmin, xmax = x_frame2D(Xu, plot_limits,resolution)
+                I_ = np.repeat(on,resolution**2)[:,None]
+                Xnew = self._index_on(Xnew,I_)
+                m,v = self._raw_predict(Xnew, slices=which_functions)
+                m = m.reshape(resolution,resolution)
+                pb.figure()
+                pb.contour(x,y,m,vmin=m.min(),vmax=m.max(),cmap=pb.cm.jet)
+                pb.scatter(Xu[:,0],Xu[:,1],40,self.likelihood.Y[os],linewidth=0,cmap=pb.cm.jet,vmin=m.min(), vmax=m.max())
+                pb.xlim(xmin[0],xmax[0])
+                pb.ylim(xmin[1],xmax[1])
+                #if hasattr(self,'Z'):
+                #    pb.scatter(self.Z[:,0],self.Z[:,1],'kx',mew=1.5,markersize=12)
+
+
 
     def plot_HD(self,input_col,output_num,plot_limits=None,which_data='all',which_functions='all',resolution=None,full_cov=False):
         # input_col \in self.input_cols
@@ -316,26 +205,26 @@ class mGP(GP):
         os = self.Xos[output_num]
         #oz = self.Zos[output_num]
 
+        resolution = resolution or 50
         Xu = self.X[os,:] * self._Xstd + self._Xmean #NOTE self.X are the normalized values now
         Xu, index_ = self._index_off(Xu)
-        Xnew, xmin, xmax = self.x_frameHD(Xu,input_col, plot_limits)
-        I_ = np.repeat(output_num,resolution or 200)[:,None]
+        Xnew, xmin, xmax = self.x_frameHD(Xu,input_col, plot_limits, resolution)
+        I_ = np.repeat(output_num,resolution)[:,None]
         Xnew = self._index_on(Xnew,I_)
-        m, var, lower, upper = self.predict(Xnew, slices=which_functions)
+        m, var, lower, upper = self.predict(Xnew, slices=which_functions,which_likelihood=output_num)
         Xu = self._index_on(Xu,index_)
-        gpplot(Xnew[:,input_col],m, lower, upper)
-        pb.plot(Xu[:,input_col],self.likelihood.data[os],'kx',mew=1.5)
-        #ymin,ymax = min(np.append(self.likelihood.data[os],lower)), max(np.append(self.likelihood.data[os],upper))
-        #ymin, ymax = ymin - 0.1*(ymax - ymin), ymax + 0.1*(ymax - ymin)
-        #pb.xlim(xmin,xmax)
-        #pb.ylim(ymin,ymax)
-        Zu = self.Z * self._Xstd + self._Xmean
-        pb.plot(Zu[:,input_col],Zu[:,input_col]*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
-
+        input_col2 = input_col if self.index > input_col else input_col + 1
+        gpplot(Xnew[:,input_col2],m, lower, upper)
+        pb.plot(Xu[:,input_col2],self.likelihoods[output_num].data,'kx',mew=1.5)
+        #pb.plot(Xu[:,input_col2],self.likelihood.data[os],'kx',mew=1.5)
+        #Zu = self.Z * self._Xstd + self._Xmean
+        #pb.plot(Zu[:,input_col],Zu[:,input_col]*0+pb.ylim()[0],'r|',mew=1.5,markersize=12)
 
     def x_frameHD(self,X,input_col,plot_limits=None,resolution=None):
         """
         Internal helper function for making plots, returns a set of input values to plot as well as lower and upper limits
+
+        input_col: column within X matrix (index column doesn't count)
         """
         if plot_limits is None:
             xmean,xmean = X.mean(0),X.mean(0)
@@ -346,7 +235,8 @@ class mGP(GP):
         else:
             raise ValueError, "Bad limits for plotting"
 
-        Xnew = np.hstack([np.repeat(mean_i,resolution or 200)[:,None] for mean_i in xmean.flatten()])
-        Xnew_i = np.linspace(xmin[0],xmax[0],resolution or 200)[:,None] #FIXME xmin[input_col -1]
-        Xnew[:,0] = Xnew_i.flatten() #FIXME
+        resolution = resolution or 50
+        Xnew = np.hstack([np.repeat(mean_i,resolution)[:,None] for mean_i in xmean.flatten()])
+        Xnew_i = np.linspace(xmin[input_col],xmax[input_col],resolution)[:,None]
+        Xnew[:,input_col] = Xnew_i.flatten()
         return Xnew, xmin[input_col], xmax[input_col]
