@@ -3,6 +3,7 @@ Multioutput GP for malaria counts
 ---------------------------------
 dataset: ../../../playground/malaria/malaria_data20130213.dat
 B matrix controls the relation between districts
+Incidences are assumed to have a log-normal distribution
 """
 #NOTE This is a non-sparse model
 
@@ -30,13 +31,13 @@ if len(d_names) > len(d_numbers):
 #Define output
 Y_names = ['incidences']
 Y_numbers = np.hstack([np.arange(len(malaria_data['headers']))[np.array(malaria_data['headers']) == Y_i] for Y_i in Y_names])
-Y_list = [malaria_data['data'][d_i][:,Y_numbers] for d_i in d_numbers]
+Y_list = [np.log(malaria_data['data'][d_i][:,Y_numbers]) for d_i in d_numbers]
 if len(Y_names) > 1:
     for num_i in range(len(d_numbers)):
         Y_list[num_i] = np.vstack(Y_list[num_i])
 
 #Define input
-X_names = ['district','time','temperature_max']#,'time']#,'rain','ndvi','humidity_06','humidity_12','rain','temperature_min','temperature_max']
+X_names = ['district','time']#,'time']#,'rain','ndvi','humidity_06','humidity_12','rain','temperature_min','temperature_max']
 X_numbers = np.hstack([np.arange(len(malaria_data['headers']))[np.array(malaria_data['headers']) == n_i] for n_i in X_names])
 X_list = [malaria_data['data'][d_i][:,X_numbers] for d_i in d_numbers]
 for X_i,num_i in zip(X_list,range(len(d_names))):
@@ -48,7 +49,7 @@ malaria_data.close()
 #Create likelihood
 likelihoods = []
 for Y_i in Y_list:
-    likelihoods.append(GPy.likelihoods.Gaussian(Y_i))
+    likelihoods.append(GPy.likelihoods.Gaussian(Y_i,normalize=False))
 
 #Define coreg_kern and base kernels
 R = len(d_names)
@@ -59,7 +60,7 @@ base = rbf + rbf.copy() + noise
 kernel = GPy.kern.icm(base,R,index=0,Dw=2)
 
 #Define model
-m = GPy.models.mGP(X_list, likelihoods, kernel, normalize_X=True,normalize_Y=True)
+m = GPy.models.mGP(X_list, likelihoods, kernel, normalize_X=True,normalize_Y=False)
 
 #Constraints
 m.scale_factor = 1.
