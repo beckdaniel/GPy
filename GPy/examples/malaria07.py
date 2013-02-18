@@ -19,7 +19,7 @@ malaria_data = shelve.open('../../../playground/malaria/malaria_data_20130213.da
 all_districts = malaria_data['districts']
 all_variables = malaria_data['headers']
 
-#Define districts to analize
+#Define districts to analyze
 d_names = ['Mubende','Nakasongola','Kamuli','Kampala','Mukono','Luwero','Tororo']
 d_numbers = np.hstack([np.arange(len(malaria_data['districts']))[np.array(malaria_data['districts']) == d_i] for d_i in d_names])
 
