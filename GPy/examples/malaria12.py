@@ -23,7 +23,7 @@ all_stations = malaria_data['stations']
 station_variables = malaria_data['headers_daily']
 
 #Define districts to analyze
-d_names = ['Soroti']
+d_names = ['Arua']
 d_numbers = np.hstack([np.arange(len(malaria_data['districts']))[np.array(malaria_data['districts']) == d_i] for d_i in d_names])
 if len(d_names) > len(d_numbers):
     print 'Warning: some districts were not found in malaria_data'
@@ -37,13 +37,13 @@ if len(Y_names_1) > 1:
         Y_list_1[num_i] = np.vstack(Y_list_1[num_i])
 
 #Define stations to analyze
-s_names = ['Soroti']
+s_names = ['Arua']
 s_numbers = np.hstack([np.arange(len(malaria_data['stations']))[np.array(malaria_data['stations']) == s_i] for s_i in s_names])
 if len(s_names) > len(s_numbers):
     print 'Warning: some stations were not found in malaria_data'
 
 #Define outputs from weather data
-Y_names_2 = ['humidity_06']#,'humidity_06']#,'humidity_12','temperature_min','temperature_max']
+Y_names_2 = ['humidity_12']#,'humidity_06']#,'humidity_12','temperature_min','temperature_max']
 Y_numbers_2 = np.hstack([np.arange(len(malaria_data['headers_daily']))[np.array(malaria_data['headers_daily']) == Y_i] for Y_i in Y_names_2])
 Y_list_2 = []
 for sn in s_numbers:
@@ -51,7 +51,7 @@ for sn in s_numbers:
         Y_list_2.append(malaria_data['weather_daily'][sn][:,yn][:,None])
 
 #Define input from non-weather data
-X_names_1 = ['district','time']#,'time']#,'rain','ndvi','humidity_06','humidity_12','rain','temperature_min','temperature_max']
+X_names_1 = ['district','time','rain']#,'time']#,'rain','ndvi','humidity_06','humidity_12','rain','temperature_min','temperature_max']
 X_numbers_1 = np.hstack([np.arange(len(malaria_data['headers']))[np.array(malaria_data['headers']) == n_i] for n_i in X_names_1])
 X_list_1 = [malaria_data['data'][d_i][:,X_numbers_1] for d_i in d_numbers]
 for X_i,num_i in zip(X_list_1,range(len(d_names))):
@@ -93,61 +93,63 @@ noise = GPy.kern.white(D)
 base = rbf + rbf.copy() + noise
 kernel = GPy.kern.icm(base,R,index=0,Dw=2)
 
-#Define model
-m = GPy.models.mGP(X_list, likelihoods, kernel, normalize_X=True,normalize_Y=False)
+Y = np.log(Y_list_1[0][1:]/Y_list_1[0][:-1])
+X = X_list_1[0][1:,1]
 
+Y2 = np.log(X_list_1[0][1:,2]/X_list_1[0][:-1,2])
+#X2 = X_list_2[0][1:,1]
+
+Yraw = Y_list_1[0][1:]
+
+pb.subplot(411)
+pb.plot(X[:-1],Y[:-1],'r')
+pb.xlim(0,2000)
+pb.subplot(412)
+pb.plot(X[1:],Y2[:-1],'b') #+30
+pb.xlim(0,2000)
+pb.subplot(413)
+pb.plot(X[1:],X_list_1[0][1:-1,2],'b')
+pb.xlim(0,2000)
+pb.subplot(414)
+pb.plot(X,(Yraw - Yraw.mean())/Yraw.std(),'r')
+pb.xlim(0,2000)
+
+rbf1 = GPy.kern.rbf(2)
+rbf2 = GPy.kern.rbf(2)
+noise = GPy.kern.white(2)
+kernel = rbf1 + rbf2 + noise
+likelihood=GPy.likelihoods.Gaussian(Y[:-1],normalize=False)
+X = np.hstack([X[:-1][:,None],Y2[:-1][:,None]])
+
+m = GPy.models.GP(X, likelihood, kernel, normalize_X=True)
 #Constraints
 m.scale_factor = 1.
 m.ensure_default_constraints()
-m.unconstrain('rbf_1_var')
-m.constrain_fixed('rbf_1_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
-m.unconstrain('rbf_2_var')
-m.constrain_fixed('rbf_2_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
-m.constrain_positive('kappa')
 m.set('_1_len',10)
 m.set('_2_len',.1)
-m.set('W',np.random.rand(R*2))
 #Optimize
 print m.checkgrad(verbose=True)
 m.optimize()
+pb.figure()
+m.plot()
 
-#Plots 1D or 2D
-o_names = ['incidence','rain']
-for os,dn in zip(m.Xos,o_names):
-    pb.figure()
-    pb.subplot(211)
-    m.plot_f(which_data = os)
-    pb.title('%s' %dn)
+rbf1_ = GPy.kern.rbf(1)
+rbf2_ = GPy.kern.rbf(1)
+noise_ = GPy.kern.white(1)
+kernel_ = rbf1_ + rbf2_
+likelihood_ = GPy.likelihoods.Gaussian(Y[:-1],normalize=False)
+#X_ = Y2[:-1][:,None]
+X_ = X[:,0][:,None]
 
-    pb.subplot(212)
-    m.plot(which_data = os)
-
-#for os,on in zip(m.Xos,range(len(m.Xos))):
-#    for vn in range(len(X_names)-1):
-#        pb.figure()
-#        m.plot_HD(which_input=vn,which_data=os)
-#        pb.title('%s: %s' %(d_names[on],X_names[vn+1]))
-
-#Print model
-print m
-
-#Print B matrix
-print np.round(m.kern.parts[0].B,2)
-"""
-#Predict districts
-malaria_data = shelve.open('../../../playground/malaria/malaria_data_20130213.dat',writeback=False)
-
-p_names = ['Mubende']
-p_numbers = np.hstack([np.arange(len(malaria_data['districts']))[np.array(malaria_data['districts']) == p_i] for p_i in p_names])
-if len(p_names) > len(p_numbers):
-    print 'Warning: some districts were not found in malaria_data'
-
-#Define Xnew values
-#X_names = same X_names
-#X_numbers = np.hstack([np.arange(len(malaria_data['headers']))[np.array(malaria_data['headers']) == n_i] for n_i in X_names])
-Xnew_list = [malaria_data['data'][p_i][:,X_numbers] for p_i in p_numbers]
-for X_i,num_i in zip(Xnew_list,range(len(p_names))):
-    X_i[:,0] = np.repeat(num_i,X_i.shape[0]) #Change district number according to data analyzed
-
-malaria_data.close()
-"""
+q = GPy.models.GP(X_, likelihood_, kernel_, normalize_X=True)
+#Constraints
+q.scale_factor = 1.
+q.ensure_default_constraints()
+q.set('_1_len',10)
+q.set('_2_len',.1)
+#Optimize
+print q.checkgrad(verbose=True)
+q.optimize()
+pb.figure()
+q.plot()
+print q
