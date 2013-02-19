@@ -22,134 +22,217 @@ all_variables = malaria_data['headers']
 all_stations = malaria_data['stations']
 station_variables = malaria_data['headers_daily']
 
-#Define districts to analyze
-d_names = ['Arua']
-d_numbers = np.hstack([np.arange(len(malaria_data['districts']))[np.array(malaria_data['districts']) == d_i] for d_i in d_names])
-if len(d_names) > len(d_numbers):
-    print 'Warning: some districts were not found in malaria_data'
-
-#Define outputs from non-weather data
-Y_names_1 = ['incidences']
-Y_numbers_1 = np.hstack([np.arange(len(malaria_data['headers']))[np.array(malaria_data['headers']) == Y_i] for Y_i in Y_names_1])
-Y_list_1 = [malaria_data['data'][d_i][:,Y_numbers_1] for d_i in d_numbers]
-if len(Y_names_1) > 1:
-    for num_i in range(len(d_numbers)):
-        Y_list_1[num_i] = np.vstack(Y_list_1[num_i])
-
-#Define stations to analyze
-s_names = ['Arua']
-s_numbers = np.hstack([np.arange(len(malaria_data['stations']))[np.array(malaria_data['stations']) == s_i] for s_i in s_names])
-if len(s_names) > len(s_numbers):
-    print 'Warning: some stations were not found in malaria_data'
-
-#Define outputs from weather data
-Y_names_2 = ['humidity_12']#,'humidity_06']#,'humidity_12','temperature_min','temperature_max']
-Y_numbers_2 = np.hstack([np.arange(len(malaria_data['headers_daily']))[np.array(malaria_data['headers_daily']) == Y_i] for Y_i in Y_names_2])
-Y_list_2 = []
-for sn in s_numbers:
-    for yn in Y_numbers_2:
-        Y_list_2.append(malaria_data['weather_daily'][sn][:,yn][:,None])
-
-#Define input from non-weather data
-X_names_1 = ['district','time','rain']#,'time']#,'rain','ndvi','humidity_06','humidity_12','rain','temperature_min','temperature_max']
-X_numbers_1 = np.hstack([np.arange(len(malaria_data['headers']))[np.array(malaria_data['headers']) == n_i] for n_i in X_names_1])
-X_list_1 = [malaria_data['data'][d_i][:,X_numbers_1] for d_i in d_numbers]
-for X_i,num_i in zip(X_list_1,range(len(d_names))):
-    X_i[:,0] = np.repeat(num_i,X_i.shape[0]) #Change district number according to data analyzed
-
-#Define input from weather data
-X_names_2 = ['rain','time']#,'time']#,'rain','ndvi','humidity_06','humidity_12','rain','temperature_min','temperature_max']
-X_numbers_2 = np.hstack([np.arange(len(malaria_data['headers_daily']))[np.array(malaria_data['headers_daily']) == n_i] for n_i in X_names_2])
-X_list_2 = []
-for sn in s_numbers:
-    for yn in Y_numbers_2:
-        X_list_2.append(malaria_data['weather_daily'][sn][:,X_numbers_2])
-for X_i,num_i in zip(X_list_2,range(len(Y_names_2))):
-    X_i[:,0] = np.repeat(1+num_i,X_i.shape[0]) #Change district number according to data analyzed
-
-#Mix lists
-X_list = []
-Y_list = []
-for j in range(len(Y_list_1)):
-    Y_list.append(Y_list_1[j])
-    X_list.append(X_list_1[j])
-for j in range(len(Y_list_2)):
-    Y_list.append(Y_list_2[j])
-    X_list.append(X_list_2[j])
+district = ['Masindi']
+d_number = int(np.arange(len(all_districts))[np.array(all_districts) == district])
+time_number = int(np.arange(len(all_variables))[np.array(all_variables) == 'time'])
+time = malaria_data['data'][d_number][:,time_number][:,None]
+Y_variable = ['incidences']
+Y_number = int(np.arange(len(all_variables))[np.array(all_variables) == Y_variable])
+inc = malaria_data['data'][d_number][:,Y_number][:,None]
+W_variable = ['ndvi']
+W_number = int(np.arange(len(all_variables))[np.array(all_variables) == W_variable])
+weather = malaria_data['data'][d_number][:,W_number][:,None]
+W_variable2 = ['rain']
+W_number2 = int(np.arange(len(all_variables))[np.array(all_variables) == W_variable2])
+weather2 = malaria_data['data'][d_number][:,W_number2][:,None]
 
 #Close data file
 malaria_data.close()
 
-#Create likelihood
-likelihoods = []
-for Y_i in Y_list:
-    likelihoods.append(GPy.likelihoods.Gaussian(Y_i,normalize=True))
+inc_z = (inc - inc.mean())/inc.std()
+weather_z = (weather - weather.mean())/weather.std()
 
-#Define coreg_kern and base kernels
-R = len(X_list)
-D = X_list[0].shape[1] - 1
-rbf = GPy.kern.rbf(D)
-noise = GPy.kern.white(D)
-base = rbf + rbf.copy() + noise
-kernel = GPy.kern.icm(base,R,index=0,Dw=2)
+#inc_diff = np.diff(inc_z.flatten())[:,None]
+#weather_diff = np.diff(weather_z.flatten())[:,None]
+inc_diff = np.log(inc[1:,:]/inc[:-1,:])
+weather_diff = np.log(weather[1:,:]/weather[:-1,:])
+timed1 = time[1:,:]
 
-Y = np.log(Y_list_1[0][1:]/Y_list_1[0][:-1])
-X = X_list_1[0][1:,1]
-
-Y2 = np.log(X_list_1[0][1:,2]/X_list_1[0][:-1,2])
-#X2 = X_list_2[0][1:,1]
-
-Yraw = Y_list_1[0][1:]
-
-pb.subplot(411)
-pb.plot(X[:-1],Y[:-1],'r')
+pb.subplot(211)
+pb.plot(time,weather_z,'b') #+30
 pb.xlim(0,2000)
-pb.subplot(412)
-pb.plot(X[1:],Y2[:-1],'b') #+30
+#pb.subplot(412)
+pb.plot(time,inc_z,'r')
 pb.xlim(0,2000)
-pb.subplot(413)
-pb.plot(X[1:],X_list_1[0][1:-1,2],'b')
+pb.subplot(212)
+pb.plot(timed1,weather_diff,'b') #+30
 pb.xlim(0,2000)
-pb.subplot(414)
-pb.plot(X,(Yraw - Yraw.mean())/Yraw.std(),'r')
+#pb.subplot(414)
+pb.plot(timed1,inc_diff,'r')
 pb.xlim(0,2000)
 
-rbf1 = GPy.kern.rbf(2)
-rbf2 = GPy.kern.rbf(2)
-noise = GPy.kern.white(2)
-kernel = rbf1 + rbf2 + noise
-likelihood=GPy.likelihoods.Gaussian(Y[:-1],normalize=False)
-X = np.hstack([X[:-1][:,None],Y2[:-1][:,None]])
-
-m = GPy.models.GP(X, likelihood, kernel, normalize_X=True)
-#Constraints
-m.scale_factor = 1.
-m.ensure_default_constraints()
-m.set('_1_len',10)
-m.set('_2_len',.1)
-#Optimize
-print m.checkgrad(verbose=True)
-m.optimize()
-pb.figure()
-m.plot()
-
-rbf1_ = GPy.kern.rbf(1)
-rbf2_ = GPy.kern.rbf(1)
-noise_ = GPy.kern.white(1)
-kernel_ = rbf1_ + rbf2_
-likelihood_ = GPy.likelihoods.Gaussian(Y[:-1],normalize=False)
-#X_ = Y2[:-1][:,None]
-X_ = X[:,0][:,None]
-
-q = GPy.models.GP(X_, likelihood_, kernel_, normalize_X=True)
-#Constraints
-q.scale_factor = 1.
+"""
+Model for weather variable, weather vs time
+"""
+print 'Weather model'
+#kernel
+periodic_w = GPy.kern.periodic_exponential(1)
+rbf_w = GPy.kern.rbf(1)
+noise_w = GPy.kern.white(1)
+#likelihood
+like_w = GPy.likelihoods.Gaussian(weather,normalize =True)
+#model
+q = GPy.models.GP(time, like_w, periodic_w+rbf_w+noise_w, normalize_X=True)
+#optimize
 q.ensure_default_constraints()
-q.set('_1_len',10)
-q.set('_2_len',.1)
-#Optimize
-print q.checkgrad(verbose=True)
+print q.checkgrad()
 q.optimize()
+print q
+#plot
 pb.figure()
 q.plot()
-print q
+#prediction
+time_star = np.arange(2000,3000)[:,None]
+mean_w,var_w,lower_w,upper_w = q.predict(time_star)
+GPy.util.plot.gpplot(time_star,mean_w,lower_w,upper_w)
+pb.xlim(0,3000)
+pb.title('Weather variable')
+
+"""
+Model for weather variable 2, weather vs time
+"""
+print 'Weather model'
+#kernel
+periodic_w2 = GPy.kern.periodic_exponential(1)
+rbf_w2 = GPy.kern.rbf(1)
+noise_w2 = GPy.kern.white(1)
+#likelihood
+like_w2 = GPy.likelihoods.Gaussian(weather2,normalize =True)
+#model
+q2 = GPy.models.GP(time, like_w2, periodic_w2+rbf_w2+noise_w2, normalize_X=True)
+#optimize
+q2.ensure_default_constraints()
+print q2.checkgrad()
+q2.optimize()
+print q2
+#plot
+pb.figure()
+q2.plot()
+#prediction
+mean_w2,var_w2,lower_w2,upper_w2 = q2.predict(time_star)
+GPy.util.plot.gpplot(time_star,mean_w2,lower_w2,upper_w2)
+pb.xlim(0,3000)
+pb.title('Weather variable 2')
+
+
+"""
+Model 1 for incidence, incidence vs time
+"""
+print 'Incidence model 1'
+#kernel
+periodic_1 = GPy.kern.periodic_exponential(1)
+rbf_1 = GPy.kern.rbf(1)
+noise_1 = GPy.kern.white(1)
+#likelihood
+like_1 = GPy.likelihoods.Gaussian(inc,normalize =True)
+#model
+m_1 = GPy.models.GP(time, like_1, periodic_1+rbf_1, normalize_X=True)
+#optimize
+m_1.ensure_default_constraints()
+print m_1.checkgrad()
+m_1.optimize()
+print m_1
+#plot
+pb.figure()
+m_1.plot()
+#prediction
+mean_1,var_1,lower_1,upper_1 = m_1.predict(time_star)
+GPy.util.plot.gpplot(time_star,mean_1,lower_1,upper_1)
+pb.xlim(0,3000)
+pb.title('Incidence - time')
+pb.ylim(-1000,6000)
+
+"""
+Model 2 for incidence, Poisson incidence vs time
+"""
+"""
+print 'Incidence model 1'
+#kernel
+periodic_2 = GPy.kern.periodic_exponential(1)
+rbf_2 = GPy.kern.rbf(1)
+noise_2 = GPy.kern.white(1)
+#likelihood
+distribution_2 = GPy.likelihoods.likelihood_functions.Poisson()
+like_2 = GPy.likelihoods.EP(inc,distribution_2)
+#model
+m_2 = GPy.models.GP(time, like_2, periodic_2+rbf_2, normalize_X=False)
+#optimize
+m_2.update_likelihood_approximation()
+m_2.ensure_default_constraints()
+#m_2.set('exp_var',.1)
+#m_2.set('rbf_var',10)
+print m_2.checkgrad()
+m_2.optimize()
+print m_2
+#plot
+pb.figure()
+m_2.plot()
+#prediction
+mean_2,var_2,lower_2,upper_2 = m_2.predict(time_star)
+GPy.util.plot.gpplot(time_star,mean_2,lower_2,upper_2)
+pb.xlim(0,3000)
+pb.title('Poisson Incidence - time')
+"""
+"""
+Model 3 for incidence
+"""
+print 'Incidence model 1'
+#kernel
+periodic_3 = GPy.kern.periodic_exponential(1)
+rbf_3 = GPy.kern.rbf(2)
+linear_3 = GPy.kern.linear(2)
+bias_3 = GPy.kern.bias(2)
+noise_3 = GPy.kern.white(2)
+#likelihood
+like_3 = GPy.likelihoods.Gaussian(inc,normalize =True)
+#model
+m_3 = GPy.models.GP(np.hstack([time,weather]), like_3,bias_3+rbf_3, normalize_X=True)
+#optimize
+m_3.ensure_default_constraints()
+#m_2.set('exp_len',1)
+print m_3.checkgrad(verbose=True)
+m_3.optimize()
+print m_3
+#prediction
+pb.figure()
+mean_3_1,var_3_1,lower_3_1,upper_3_1 = m_3.predict(np.hstack([time,weather]))
+GPy.util.plot.gpplot(time,mean_3_1,lower_3_1,upper_3_1)
+pb.plot(time,inc,'kx',mew=1.5)
+mean_3,var_3,lower_3,upper_3 = m_3.predict(np.hstack([time_star,mean_w]))
+GPy.util.plot.gpplot(time_star,mean_3,lower_3,upper_3)
+pb.xlim(0,3000)
+pb.title('Incidence - time+weather')
+pb.ylim(-1000,6000)
+
+"""
+Model 4 for incidence
+"""
+print 'Incidence model 1'
+#kernel
+periodic_4 = GPy.kern.periodic_exponential(1)
+linear_4 = GPy.kern.linear(3)
+bias_4 = GPy.kern.bias(3)
+rbf_4 = GPy.kern.rbf(3)
+noise_4 = GPy.kern.white(3)
+#likelihood
+like_4 = GPy.likelihoods.Gaussian(inc,normalize =True)
+#model
+m_4 = GPy.models.GP(np.hstack([time,weather,weather2]), like_4, rbf_4+rbf_4.copy()+bias_4, normalize_X=True)
+#optimize
+m_4.ensure_default_constraints()
+m_4.set('2_len',1)
+m_4.set('1_len',.1)
+print m_4.checkgrad(verbose=True)
+m_4.optimize()
+print m_4
+#prediction
+pb.figure()
+mean_4_1,var_4_1,lower_4_1,upper_4_1 = m_4.predict(np.hstack([time,weather,weather2]))
+GPy.util.plot.gpplot(time,mean_4_1,lower_4_1,upper_4_1)
+pb.plot(time,inc,'kx',mew=1.5)
+mean_4,var_4,lower_4,upper_4 = m_4.predict(np.hstack([time_star,mean_w,mean_w2]))
+GPy.util.plot.gpplot(time_star,mean_4,lower_4,upper_4)
+pb.xlim(0,3000)
+pb.title('Incidence - time+weather+weather')
+pb.ylim(-1000,6000)
+
