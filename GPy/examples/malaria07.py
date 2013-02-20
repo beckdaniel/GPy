@@ -20,7 +20,7 @@ all_districts = malaria_data['districts']
 all_variables = malaria_data['headers']
 
 #Define districts to analyze
-d_names = ['Mubende','Nakasongola','Kamuli','Kampala','Mukono','Luwero','Tororo']
+d_names = ['Mubende','Nakasongola']#,'Kamuli','Kampala','Mukono','Luwero','Tororo']
 d_numbers = np.hstack([np.arange(len(malaria_data['districts']))[np.array(malaria_data['districts']) == d_i] for d_i in d_names])
 
 #Define output
@@ -32,7 +32,7 @@ for output_i in Y_numbers:
     Y_list[-1] = np.hstack(Y_list[-1])[:,None]
 
 #Define input
-X_names = ['district','time','ndvi','longitude','latitude','altitude']
+X_names = ['district','time']#,'ndvi','longitude','latitude','altitude']
 X_numbers = np.hstack([np.arange(len(malaria_data['headers']))[np.array(malaria_data['headers']) == n_i] for n_i in X_names])
 X_list = []
 for output_i,new_num_i in zip(Y_numbers,range(len(Y_numbers))):
@@ -53,22 +53,23 @@ R = len(Y_names)
 D = len(X_names) - 1 #-1 if district is in X_names
 rbf = GPy.kern.rbf(D)
 noise = GPy.kern.white(D)
-base = rbf + rbf.copy() + noise
+periodic = GPy.kern.periodic_exponential(1)
+#base = rbf + rbf.copy() + noise
+base = rbf + periodic
 kernel = GPy.kern.icm(base,R,index=0,Dw=2)
-
 #Define model
 m = GPy.models.mGP(X_list, likelihoods, kernel, normalize_X=True,normalize_Y=False)
 
 # Constraints
 m.scale_factor = 1.
 m.ensure_default_constraints()
-m.unconstrain('rbf_1_var')
-m.constrain_fixed('rbf_1_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
-m.unconstrain('rbf_2_var')
-m.constrain_fixed('rbf_2_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
+m.unconstrain('rbf_var')
+m.constrain_fixed('rbf_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
+#m.unconstrain('rbf_2_var')
+#m.constrain_fixed('rbf_2_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
 m.constrain_positive('kappa')
-m.set('_1_len',.10)
-m.set('_2_len',.1)
+#m.set('_1_len',.10)
+#m.set('_2_len',.1)
 m.set('W',np.random.rand(R*2))
 
 #Optimize
