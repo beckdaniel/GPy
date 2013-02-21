@@ -34,7 +34,7 @@ class sparse_GP(GP):
     """
 
     def __init__(self, X, likelihood, kernel, Z, X_uncertainty=None, Xslices=None,Zslices=None, normalize_X=False):
-        self.scale_factor = 1.0# a scaling factor to help keep the algorithm stable
+        self.scale_factor = 100.0# a scaling factor to help keep the algorithm stable
 
         self.Z = Z
         self.Zslices = Zslices
@@ -48,6 +48,9 @@ class sparse_GP(GP):
             assert X_uncertainty.shape==X.shape
             self.has_uncertain_inputs=True
             self.X_uncertainty = X_uncertainty
+
+        if not self.likelihood.is_heteroscedastic:
+            self.likelihood.trYYT = np.trace(np.dot(self.likelihood.Y, self.likelihood.Y.T)) # TODO: something more elegant here?
 
         GP.__init__(self, X, likelihood, kernel=kernel, normalize_X=normalize_X, Xslices=Xslices)
 
@@ -104,9 +107,11 @@ class sparse_GP(GP):
             self.dL_dpsi2 += - 0.5 * self.likelihood.precision[:,None,None]/sf2 * self.D * self.C[None,:,:] # dC
             self.dL_dpsi2 += - 0.5 * self.likelihood.precision[:,None,None]* self.E[None,:,:] # dD
         else:
-            self.dL_dpsi2 = 0.5 * self.likelihood.precision * self.D * self.Kmmi[None,:,:] # dB
-            self.dL_dpsi2 += - 0.5 * self.likelihood.precision/sf2 * self.D * self.C[None,:,:] # dC
-            self.dL_dpsi2 += - 0.5 * self.likelihood.precision * self.E[None,:,:] # dD
+            self.dL_dpsi2 = 0.5 * self.likelihood.precision * self.D * self.Kmmi # dB
+            self.dL_dpsi2 += - 0.5 * self.likelihood.precision/sf2 * self.D * self.C # dC
+            self.dL_dpsi2 += - 0.5 * self.likelihood.precision * self.E # dD
+            #repeat for each of the N psi_2 matrices
+            self.dL_dpsi2 = np.repeat(self.dL_dpsi2[None,:,:],self.N,axis=0)
 
         # Compute dL_dKmm
         self.dL_dKmm = -0.5 * self.D * mdot(self.Lmi.T, self.A, self.Lmi)*sf2 # dB
@@ -143,7 +148,7 @@ class sparse_GP(GP):
         return np.hstack([self.Z.flatten(),GP._get_params(self)])
 
     def _get_param_names(self):
-        return sum([['iip_%i_%i'%(i,j) for i in range(self.Z.shape[0])] for j in range(self.Z.shape[1])],[]) + GP._get_param_names(self)
+        return sum([['iip_%i_%i'%(i,j) for j in range(self.Z.shape[1])] for i in range(self.Z.shape[0])],[]) + GP._get_param_names(self)
 
     def log_likelihood(self):
         """ Compute the (lower bound on the) log marginal likelihood """
@@ -171,7 +176,11 @@ class sparse_GP(GP):
             dL_dtheta += self.kern.dpsi2_dtheta(self.dL_dpsi2,self.dL_dpsi1.T, self.Z,self.X, self.X_uncertainty)
         else:
             #re-cast computations in psi2 back to psi1:
-            dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2.sum(0),self.psi1)
+            #dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2.sum(0),self.psi1)
+            if not self.likelihood.is_heteroscedastic:
+                dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2[0,:,:],self.psi1)
+            else:
+                raise NotImplementedError, "TODO"
             dL_dtheta += self.kern.dK_dtheta(dL_dpsi1,self.Z,self.X)
             dL_dtheta += self.kern.dKdiag_dtheta(self.dL_dpsi0, self.X)
 
@@ -187,7 +196,10 @@ class sparse_GP(GP):
             dL_dZ += 2.*self.kern.dpsi2_dZ(self.dL_dpsi2,self.Z,self.X, self.X_uncertainty) # 'stripes'
         else:
             #re-cast computations in psi2 back to psi1:
-            dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2.sum(0),self.psi1)
+            if not self.likelihood.is_heteroscedastic:
+                dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2[0,:,:],self.psi1)
+            else:
+                raise NotImplementedError, "TODO"
             dL_dZ += self.kern.dK_dX(dL_dpsi1,self.Z,self.X)
         return dL_dZ
 

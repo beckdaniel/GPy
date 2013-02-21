@@ -5,31 +5,38 @@ class Gaussian(likelihood):
     def __init__(self,data,variance=1.,normalize=False):
         self.is_heteroscedastic = False
         self.Nparams = 1
-        self.data = data
-        self.N,D = data.shape
         self.Z = 0. # a correction factor which accounts for the approximation made
+        N, self.D = data.shape
 
         #normalisation
         if normalize:
             self._mean = data.mean(0)[None,:]
             self._std = data.std(0)[None,:]
-            self.Y = (self.data - self._mean)/self._std
         else:
-            self._mean = np.zeros((1,D))
-            self._std = np.ones((1,D))
-            self.Y = self.data
+            self._mean = np.zeros((1,self.D))
+            self._std = np.ones((1,self.D))
 
-        #TODO: make this work efficiently (only compute YYT if D>>N)
-        self.YYT = np.dot(self.Y,self.Y.T)
-        self.trYYT = np.trace(self.YYT)
+        self.set_data(data)
+
         self._set_params(np.asarray(variance))
 
+    def set_data(self,data):
+        self.data = data
+        self.N,D = data.shape
+        assert D == self.D
+        self.Y = (self.data - self._mean)/self._std
+        if D > self.N:
+            self.YYT = np.dot(self.Y,self.Y.T)
+            self.trYYT = np.trace(self.YYT)
+        else:
+            self.YYT = None
+            self.trYYT = None
 
     def _get_params(self):
         return np.asarray(self._variance)
 
     def _get_param_names(self):
-        return ["noise variance"]
+        return ["noise_variance"]
 
     def _set_params(self,x):
         self._variance = float(x)

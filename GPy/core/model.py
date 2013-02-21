@@ -10,7 +10,7 @@ from parameterised import parameterised, truncate_pad
 import priors
 from ..util.linalg import jitchol
 from ..inference import optimization
-from GPy import likelihoods
+from .. import likelihoods
 
 class model(parameterised):
     def __init__(self):
@@ -294,7 +294,13 @@ class model(parameterised):
         strs = [str(p) if p is not None else '' for p in self.priors]
         width = np.array(max([len(p) for p in strs] + [5])) + 4
 
-        s[0] = 'Marginal log-likelihood: {0:.3e}\n'.format(self.log_likelihood()) + s[0]
+        log_like = self.log_likelihood()
+        log_prior = self.log_prior()
+        obj_funct = '\nLog-likelihood: {0:.3e}'.format(log_like)
+        if len(''.join(strs)) != 0:
+            obj_funct += ', Log prior: {0:.3e}, LL+prior = {0:.3e}'.format(log_prior, log_like + log_prior)
+        obj_funct += '\n\n'
+        s[0] = obj_funct + s[0]
         s[0] += "|{h:^{col}}".format(h = 'Prior', col = width)
         s[1] += '-'*(width + 1)
 
@@ -304,7 +310,7 @@ class model(parameterised):
         return '\n'.join(s)
 
 
-    def checkgrad(self, verbose=False, include_priors=False, step=1e-6, tolerance = 1e-3):
+    def checkgrad(self, target_param = None, verbose=False, step=1e-6, tolerance = 1e-3):
         """
         Check the gradient of the model by comparing to a numerical estimate.
         If the verbose flag is passed, invividual components are tested (and printed)
@@ -361,7 +367,12 @@ class model(parameterised):
             separator = '-'*len(header_string[0])
             print '\n'.join([header_string[0], separator])
 
-            for i in range(len(x)):
+            if target_param is None:
+                param_list = range(len(x))
+            else:
+                param_list = self.grep_param_names(target_param)
+                
+            for i in param_list:
                 xx = x.copy()
                 xx[i] += step
                 self._set_params_transformed(xx)

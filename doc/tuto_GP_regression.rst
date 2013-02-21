@@ -2,11 +2,6 @@
 Gaussian process regression tutorial
 *************************************
 
-#.. ipython:: python
-#
-#    print "Hello world"
-#    X = [[1, 10], [1, 20], [1, -2]]
-
 We will see in this tutorial the basics for building a 1 dimensional and a 2 dimensional Gaussian process regression model, also known as a kriging model.
 
 We first import the libraries we will need: ::
@@ -16,7 +11,7 @@ We first import the libraries we will need: ::
     import numpy as np
     import GPy
 
-1 dimensional model
+1-dimensional model
 ===================
 
 For this toy example, we assume we have the following inputs and outputs::
@@ -103,7 +98,7 @@ Once again, we can use ``print(m)`` and ``m.plot()`` to look at the resulting mo
     GP regression model after optimization of the parameters.
 
 
-2 dimensional example
+2-dimensional example
 =====================
 
 Here is a 2 dimensional example::

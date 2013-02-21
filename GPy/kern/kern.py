@@ -8,6 +8,7 @@ from ..core.parameterised import parameterised
 from kernpart import kernpart
 import itertools
 from product_orthogonal import product_orthogonal
+from product import product
 
 class kern(parameterised):
     def __init__(self,D,parts=[], input_slices=None):
@@ -49,6 +50,18 @@ class kern(parameterised):
         self.compute_param_slices()
 
         parameterised.__init__(self)
+
+    def _transform_gradients(self,g):
+        x = self._get_params()
+        g[self.constrained_positive_indices] = g[self.constrained_positive_indices]*x[self.constrained_positive_indices]
+        g[self.constrained_negative_indices] = g[self.constrained_negative_indices]*x[self.constrained_negative_indices]
+        [np.put(g,i,g[i]*(x[i]-l)*(h-x[i])/(h-l)) for i,l,h in zip(self.constrained_bounded_indices, self.constrained_bounded_lowers, self.constrained_bounded_uppers)]
+        [np.put(g,i,v) for i,v in [(t[0],np.sum(g[t])) for t in self.tied_indices]]
+        if len(self.tied_indices) or len(self.constrained_fixed_indices):
+            to_remove = np.hstack((self.constrained_fixed_indices+[t[1:] for t in self.tied_indices]))
+            return np.delete(g,to_remove)
+        else:
+            return g
 
     def compute_param_slices(self):
         """create a set of slices that can index the parameters of each part"""
@@ -137,24 +150,38 @@ class kern(parameterised):
         """
         Shortcut for `prod_orthogonal`. Note that `+` assumes that we sum 2 kernels defines on the same space whereas `*` assumes that the kernels are defined on different subspaces.
         """
-        return self.prod_orthogonal(other)
+        return self.prod(other)
 
-    def prod_orthogonal(self,other):
+    def prod(self,other):
         """
-        multiply two kernels. Both kernels are defined on separate spaces. Note that the constrains on the parameters of the kernels to multiply will be lost.
+        multiply two kernels defined on the same spaces.
         :param other: the other kernel to be added
         :type other: GPy.kern
         """
         K1 = self.copy()
         K2 = other.copy()
-        K1.unconstrain('')
-        K2.unconstrain('')
 
-        prev_ties = K1.tied_indices + [arr + K1.Nparam for arr in K2.tied_indices]
-        K1.untie_everything()
-        K2.untie_everything()
+        newkernparts = [product(k1,k2) for k1, k2 in itertools.product(K1.parts,K2.parts)]
 
-        D = K1.D + K2.D
+        slices = []
+        for sl1, sl2 in itertools.product(K1.input_slices,K2.input_slices):
+            s1, s2 = [False]*K1.D, [False]*K2.D
+            s1[sl1], s2[sl2] = [True], [True]
+            slices += [s1+s2]
+
+        newkern = kern(K1.D, newkernparts, slices)
+        newkern._follow_constrains(K1,K2)
+
+        return newkern
+
+    def prod_orthogonal(self,other):
+        """
+        multiply two kernels. Both kernels are defined on separate spaces.
+        :param other: the other kernel to be added
+        :type other: GPy.kern
+        """
+        K1 = self.copy()
+        K2 = other.copy()
 
         newkernparts = [product_orthogonal(k1,k2) for k1, k2 in itertools.product(K1.parts,K2.parts)]
 
@@ -164,9 +191,14 @@ class kern(parameterised):
             s1[sl1], s2[sl2] = [True], [True]
             slices += [s1+s2]
 
-        newkern = kern(D, newkernparts, slices)
+        newkern = kern(K1.D + K2.D, newkernparts, slices)
+        newkern._follow_constrains(K1,K2)
 
-        # create the ties
+        return newkern
+
+    def _follow_constrains(self,K1,K2):
+
+        # Build the array that allows to go from the initial indices of the param to the new ones
         K1_param = []
         n = 0
         for k1 in K1.parts:
@@ -180,19 +212,40 @@ class kern(parameterised):
         index_param = []
         for p1 in K1_param:
             for p2 in K2_param:
-                index_param += [0] + p1[1:] + p2[1:]
+                index_param += p1 + p2
         index_param = np.array(index_param)
+
+        # Get the ties and constrains of the kernels before the multiplication
+        prev_ties = K1.tied_indices + [arr + K1.Nparam for arr in K2.tied_indices]
+
+        prev_constr_pos = np.append(K1.constrained_positive_indices, K1.Nparam + K2.constrained_positive_indices)
+        prev_constr_neg = np.append(K1.constrained_negative_indices, K1.Nparam + K2.constrained_negative_indices)
+
+        prev_constr_fix = K1.constrained_fixed_indices + [arr + K1.Nparam for arr in K2.constrained_fixed_indices]
+        prev_constr_fix_values = K1.constrained_fixed_values + K2.constrained_fixed_values
+
+        prev_constr_bou = K1.constrained_bounded_indices + [arr + K1.Nparam for arr in K2.constrained_bounded_indices]
+        prev_constr_bou_low = K1.constrained_bounded_lowers + K2.constrained_bounded_lowers
+        prev_constr_bou_upp = K1.constrained_bounded_uppers + K2.constrained_bounded_uppers
 
         # follow the previous ties
         for arr in prev_ties:
             for j in arr:
                 index_param[np.where(index_param==j)[0]] = arr[0]
 
-        # tie
-        for i in np.unique(index_param)[1:]:
-            newkern.tie_param(np.where(index_param==i)[0])
-
-        return newkern
+        # ties and constrains
+        for i in range(K1.Nparam + K2.Nparam):
+            index = np.where(index_param==i)[0]
+            if index.size > 1:
+                self.tie_param(index)
+        for i in prev_constr_pos:
+            self.constrain_positive(np.where(index_param==i)[0])
+        for i in prev_constr_neg:
+            self.constrain_neg(np.where(index_param==i)[0])
+        for j, i in enumerate(prev_constr_fix):
+            self.constrain_fixed(np.where(index_param==i)[0],prev_constr_fix_values[j])
+        for j, i in enumerate(prev_constr_bou):
+            self.constrain_bounded(np.where(index_param==i)[0],prev_constr_bou_low[j],prev_constr_bou_upp[j])
 
     def _get_params(self):
         return np.hstack([p._get_params() for p in self.parts])
@@ -237,8 +290,7 @@ class kern(parameterised):
         target = np.zeros(self.Nparam)
         [p.dK_dtheta(partial[s1,s2],X[s1,i_s],X2[s2,i_s],target[ps]) for p,i_s,ps,s1,s2 in zip(self.parts, self.input_slices, self.param_slices, slices1, slices2)]
 
-	#TODO: transform the gradients here!
-        return target
+        return self._transform_gradients(target)
 
     def dK_dX(self,partial,X,X2=None,slices1=None,slices2=None):
         if X2 is None:
@@ -262,7 +314,7 @@ class kern(parameterised):
         slices = self._process_slices(slices,False)
         target = np.zeros(self.Nparam)
         [p.dKdiag_dtheta(partial[s],X[s,i_s],target[ps]) for p,i_s,s,ps in zip(self.parts,self.input_slices,slices,self.param_slices)]
-        return target
+        return self._transform_gradients(target)
 
     def dKdiag_dX(self, partial, X, slices=None):
         assert X.shape[1]==self.D
@@ -281,7 +333,7 @@ class kern(parameterised):
         slices = self._process_slices(slices,False)
         target = np.zeros(self.Nparam)
         [p.dpsi0_dtheta(partial[s],Z,mu[s],S[s],target[ps]) for p,ps,s in zip(self.parts, self.param_slices,slices)]
-        return target
+        return self._transform_gradients(target)
 
     def dpsi0_dmuS(self,partial,Z,mu,S,slices=None):
         slices = self._process_slices(slices,False)
@@ -301,7 +353,7 @@ class kern(parameterised):
         slices1, slices2 = self._process_slices(slices1,slices2)
         target = np.zeros((self.Nparam))
         [p.dpsi1_dtheta(partial[s2,s1],Z[s2,i_s],mu[s1,i_s],S[s1,i_s],target[ps]) for p,ps,s1,s2,i_s in zip(self.parts, self.param_slices,slices1,slices2,self.input_slices)]
-        return target
+        return self._transform_gradients(target)
 
     def dpsi1_dZ(self,partial,Z,mu,S,slices1=None,slices2=None):
         """N,M,Q"""
@@ -326,15 +378,23 @@ class kern(parameterised):
         slices1, slices2 = self._process_slices(slices1,slices2)
         [p.psi2(Z[s2,i_s],mu[s1,i_s],S[s1,i_s],target[s1,s2,s2]) for p,i_s,s1,s2 in zip(self.parts,self.input_slices,slices1,slices2)]
 
-        # MASSIVE TODO: do something smart for white
-        # "crossterms"
-        psi1_matrices = [np.zeros((mu.shape[0], Z.shape[0])) for p in self.parts]
-        [p.psi1(Z[s2],mu[s1],S[s1],psi1_target[s1,s2]) for p,s1,s2,psi1_target in zip(self.parts,slices1,slices2, psi1_matrices)]
-        for a,b in itertools.combinations(psi1_matrices, 2):
-            tmp = np.multiply(a,b)
-            target += tmp[:,None,:] + tmp[:, :,None]
 
-        return target
+
+        # "crossterms". Here we are recomputing psi1 for white (we don't need to), but it's
+        # not really expensive, since it's just a matrix of zeroes.
+        # psi1_matrices = [np.zeros((mu.shape[0], Z.shape[0])) for p in self.parts]
+        # [p.psi1(Z[s2],mu[s1],S[s1],psi1_target[s1,s2]) for p,s1,s2,psi1_target in zip(self.parts,slices1,slices2, psi1_matrices)]
+
+        crossterms = 0.0
+        # for 3 kernels this returns something like
+        # [(0,1), (0,2), (1,2)]
+        # in theory, we should also account for (1,0), (2,0) and so on, but
+        # the transpose deals exactly with that
+        # for a,b in itertools.combinations(psi1_matrices, 2):
+        #     tmp = np.multiply(a,b)
+        #     crossterms += tmp[:,None,:] + tmp[:, :,None]
+
+        return target + crossterms
 
     def dpsi2_dtheta(self,partial,partial1,Z,mu,S,slices1=None,slices2=None):
         """Returns shape (N,M,M,Ntheta)"""
@@ -342,23 +402,27 @@ class kern(parameterised):
         target = np.zeros(self.Nparam)
         [p.dpsi2_dtheta(partial[s1,s2,s2],Z[s2,i_s],mu[s1,i_s],S[s1,i_s],target[ps]) for p,i_s,s1,s2,ps in zip(self.parts,self.input_slices,slices1,slices2,self.param_slices)]
 
+        # # "crossterms"
+        # # 1. get all the psi1 statistics
+        # psi1_matrices = [np.zeros((mu.shape[0], Z.shape[0])) for p in self.parts]
+        # [p.psi1(Z[s2],mu[s1],S[s1],psi1_target[s1,s2]) for p,s1,s2,psi1_target in zip(self.parts,slices1,slices2, psi1_matrices)]
 
-        # "crossterms"
-        # 1. get all the psi1 statistics
-        psi1_matrices = [np.zeros((mu.shape[0], Z.shape[0])) for p in self.parts]
-        [p.psi1(Z[s2],mu[s1],S[s1],psi1_target[s1,s2]) for p,s1,s2,psi1_target in zip(self.parts,slices1,slices2, psi1_matrices)]
-        partial1 = np.zeros_like(partial1)
+        # partial1 = np.ones_like(partial1)
+        # # 2. get all the dpsi1/dtheta gradients
+        # psi1_gradients = [np.zeros(self.Nparam) for p in self.parts]
+        # [p.dpsi1_dtheta(partial1[s2,s1],Z[s2,i_s],mu[s1,i_s],S[s1,i_s],psi1g_target[ps]) for p,ps,s1,s2,i_s,psi1g_target in zip(self.parts, self.param_slices,slices1,slices2,self.input_slices,psi1_gradients)]
 
-        # 2. get all the dpsi1/dtheta gradients
-        psi1_gradients = [np.zeros(self.Nparam) for p in self.parts]
-        [p.dpsi1_dtheta(partial1[s2,s1],Z[s2,i_s],mu[s1,i_s],S[s1,i_s],psi1g_target[ps]) for p,ps,s1,s2,i_s,psi1g_target in zip(self.parts, self.param_slices,slices1,slices2,self.input_slices,psi1_gradients)]
 
-        # 3. multiply them somehow
-        for a,b in itertools.combinations(range(len(psi1_matrices)), 2):
-            gne = (psi1_gradients[a][None]*psi1_matrices[b].sum(0)[:,None]).sum(0)
+        # # 3. multiply them somehow
+        # for a,b in itertools.combinations(range(len(psi1_matrices)), 2):
 
-            target += (gne[None] + gne[:, None]).sum(0)
-        return target
+        #     tmp = (psi1_gradients[a][None, None] * psi1_matrices[b][:,:, None])
+        #     # target += (tmp[None] + tmp[:,None]).sum(0).sum(0).sum(0)
+        #     # gne = (psi1_gradients[a].sum()*psi1_matrices[b].sum())
+        #     # target += gne
+        #     #target += (gne[None] + gne[:, None]).sum(0)
+        #     target += (partial.sum(0)[:,:,None] * (tmp[:, None] + tmp[:,:,None]).sum(0)).sum(0).sum(0)
+        return self._transform_gradients(target)
 
     def dpsi2_dZ(self,partial,Z,mu,S,slices1=None,slices2=None):
         slices1, slices2 = self._process_slices(slices1,slices2)
@@ -376,7 +440,7 @@ class kern(parameterised):
         #TODO: there are some extra terms to compute here!
         return target_mu, target_S
 
-    def plot(self, x = None, plot_limits=None,which_functions='all',resolution=None):
+    def plot(self, x = None, plot_limits=None,which_functions='all',resolution=None,*args,**kwargs):
         if which_functions=='all':
             which_functions = [True]*self.Nparts
         if self.D == 1:
@@ -396,7 +460,7 @@ class kern(parameterised):
 
             Xnew = np.linspace(xmin,xmax,resolution or 201)[:,None]
             Kx = self.K(Xnew,x,slices2=which_functions)
-            pb.plot(Xnew,Kx)
+            pb.plot(Xnew,Kx,*args,**kwargs)
             pb.xlim(xmin,xmax)
             pb.xlabel("x")
             pb.ylabel("k(x,%0.1f)" %x)
@@ -423,7 +487,7 @@ class kern(parameterised):
             Xnew = np.vstack((xx.flatten(),yy.flatten())).T
             Kx = self.K(Xnew,x,slices2=which_functions)
             Kx = Kx.reshape(resolution,resolution).T
-            pb.contour(xg,yg,Kx,vmin=Kx.min(),vmax=Kx.max(),cmap=pb.cm.jet)
+            pb.contour(xg,yg,Kx,vmin=Kx.min(),vmax=Kx.max(),cmap=pb.cm.jet,*args,**kwargs)
             pb.xlim(xmin[0],xmax[0])
             pb.ylim(xmin[1],xmax[1])
             pb.xlabel("x1")

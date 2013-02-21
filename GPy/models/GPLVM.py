@@ -38,7 +38,7 @@ class GPLVM(GP):
             return np.random.randn(Y.shape[0], Q)
 
     def _get_param_names(self):
-        return sum([['X_%i_%i'%(n,q) for n in range(self.N)] for q in range(self.Q)],[]) + GP._get_param_names(self)
+        return sum([['X_%i_%i'%(n,q) for q in range(self.Q)] for n in range(self.N)],[]) + GP._get_param_names(self)
 
     def _get_params(self):
         return np.hstack((self.X.flatten(), GP._get_params(self)))
@@ -53,10 +53,10 @@ class GPLVM(GP):
         return np.hstack((dL_dX.flatten(),GP._log_likelihood_gradients(self)))
 
     def plot(self):
-        assert self.Y.shape[1]==2
-        pb.scatter(self.Y[:,0],self.Y[:,1],40,self.X[:,0].copy(),linewidth=0,cmap=pb.cm.jet)
+        assert self.likelihood.Y.shape[1]==2
+        pb.scatter(self.likelihood.Y[:,0],self.likelihood.Y[:,1],40,self.X[:,0].copy(),linewidth=0,cmap=pb.cm.jet)
         Xnew = np.linspace(self.X.min(),self.X.max(),200)[:,None]
-        mu, var = self.predict(Xnew)
+        mu, var, upper, lower = self.predict(Xnew)
         pb.plot(mu[:,0], mu[:,1],'k',linewidth=1.5)
 
     def plot_latent(self):

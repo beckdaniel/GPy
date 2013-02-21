@@ -37,7 +37,7 @@ try:
 except ImportError:
     print "no sphinx"
 
-#sys.path.insert(0, os.getcwd() + "/..")
+print "sys.path:", sys.path
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -45,7 +45,6 @@ except ImportError:
 #sys.path.insert(0, os.path.abspath('../GPy'))
 
 #print "sys.path.after:", sys.path
-
 
 # If your extensions are in another directory, add it here. If the directory
 # is relative to the documentation root, use os.path.abspath to make it
@@ -55,7 +54,6 @@ sys.path.append(os.path.abspath('sphinxext'))
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
 #sys.path.insert(0, os.path.abspath('./sphinxext'))
 
 # -- General configuration -----------------------------------------------------
@@ -70,13 +68,12 @@ print "Importing extensions"
 extensions = ['sphinx.ext.autodoc',
               #'sphinx.ext.doctest'
               'sphinx.ext.viewcode',
-              'sphinx.ext.pngmath'
-              #'ipython_directive',
-              #'ipython_console_highlighting.py'
-              #'matplotlib.sphinxext.mathmpl',
-              #'matplotlib.sphinxext.only_directives',
-              #'matplotlib.sphinxext.plot_directive',
+              'sphinx.ext.pngmath',
+              'ipython_directive',
+              'ipython_console_highlighting'
+              #'matplotlib.sphinxext.plot_directive'
              ]
+plot_formats = [('png', 80), ('pdf', 50)]
 
 print "finished importing"
 
@@ -106,7 +103,7 @@ class Mock(object):
 #import mock
 
 print "Mocking"
-MOCK_MODULES = ['pylab', 'matplotlib', 'sympy', 'sympy.utilities', 'sympy.utilities.codegen', 'sympy.core.cache', 'sympy.core', 'sympy.parsing', 'sympy.parsing.sympy_parser']
+MOCK_MODULES = ['pylab', 'sympy', 'sympy.utilities', 'sympy.utilities.codegen', 'sympy.core.cache', 'sympy.core', 'sympy.parsing', 'sympy.parsing.sympy_parser', 'matplotlib']
 #'matplotlib', 'matplotlib.color', 'matplotlib.pyplot', 'pylab' ]
 for mod_name in MOCK_MODULES:
     sys.modules[mod_name] = Mock()
@@ -114,13 +111,27 @@ for mod_name in MOCK_MODULES:
 # ----------------------- READTHEDOCS ------------------
 on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
+on_rtd = True
 if on_rtd:
-    sys.path.insert(0, os.getcwd() + "/../GPy")
-    #sys.path.append("../GPy")
-    os.system("pwd")
-    os.system("sphinx-apidoc -f -o . ../GPy")
-    #os.system("cd ..")
-    #os.system("cd ./docs")
+    sys.path.append(os.path.abspath('../GPy'))
+
+    import subprocess
+
+    proc = subprocess.Popen("pwd", stdout=subprocess.PIPE, shell=True)
+    (out, err) = proc.communicate()
+    print "program output:", out
+    proc = subprocess.Popen("ls ../", stdout=subprocess.PIPE, shell=True)
+    (out, err) = proc.communicate()
+    print "program output:", out
+    proc = subprocess.Popen("sphinx-apidoc -f -o . ../GPy", stdout=subprocess.PIPE, shell=True)
+    (out, err) = proc.communicate()
+    print "program output:", out
+    #proc = subprocess.Popen("whereis numpy", stdout=subprocess.PIPE, shell=True)
+    #(out, err) = proc.communicate()
+    #print "program output:", out
+    #proc = subprocess.Popen("whereis matplotlib", stdout=subprocess.PIPE, shell=True)
+    #(out, err) = proc.communicate()
+    #print "program output:", out
 
 print "Compiled files"
 
@@ -383,18 +394,5 @@ epub_copyright = u'2013, Author'
 
 # Allow duplicate toc entries.
 #epub_tocdup = True
-
-#############################################################################
-#
-# Include constructors in all the docs
-# Got this method from:
-# http://stackoverflow.com/questions/5599254/how-to-use-sphinxs-autodoc-to-document-a-classs-init-self-method
-#def skip(app, what, name, obj, skip, options):
-    #if name == "__init__":
-        #return False
-    #return skip
-
-#def setup(app):
-    #app.connect("autodoc-skip-member", skip)
 
 autodoc_member_order = "source"
