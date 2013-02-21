@@ -30,7 +30,6 @@ def crescent_data(model_type='Full', inducing=10, seed=default_seed): #FIXME
     distribution = GPy.likelihoods.likelihood_functions.probit()
     likelihood = GPy.likelihoods.EP(data['Y'],distribution)
 
-
     if model_type=='Full':
         m = GPy.models.GP(data['X'],likelihood,kernel)
     else:
@@ -38,12 +37,11 @@ def crescent_data(model_type='Full', inducing=10, seed=default_seed): #FIXME
         m = GPy.models.sparse_GP_EP(data['X'],likelihood=likelihood,inducing=inducing,ep_proxy=model_type)
 
     m.update_likelihood_approximation()
-    print(m)
 
     # optimize
     m.optimize()
-    print(m)
 
+    print(m)
     # plot
     m.plot()
     return m

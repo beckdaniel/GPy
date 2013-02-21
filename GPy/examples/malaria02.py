@@ -1,11 +1,15 @@
 """
 Multioutput GP for malaria counts
 dataset: ../../../playground/malaria/allMalariaData
+The model is applied to  Districts that are geographicaly close to each other
+W is a 2 x R matrix
+---------------------------------------------
+Masindi <-                            Luweero
+           Mpigi - Wakiso - Kampala - Mukono
 """
 #NOTE this test just considers incidences
 #NOTE this test doesn't use the last dataset
 #NOTE error in reference date definition
-#NOTE this test doesn't define W as a 2 x R matrix
 
 import numpy as np
 import pylab as pb
@@ -22,14 +26,12 @@ def string2date(string):
     day = int(string[6:8])
     return 2000+year, month, day
 
-#Set number of districts to work with (i.e. number of outputs)
-R = 8
 
 # Process Malaria data
 filename='../../../playground/malaria/allMalariaData'
 df=shelve.open(filename)
-districts = df.keys()
-districts = districts[:R]
+#districts = df.keys()
+districts = ['Masindi','Mpigi','Wakiso','Kampala','Mukono','Luweero']
 X_list = []
 Y_list = []
 for d,n in zip(districts,range(len(districts))):
@@ -53,8 +55,7 @@ for d,n in zip(districts,range(len(districts))):
                 print "Unexpected value: %s - %s - %s" %(d,i,df[d][i])
                 correct_value = False
             if correct_value:
-                #newX = (new_date[-1] - new_date[0]).days
-                X.append((new_date[-1] - new_date[0]).days) #NOTE this is wrong, reference date should not change for each output
+                X.append((new_date[-1] - new_date[0]).days)
     assert len(X) == len(Y)
     X = np.array(X)[:,None]
     Y = np.array(Y)[:,None]
@@ -62,11 +63,15 @@ for d,n in zip(districts,range(len(districts))):
     X_list.append(np.hstack([I,X]))
     Y_list.append(Y)
 
+#Set number of districts to work with (i.e. number of outputs)
+R = len(districts)
+
 # Define Gaussian likelihood
 likelihoods = []
 for y in Y_list:
     likelihoods.append(GPy.likelihoods.Gaussian(y))
 
+# Define the inducing inputs
 M = R #NOTE: the model won't work properly if M is different from R
 Zindex = [np.repeat(i,M)[:,None] for i in range(len(X_list))]
 _Z = [np.linspace(0,1300,M)[:,None] for a in range(M)]
@@ -77,7 +82,7 @@ rbf = GPy.kern.rbf(1)
 bias = GPy.kern.bias(1)
 noise = GPy.kern.white(1)
 base = rbf + noise #+ bias
-kernel = GPy.kern.icm(base,R,index=0)
+kernel = GPy.kern.icm(base,R,index=0,Dw=2)
 
 # Define the model
 m = GPy.models.multioutput_GP(X_list=X_list,likelihood_list=likelihoods,kernel=kernel,Z_list=Z_list,normalize_X=True) #NOTE: better to normalize X and Y

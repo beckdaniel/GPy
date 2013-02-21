@@ -38,6 +38,36 @@ class coreg_kern(kern):
         X = X[:,_range]
         return X,X_i
 
+    def __add__(self,other):
+        assert self.D == other.D
+        #N = 7
+        #D = 2
+        #R = 3
+        #M = 5
+        #_X = np.arange(1,N*D +1).reshape(N,D)
+        #I_ = np.array([0,0,1,1,1,2,2])[:,None]
+        #X = np.hstack([I_,_X])
+        newkern =  coreg_kern(self.D,self.parts+other.parts, self.input_slices + other.input_slices,self.index)
+        #transfer constraints:
+        newkern.constrained_positive_indices = np.hstack((self.constrained_positive_indices, self.Nparam + other.constrained_positive_indices))
+        newkern.constrained_negative_indices = np.hstack((self.constrained_negative_indices, self.Nparam + other.constrained_negative_indices))
+        newkern.constrained_bounded_indices = self.constrained_bounded_indices + [self.Nparam + x for x in other.constrained_bounded_indices]
+        newkern.constrained_bounded_lowers = self.constrained_bounded_lowers + other.constrained_bounded_lowers
+        newkern.constrained_bounded_uppers = self.constrained_bounded_uppers + other.constrained_bounded_uppers
+        newkern.constrained_fixed_indices = self.constrained_fixed_indices + [self.Nparam + x for x in other.constrained_fixed_indices]
+        newkern.constrained_fixed_values = self.constrained_fixed_values + other.constrained_fixed_values
+        newkern.tied_indices = self.tied_indices + [self.Nparam + x for x in other.tied_indices]
+        return newkern
+
+    def add(self,other):
+        """
+        Add another kernel to this one. Both kernels are defined on the same _space_
+        :param other: the other kernel to be added
+        :type other: GPy.kern
+        """
+        return self + other
+
+
     def K(self,X,X2=None,slices1=None,slices2=None):
         assert X.shape[1]==self.D + 1
         slices1, slices2 = self._process_slices(slices1,slices2)
@@ -88,7 +118,7 @@ class coreg_kern(kern):
         [p.dKdiag_dtheta(partial[s],X[s,i_s],target[ps],X_i=X_i[s]) for p,i_s,s,ps in zip(self.parts,self.input_slices,slices,self.param_slices)]
         return target
 
-    def dK_dX(self,partial,X,X2=None,slices1=None,slices2=None):
+    def dK_dX(self,partial,X,X2=None,slices1=None,slices2=None): #FIXME
         if X2 is None:
             X2 = X
         slices1, slices2 = self._process_slices(slices1,slices2)
@@ -107,6 +137,8 @@ class coreg_kern(kern):
         return target
 
     def psi0(self,Z,mu,S,slices=None):
+        raise NotImplementedError
+        """
         slices = self._process_slices(slices,False)
         Z,Z_i = self._extract_index(Z)
         mu,mu_i = self._extract_index(mu)
@@ -114,3 +146,8 @@ class coreg_kern(kern):
         target = np.zeros(mu.shape[0])
         [p.psi0(Z,mu[s],S[s],target[s],Z_i=Z_i[s],mu_i=mu_i[s],S_i=S_i[s]) for p,s in zip(self.parts,slices)]
         return target
+        """
+
+
+
+

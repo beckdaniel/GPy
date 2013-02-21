@@ -12,3 +12,4 @@ from sparse_GPLVM import sparse_GPLVM
 #from uncollapsed_sparse_GP import uncollapsed_sparse_GP
 from BGPLVM import Bayesian_GPLVM
 from multioutput_GP import multioutput_GP
+from mGP import mGP

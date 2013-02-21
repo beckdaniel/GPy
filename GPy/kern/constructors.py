@@ -254,7 +254,7 @@ def product_orthogonal(k1,k2):
     part = product_orthogonalpart(k1,k2)
     return kern(k1.D+k2.D, [part])
 
-def icm(base_kern,R,index=None):
-    part = icmpart(base_kern,R=R)
+def icm(base_kern,R,index=None,Dw=1):
+    part = icmpart(base_kern,R=R,Dw=Dw)
     D = base_kern.D
     return coreg_kern(D,[part],index=index)
