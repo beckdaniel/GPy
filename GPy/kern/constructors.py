@@ -23,6 +23,7 @@ from product_orthogonal import product_orthogonal as product_orthogonalpart
 #TODO these s=constructors are not as clean as we'd like. Tidy the code up
 #using meta-classes to make the objects construct properly wthout them.
 from icm import icm as icmpart
+from cor_white import cor_white as cor_whitepart
 from coreg_kern import coreg_kern
 
 def rbf(D,variance=1., lengthscale=None,ARD=False):
@@ -268,5 +269,10 @@ def product_orthogonal(k1,k2):
 
 def icm(base_kern,R,index=None,Dw=1):
     part = icmpart(base_kern,R=R,Dw=Dw)
+    D = base_kern.D
+    return coreg_kern(D,[part],index=index)
+
+def cor_white(base_kern,R,index=None,Dw=1):
+    part = cor_whitepart(base_kern,R=R,Dw=Dw)
     D = base_kern.D
     return coreg_kern(D,[part],index=index)

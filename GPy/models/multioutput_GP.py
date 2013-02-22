@@ -32,82 +32,162 @@ class multioutput_GP(sparse_GP):
     """
     #TODO allow mixed likelihoods (i.e. non-gaussian)
 
-    def __init__(self,X_list,likelihood_list,kernel=None,Z_list=None,M_i=10,normalize_X=False, Xslices_list=None):
+    def __init__(self,X_list,likelihood_list,kernel=None,Z=None,M=10,normalize_X=False, normalize_Y=False, Xslices_list=None,Zslices_list=None):
 
-        X = np.vstack(X_list)
-        Y = np.vstack([l.Y for l in likelihood_list])
-        likelihood = likelihoods.Gaussian(Y,normalize=True)
-        #distribution = likelihoods.likelihood_functions.Poisson()
-        #likelihood = likelihoods.EP(Y,distribution)
-
-        if Z_list is None:
-            Z = np.vstack([np.random.permutation(Xi.copy())[:M_i] for Xi in X_list])
-        else:
-            Z = np.vstack(Z_list)
-            assert Z.shape[1]==X.shape[1]
-
-        if kernel is None:
-            base = kern.rbf(X.shape[1]-1)
-            kernel = kern.icm(base,R=len(X_list),index=0)
-
-        Xslices = None #FIXME
-
-        self.Zos = self._get_output_slices(Z,kernel)
-        self.Xos = self._get_output_slices(X,kernel)
-
-        # Normalize: better to normalize before passing to sparse_GP
-        if normalize_X:
+        #Aggregate X_list and normalize values
+        X = np.vstack (X_list)
+        self.Xos = self._get_output_slices(X,kernel) #Slices per output
+        Xslices = None #TODO how to handle this?
+        if normalize_X: #Better to normalize before passing to GP/sparse_GP
             _Xmean = X.mean(0)[None,:]
             _Xstd = X.std(0)[None,:]
             _Xmean[:,self.index] = 0 # Index column shouldn't be normilized
             _Xstd[:,self.index] = 1 # Index column shouldn't be normilized
             X = (X.copy() - _Xmean) / _Xstd
-            #if hasattr(self,'Z'):
-            Z = (Z.copy() - _Xmean) / _Xstd
         else:
             _Xmean = np.zeros((1,X.shape[1]))
             _Xstd = np.ones((1,X.shape[1]))
 
-        #GP.__init__(self, X, likelihood, kernel, normalize_X=False)#, Xslices)
-        sparse_GP.__init__(self, X, likelihood, kernel,Z, normalize_X=False)#, Xslices)
+        #Aggregate Y_list and normalize values
+        self.likelihoods = [likelihoods.Gaussian(l.Y,normalize=normalize_Y) for l in likelihood_list] #Needed for handling mixed likelihoods
+        Y = np.vstack([l.Y for l in self.likelihoods]) #Needed for using GP/sparse_GP
+        likelihood = likelihoods.Gaussian(Y,normalize=False)
+
+        #Default kernel
+        if kernel is None:
+            base = kern.rbf(X.shape[1]-1)
+            kernel = kern.icm(base,R=len(X_list),index=0)
+
+        #Inducing inputs
+        if Z is None:
+            Z = np.vstack([np.random.permutation(Xi.copy())[:M] for Xi in X_list]) #FIXME inducing inputs are used across all outputs
+        else:
+            self._M = Z.shape[0]
+            Z = np.vstack([np.hstack([np.repeat(i,Z.shape[0])[:,None], Z]) for i in range(len(X_list))])
+        assert Z.shape[1]==X.shape[1]
+        self.Zos = self._get_output_slices(Z,kernel) #Slices per output
+        Zslices = None #TODO how to handle this?
+        if normalize_X: #Better to normalize before passing to GP/sparse_GP
+            _Zmean = Z.mean(0)[None,:]
+            _Zstd = Z.std(0)[None,:]
+            _Zmean[:,self.index] = 0 # Index column shouldn't be normilized
+            _Zstd[:,self.index] = 1 # Index column shouldn't be normilized
+            Z = (Z.copy() - _Zmean) / _Zstd
+        else:
+            _Zmean = np.zeros((1,Z.shape[1]))
+            _Zstd = np.ones((1,Z.shape[1]))
+
+
+        #Pass through GP/sparse_GP
+        sparse_GP.__init__(self, X, likelihood, kernel, Z, normalize_X=False, Xslices=Xslices)
+
+        #Overwrite _Xmean and _Xstd from GP/sparseGP
         self._Xmean = _Xmean
         self._Xstd = _Xstd
+        self._Zmean = _Zmean
+        self._Zstd = _Zstd
 
     def _get_output_slices(self,X,kernel):
+        """
+        Return the slices from X that correspond to each output
+        """
         self.R = kernel.parts[0].R
         self.index = kernel.index
         _range = range(X.shape[1])
         _range.pop(self.index)
         self.input_cols = np.array(_range)
-        self._I = X[:,self.index] #TODO change in MGP.py
+        self._I = X[:,self.index]
         used_terms = []
-        self.output_nums = np.array([s for s in self._I if s not in used_terms and not used_terms.append(s)])
-        assert all([self.R >= s for s in self.output_nums]), "Coregionalization matrix rank is smaller than number of outputs"
+        self.output_nums = np.array([int(s) for s in self._I if s not in used_terms and not used_terms.append(s)])
+        assert all([self.R >= s for s in self.output_nums]), "Coregionalization matrix rank is smaller than the number of outputs"
         nx = np.arange(self._I.size)
         return [slice(nx[self._I == s][0],1+nx[self._I == s][-1]) for s in self.output_nums]
 
     def _index_off(self,X):
+        """
+        Remove the output-index column from X
+        """
         return X[:,self.input_cols], X[:,self.index][:,None]
 
     def _index_on(self,X,index):
+        """
+        Add an output-index column to X
+        """
         return np.hstack([X[:,self.input_cols<self.index],index,X[:,self.input_cols>self.index]])
 
     def _set_params(self, p):
+        """
         _Z,_I = self._index_off(self.Z)
         _Z = p[:self.M*(self.Q-1)].reshape(self.M,self.Q-1)
         self.Z = self._index_on(_Z,_I)
         self.kern._set_params(p[_Z.size:_Z.size+self.kern.Nparam])
         self.likelihood._set_params(p[_Z.size+self.kern.Nparam:])
         self._computations()
+        """
+        _Z = p[:self._M*(self.Q-1)].reshape(self._M,self.Q-1)
+        self.Z = np.vstack([np.hstack([np.repeat(i,self._M)[:,None],_Z]) for i in range(len(self.Zos))])
+        self.kern._set_params(p[_Z.size:_Z.size+self.kern.Nparam])
+        self.likelihood._set_params(p[_Z.size+self.kern.Nparam:])
+        self._computations()
 
     def _get_params(self):
-        _Z,_I = self._index_off(self.Z)
+        _Z,_I = self._index_off(self.Z[:self._M,:]) #Remove index and repetitions for each output
         return np.hstack([_Z.flatten(),GP._get_params(self)])
 
     def _get_param_names(self):
-        _Z,_I = self._index_off(self.Z)
+        _Z,_I = self._index_off(self.Z[:self._M,:])
         return sum([['iip_%i_%i'%(i,j) for i in range(_Z.shape[0])] for j in range(_Z.shape[1])],[]) + GP._get_param_names(self)
 
+
+    def _log_likelihood_gradients(self):#FIXME
+        #return np.hstack((self.dL_dZ().flatten(), self.dL_dtheta(), self.likelihood._gradients(partial=self.partial_for_likelihood)))
+        return np.hstack((np.zeros(self._M), self.dL_dtheta(), self.likelihood._gradients(partial=self.partial_for_likelihood)))
+
+
+    def predict(self,Xnew, slices=None, full_cov=False):
+        """
+        Predict the function(s) at the new point(s) Xnew.
+
+        Arguments
+        ---------
+        :param Xnew: The points at which to make a prediction
+        :type Xnew: np.ndarray, Nnew x self.Q
+        :param slices:  specifies which outputs kernel(s) the Xnew correspond to (see below)
+        :type slices: (None, list of slice objects, list of ints)
+        :param full_cov: whether to return the folll covariance matrix, or just the diagonal
+        :type full_cov: bool
+        :rtype: posterior mean,  a Numpy array, Nnew x self.D
+        :rtype: posterior variance, a Numpy array, Nnew x 1 if full_cov=False, Nnew x Nnew otherwise
+        :rtype: lower and upper boundaries of the 95% confidence intervals, Numpy arrays,  Nnew x self.D
+
+        .. Note:: "slices" specifies how the the points X_new co-vary wich the training points.
+
+             - If None, the new points covary throigh every kernel part (default)
+             - If a list of slices, the i^th slice specifies which data are affected by the i^th kernel part
+             - If a list of booleans, specifying which kernel parts are active
+
+           If full_cov and self.D > 1, the return shape of var is Nnew x Nnew x self.D. If self.D == 1, the return shape is Nnew x Nnew.
+           This is to allow for different normalisations of the output dimensions.
+
+        """
+        #Normalise X values
+        Xnew = (Xnew.copy() - self._Xmean) / self._Xstd
+        mu, var = self._raw_predict(Xnew, slices, full_cov)
+
+        #Push through the corresponding likelihood
+        mean = []
+        _025pm = []
+        _975pm = []
+        for on in self.output_nums: #Each output can be related to a different likelihood
+            _index = Xnew[:,0] == on
+            mean_on,_025pm_on,_975pm_on = self.likelihoods[on].predictive_values(mu[_index],var[_index])
+            mean.append(mean_on)
+            _025pm.append(_025pm_on)
+            _975pm.append(_975pm_on)
+        mean = np.vstack(mean)
+        _025pm = np.vstack(_025pm)
+        _975pm = np.vstack(_975pm)
+        return mean, var, _025pm, _975pm
 
     def plot_f(self, samples=0, plot_limits=None, which_data='all', which_functions='all', resolution=None, full_cov=False):
         """

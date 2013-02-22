@@ -6,9 +6,9 @@ from kernpart import kernpart
 import numpy as np
 from GPy.util.linalg import mdot, pdinv
 
-class icm(kernpart):
+class cor_white(kernpart):
     """
-    Kernel for Intrisec Corregionalization Models
+    White noise kernel for Corregionalization Models
 
     :param D: the number of input dimensions
     :type D: int
@@ -24,37 +24,38 @@ class icm(kernpart):
 
     """
     def __init__(self,base_kern,R=1.,Dw=1):
-        self.name = 'icm'
+        self.name = 'cor_white'
         self.base_kern = base_kern
         self.D = self.base_kern.D
         self.R = R
-        #self.W = np.ones((self.D,self.R)) * .70710678
-        #self.W = np.arange(self.D*self.R).reshape(self.D,self.R)
         self.Dw = Dw
-        self.W = np.ones((self.Dw,self.R))
-        self.kappa = 1.
-        self.Nparam = self.base_kern.Nparam + self.Dw*self.R + 1
-        self._set_params(np.hstack([self.base_kern._get_params(),self.W.flatten(),self.kappa]))
+        #self.kappa = 1.
+        self.B = np.eye(self.R)
+        self.Nparam = self.base_kern.Nparam
+        #self._set_params(np.hstack([self.base_kern._get_params()]))
+        self._set_params(self.base_kern._get_params())
 
         #initialize cache NOTE ???
         #self._X, self._X2, self._params = np.empty(shape=(3,1))
 
     def _get_params(self):
-        return np.hstack([self.base_kern._get_params(),self.W.flatten(),self.kappa])
+        #return np.hstack([self.base_kern._get_params(),self.W.flatten(),self.kappa])
+        return self.base_kern._get_params()
 
     def _set_params(self,x):
         assert x.size == self.Nparam
-        self.kappa = x[-1]
-        self.W = x[-(self.Dw*self.R+1):-1].reshape(self.Dw,self.R)
-        self.base_kern._set_params(x[:-(self.Dw*self.R+1)])
-        self.B = np.dot(self.W.T,self.W) + self.kappa*np.eye(self.R)
+        #self.kappa = x[-1]
+        #self.W = x[-(self.Dw*self.R+1):-1].reshape(self.Dw,self.R)
+        #self.base_kern._set_params(x[:-(self.Dw*self.R+1)])
+        #self.B = np.dot(self.W.T,self.W) + self.kappa*np.eye(self.R)
+        self.base_kern._set_params(x)
 
     def _get_param_names(self):
         names = self.base_kern._get_param_names()
-        temp = np.meshgrid(range(self.R),range(self.Dw))
-        _i = temp[1].flatten()
-        _j = temp[0].flatten()
-        names += [ 'W_%s_%s' %(i,j) for i,j in zip(_i,_j)] + ['kappa']
+        #temp = np.meshgrid(range(self.R),range(self.Dw))
+        #_i = temp[1].flatten()
+        #_j = temp[0].flatten()
+        #names += [ 'W_%s_%s' %(i,j) for i,j in zip(_i,_j)] + ['kappa']
         return names
 
     def K(self,X,X2,target,X_i,X2_i):
@@ -86,12 +87,12 @@ class icm(kernpart):
         for i,I in zip(i_cov,I_cov):
             for j,J in zip(j_cov,J_cov):
                 dtheta_base += self.B[i,j]*self.base_kern.dK_dtheta(partial[I,J],X[I,:],X2[J,:]) #NOTE target?
-                PK[i,j] += np.sum(partial[I,J]*self.base_kern.K(X[I,:],X2[J,:])) #ARD?
-                #dW = 2*np.sum(PK[:,None,:]*self.W[None,:,:],-1).flatten(1)
-                if i == j:
-                    dkappa += np.sum(partial[I,J]*self.base_kern.K(X[I,:],X2[J,:])) #ARD?
-        dW = 2*np.sum(PK[:,None,:]*self.W[None,:,:],-1).flatten(1)
-        target += np.hstack([dtheta_base,dW,dkappa])
+                #PK[i,j] += np.sum(partial[I,J]*self.base_kern.K(X[I,:],X2[J,:])) #ARD?
+                #if i == j:
+                #    dkappa += np.sum(partial[I,J]*self.base_kern.K(X[I,:],X2[J,:])) #ARD?
+        #dW = 2*np.sum(PK[:,None,:]*self.W[None,:,:],-1).flatten(1)
+        #target += np.hstack([dtheta_base,dW,dkappa])
+        target += dtheta_base
 
     def dKdiag_dtheta(self,partial,X,target,X_i):
         i_cov, I_cov = self._cross_ref(X_i)
@@ -101,16 +102,16 @@ class icm(kernpart):
         PK = np.zeros(self.R)[:,None]
         for i,I in zip(i_cov,I_cov):
             dtheta += self.B[i,i] * self.base_kern.dKdiag_dtheta(partial[I],X[I,:])
-            dkappa += np.sum(partial[I]*self.base_kern.Kdiag(X[I,:]))
-            PK_ij = partial[I]*self.base_kern.Kdiag(X[I,:]) #ARD?
-            PK[i] += np.sum(partial[I]*self.base_kern.Kdiag(X[I,:])) #ARD?
-            for k in range(self.Dw):
-                dW[k,i] += 2*np.sum(self.W[k,i] * PK_ij)
-        dW2 = (PK * dW.T).flatten(1)
-        target +=  np.hstack([dtheta,dW.flatten(),dkappa])
+            #dkappa += np.sum(partial[I]*self.base_kern.Kdiag(X[I,:]))
+            #PK_ij = partial[I]*self.base_kern.Kdiag(X[I,:]) #ARD?
+            #PK[i] += np.sum(partial[I]*self.base_kern.Kdiag(X[I,:])) #ARD?
+            #for k in range(self.Dw):
+            #    dW[k,i] += 2*np.sum(self.W[k,i] * PK_ij)
+        #dW2 = (PK * dW.T).flatten(1)
+        #target +=  np.hstack([dtheta,dW.flatten(),dkappa])
+        target +=  dtheta
 
     def dK_dX(self,partial,X,X2,target,X_i,X2_i): #NOTE only gradients wrt X, or also X2?
-        """
         i_cov, I_cov = self._cross_ref(X_i)
         j_cov, J_cov = self._cross_ref(X2_i)
         BK = []
@@ -122,7 +123,6 @@ class icm(kernpart):
         target +=BK
 
     def dKdiag_dX(self,partial,X,target,X_i):
-        """
         pass
 
     #---------------------------------------#

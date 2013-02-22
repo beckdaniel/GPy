@@ -28,7 +28,7 @@ class mGP(GP):
     """
     #TODO allow mixed likelihoods (i.e. non-gaussian)
 
-    def __init__(self,X_list,likelihood_list,kernel=None,normalize_X=False,normalize_Y=False, Xslices_list=None):
+    def __init__(self,X_list,likelihood_list,kernel=None,normalize_X=False, normalize_Y=False, Xslices_list=None):
 
         #Aggregate X_list and normalize values
         X = np.vstack (X_list)
@@ -45,8 +45,8 @@ class mGP(GP):
             _Xstd = np.ones((1,X.shape[1]))
 
         #Aggregate Y_list and normalize values
-        self.likelihoods = [likelihoods.Gaussian(l.Y,normalize=normalize_Y) for l in likelihood_list] #Needed to handle mixed likelihoods
-        Y = np.vstack([l.Y for l in self.likelihoods]) #Needed to use GP/sparse_GP
+        self.likelihoods = [likelihoods.Gaussian(l.Y,normalize=normalize_Y) for l in likelihood_list] #Needed for handling mixed likelihoods
+        Y = np.vstack([l.Y for l in self.likelihoods]) #Needed for using GP/sparse_GP
         likelihood = likelihoods.Gaussian(Y,normalize=False)
         #distribution = likelihoods.likelihood_functions.Poisson()
         #likelihood = likelihoods.EP(Y,distribution)
