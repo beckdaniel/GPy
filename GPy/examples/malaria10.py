@@ -1,10 +1,9 @@
+#NOTE BROKEN
 """
-Multioutput GP for malaria counts
+Full Multioutput GP for malaria counts
 ---------------------------------
 dataset: ../../../playground/malaria/malaria_data20130213.dat
-B matrix controls the relation between districts
 """
-#NOTE This is a non-sparse model
 
 import numpy as np
 import pylab as pb

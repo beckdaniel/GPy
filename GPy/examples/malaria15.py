@@ -1,3 +1,4 @@
+#NOTE BROKEN
 """
 Multioutput GP for malaria counts
 ---------------------------------
@@ -11,7 +12,11 @@ import numpy as np
 import pylab as pb
 import shelve
 import GPy
-import datetime
+import sys
+
+#My functions
+sys.path.append('../../../playground/malaria')
+import useful
 
 pb.ion()
 pb.close('all')
@@ -27,121 +32,6 @@ all_districts = malaria_data['districts']
 all_variables = malaria_data['headers']
 malaria_data.close()
 
-def ndvi_data(district_name,variable_name):
-    """
-    Returns a variable in specific district form file uganda_ndvi_20130213.dat (weekly data)
-    """
-    #Open data file
-    malaria_data = shelve.open('../../../playground/malaria/uganda_ndvi_20130213.dat',writeback=False)
-    all_districts = malaria_data['districts']
-    all_variables = malaria_data['headers']
-    #Get district number in data arrange
-    district = [district_name]
-    d_number = int(np.arange(len(all_districts))[np.array(all_districts) == district])
-    #Get variable number in data arrange
-    variable = [variable_name]
-    v_number = int(np.arange(len(all_variables))[np.array(all_variables) == variable])
-    v_data = malaria_data['data'][d_number][:,v_number]
-    #Close data file
-    malaria_data.close()
-    return v_data[:,None]
-
-def ndvi_clean(district_name,variable_name):
-    """
-    Returns a variable in specific district form file uganda_ndvi_20130213.dat (weekly data) after removing wrong incidences
-    """
-    assert variable_name in ['ndvi','time','incidences']
-    inc = ndvi_data(district_name,'incidences').flatten()
-    var = ndvi_data(district_name,variable_name).flatten()
-    index = np.arange(inc.size)
-    mean = inc.mean()
-    threshold = 2*inc.std()
-    #Remove above
-    clean = index[inc < mean+threshold]
-    inc2 = inc[clean]
-    var = var[clean]
-    index2 = np.arange(clean.size)
-    #Remove below
-    clean2 = index2[inc2 > mean-threshold]
-    var = var[clean2]
-    """
-    if district_name == 'Apac':
-        clean = index[inc < 10000]
-        var = var[clean,:]
-    #Remove wrong data
-    if district_name == 'Mbarara':
-        v_data = np.hstack([v_data[:14],v_data[15:]])
-    if district_name == 'Gulu':
-        v_data = np.hstack([v_data[:-2],v_data[-1]])
-    """
-    return var[:,None]
-
-#Incidences per location - Box diagrams
-"""
-var_list = ['altitude','latitude','longitude']
-width_list = [30,120,120]
-scale = [1,100,100]
-for var,wd,scl in zip(var_list,width_list,scale):
-    min_ = 100000
-    max_ = 0
-    pb.figure()
-    for district in all_districts:
-        incidences = ndvi_clean(district,'incidences')
-        location = ndvi_data(district,var)[0,0]/scl
-        pb.boxplot(incidences,positions=[location],widths=wd)
-        if min_ > location:
-            min_ = location
-        if max_ < location:
-            max_ = location
-    pb.xlabel('%s' %var)
-    pb.ylabel('incidences')
-    minimax = (max_ - min_)*.1
-    min_ = min_ - minimax
-    max_ = max_ + minimax
-    pb.xlim(min_,max_)
-"""
-
-#Variables vs time
-"""
-var_list=['ndvi','incidences']
-subplots = (211,212)
-name_list = ('NDVI','incidences')
-for district in all_stations:
-    time = ndvi_clean(district,'time')
-    pb.figure()
-    for var,subs,name in zip(var_list,subplots,name_list):
-        fig = pb.subplot(subs)
-        v = ndvi_clean(district,var)
-        pb.plot(time,v,'k')
-        pb.ylabel('%s' %name)
-        fig.yaxis.set_major_locator(pb.MaxNLocator(3))
-        fig.axes.get_xaxis().set_visible(False)
-    fig.axes.get_xaxis().set_visible(True)
-    pb.xlabel('time (days)')
-    pb.suptitle('%s' %district)
-"""
-#standardized Variables vs time
-"""
-lag = 0
-for district in all_stations:
-    altitude = ndvi_data(district,'altitude')[0,0]
-    incidences = ndvi_clean(district,'incidences')
-    incidences = (incidences - incidences.mean())/incidences.std()
-    time = ndvi_clean(district,'time')
-    fig = pb.figure()
-
-    v_ = ndvi_clean(district,'ndvi')
-    v = (v_ - v_.mean())/v_.std()
-    pb.plot(time-lag,incidences,'r')
-    pb.plot(time,v,'k--',linewidth=2)
-    pb.ylabel('incidence / NDVI\nstandardized')
-    #fig.yaxis.set_major_locator(pb.MaxNLocator(3))
-    pb.text(2,pb.ylim()[1],'lag %s' %lag)
-    pb.xlim(0,1800)
-    pb.xlabel('time (days)')
-    pb.suptitle('%s (altitude: %s)' %(district,altitude))
-
-"""
 #Forcast
 #all_stations2 = all_stations[:5] + all_stations[6:]
 all_stations2 = ['Kampala']
@@ -151,9 +41,9 @@ upper = 12
 for district in all_stations2:
     #data
     X2_name = 'ndvi'
-    Y_ = ndvi_clean(district,'incidences')
-    X1_ = ndvi_clean(district,'time')
-    X2_ = ndvi_clean(district,X2_name)
+    Y_ = useful.ndvi_clean(district,'incidences')
+    X1_ = useful.ndvi_clean(district,'time')
+    X2_ = useful.ndvi_clean(district,X2_name)
 
     #cut
     last = X1_[-1,0]

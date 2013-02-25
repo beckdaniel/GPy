@@ -1,10 +1,12 @@
 """
-Multioutput GP for malaria counts
+Comparison GP regression (incidences ~ time) vs mGP (incidences_district ~ time)
 ---------------------------------
+
 dataset: ../../../playground/malaria/malaria_data20130213.dat
+
 B matrix controls the relation between districts
 """
-#NOTE This is a non-sparse model
+#NOTE Prediction is misleading, as future observations of some districts are considered as given.
 
 import numpy as np
 import pylab as pb

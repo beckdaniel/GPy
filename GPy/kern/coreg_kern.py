@@ -40,13 +40,6 @@ class coreg_kern(kern):
 
     def __add__(self,other):
         assert self.D == other.D
-        #N = 7
-        #D = 2
-        #R = 3
-        #M = 5
-        #_X = np.arange(1,N*D +1).reshape(N,D)
-        #I_ = np.array([0,0,1,1,1,2,2])[:,None]
-        #X = np.hstack([I_,_X])
         newkern =  coreg_kern(self.D,self.parts+other.parts, self.input_slices + other.input_slices,self.index)
         #transfer constraints:
         newkern.constrained_positive_indices = np.hstack((self.constrained_positive_indices, self.Nparam + other.constrained_positive_indices))
@@ -67,6 +60,25 @@ class coreg_kern(kern):
         """
         return self + other
 
+    def add_orthogonal(self,other):
+        raise NotImplementedError
+
+    def __mul__(self,other):
+        """
+        Shortcut for `prod_orthogonal`. Note that `+` assumes that we sum 2 kernels defines on the same space whereas `*` assumes that the kernels are defined on different subspaces.
+        """
+        return self.prod(other)
+
+    def prod(self,other):
+        """
+        multiply two kernels defined on the same spaces.
+        :param other: the other kernel to be added
+        :type other: GPy.kern
+        """
+        raise NotImplementedError
+
+    def prod_orthogonal(self,other):
+        raise NotImplementedError
 
     def K(self,X,X2=None,slices1=None,slices2=None):
         assert X.shape[1]==self.D + 1

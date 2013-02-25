@@ -1,11 +1,11 @@
+#NOTE BROKEN
 """
-Multioutput GP for malaria counts
+Full Multioutput GP for malaria counts
 ---------------------------------
 dataset: ../../../playground/malaria/uganda_data_20130213.dat
 B matrix controls the relation between districts
 Incidences are assumed to have a log-normal distribution
 """
-#NOTE This is a non-sparse model
 
 import numpy as np
 import pylab as pb

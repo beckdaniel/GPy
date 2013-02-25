@@ -1,10 +1,13 @@
 """
-Multioutput GP for malaria counts
+Full Multioutput GP for malaria counts
 ---------------------------------
+
 dataset: ../../../playground/malaria/malaria_data20130213.dat
-B matrix controls the relation between incidence and rain
+
+Outputs: incidence, rain (1 district)
+Input: time
+B matrix controls the relation between districts
 """
-#NOTE This is a non-sparse model
 
 import numpy as np
 import pylab as pb
@@ -68,8 +71,8 @@ m.constrain_fixed('rbf_var',1.) # Variance parameter will be given by the elemen
 #m.unconstrain('rbf_2_var')
 #m.constrain_fixed('rbf_2_var',1.) # Variance parameter will be given by the elements of the coregionalization matrix
 m.constrain_positive('kappa')
-#m.set('_1_len',.10)
-#m.set('_2_len',.1)
+m.set('rbf_len',.10)
+m.set('exp_len',.1)
 m.set('W',np.random.rand(R*2))
 
 #Optimize
