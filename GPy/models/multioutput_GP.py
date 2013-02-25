@@ -139,9 +139,9 @@ class multioutput_GP(sparse_GP):
         return sum([['iip_%i_%i'%(i,j) for i in range(_Z.shape[0])] for j in range(_Z.shape[1])],[]) + GP._get_param_names(self)
 
 
-    def _log_likelihood_gradients(self):#FIXME
+    def _log_likelihood_gradients(self):#FIXME number of parameters for Z
         #return np.hstack((self.dL_dZ().flatten(), self.dL_dtheta(), self.likelihood._gradients(partial=self.partial_for_likelihood)))
-        return np.hstack((np.zeros(self._M), self.dL_dtheta(), self.likelihood._gradients(partial=self.partial_for_likelihood)))
+        return np.hstack((np.zeros(self._M*(self.Q-1)), self.dL_dtheta(), self.likelihood._gradients(partial=self.partial_for_likelihood)))
 
 
     def predict(self,Xnew, slices=None, full_cov=False):

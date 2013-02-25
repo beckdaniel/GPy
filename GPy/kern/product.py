@@ -99,4 +99,3 @@ class product(kernpart):
 
         target[:self.k1.Nparam] += k1_target
         target[self.k1.Nparam:] += k2_target
-

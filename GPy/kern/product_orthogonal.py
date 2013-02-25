@@ -83,3 +83,18 @@ class product_orthogonal(kernpart):
 
     def dKdiag_dX(self,X,target):
         pass
+
+    def dKdiag_dtheta(self,partial,X,target):
+        """derivative of the covariance matrix with respect to the parameters."""
+        K1 = np.zeros(X.shape[0])
+        K2 = np.zeros(X.shape[0])
+        self.k1.Kdiag(X[:,0:self.k1.D],K1)
+        self.k2.Kdiag(X[:,self.k1.D:],K2)
+
+        k1_target = np.zeros(self.k1.Nparam)
+        k2_target = np.zeros(self.k2.Nparam)
+        self.k1.dKdiag_dtheta(partial*K2, X[:,:self.k1.D], k1_target)
+        self.k2.dKdiag_dtheta(partial*K1, X[:,self.k1.D:], k2_target)
+
+        target[:self.k1.Nparam] += k1_target
+        target[self.k1.Nparam:] += k2_target

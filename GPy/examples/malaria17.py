@@ -1,8 +1,10 @@
 """
 Comparison:
- - GP regression incidences_district ~ time
- - GP regression ndvi_district ~ time
- - GP regression incidences_district ~ time + ndvi
+    - GP regression incidences_district ~ time
+    - GP regression ndvi_district ~ time
+    - GP regression incidences_district ~ time + ndvi
+    - multioutput GP incidences_district ~ time
+    - multioutput GP incidences_district ~ time + ndvi
 
 ---------------------------------
 
@@ -33,21 +35,31 @@ all_districts = malaria_data['districts']
 all_variables = malaria_data['headers']
 malaria_data.close()
 
-#Multioutput model
+all_stations = ['Mubende','Masindi','Mbarara','Kampala','Kasese']
+
+#Multioutput models outputs/inputs
 Xlist_ = []
 Xlist = []
 Xlist_fut = []
+
+XXlist_ = []
+XXlist = []
+XXlist_fut = []
+
 Ylist = []
 Ylist_ = []
 Ylist_fut = []
+
 likelihoods = []
 R = len(all_stations)
 stations = all_stations[:R]
 I = np.arange(len(stations))
+
 for i,district in zip(I,stations):
     #data
     Y_ = useful.ndvi_clean(district,'incidences')
     X1_ = useful.ndvi_clean(district,'time')
+    X2_ = useful.ndvi_clean(district,'ndvi')
 
     #cut
     last = X1_[-1,0]
@@ -58,8 +70,13 @@ for i,district in zip(I,stations):
 
     X1 = X1_[:cut,:]
     X1_fut = X1_[cut:,:]
-    #min2_ = X1_.min()
-    #max2_ = X1_.max()
+
+    X2 = X2_[:cut,:]
+    X2_fut = X2_[cut:,:]
+
+    XX_ = np.hstack([X1_,X2_])
+    XX = np.hstack([X1,X2])
+    XX_fut = np.hstack([X1_fut,X2_fut])
 
     likelihoods.append(GPy.likelihoods.Gaussian(Y,normalize=False))
     Ylist_.append(Y_)
@@ -71,8 +88,14 @@ for i,district in zip(I,stations):
     Xlist.append(np.hstack([np.repeat(i,X1.size)[:,None],X1]))
     Xlist_fut.append(np.hstack([np.repeat(i,X1_fut.size)[:,None],X1_fut]))
 
+    #Index time + ndvi
+    XXlist_.append(np.hstack([np.repeat(i,XX_.shape[0])[:,None],XX_]))
+    XXlist.append(np.hstack([np.repeat(i,XX.shape[0])[:,None],XX]))
+    XXlist_fut.append(np.hstack([np.repeat(i,XX_fut.shape[0])[:,None],XX_fut]))
+
 #model 4
-print '\nMultioutput model'
+#multioutput GP incidences_district ~ time
+print '\nMultioutput model incidences ~ time'
 
 R = R
 D = 1
@@ -82,62 +105,71 @@ linear4 = GPy.kern.linear(1)
 bias4 = GPy.kern.bias(1)
 base_white4 = GPy.kern.white(1)
 white4 = GPy.kern.cor_white(base_white4,R,index=0,Dw=2)
-#base4 = linear4+periodic4*rbf4 + white4
-#base4 = rbf4.copy()+rbf4.copy() + bias4
-base4 = periodic4*rbf4+rbf4.copy()+bias4# +bias4
+base4 = periodic4*rbf4+rbf4.copy()+bias4
 kernel4 = GPy.kern.icm(base4,R,index=0,Dw=2)
 
-Z = np.linspace(100,1400,6)[:,None]
+Z = np.linspace(100,1400,5)[:,None]
 
 #m4 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=True)
 m4 = GPy.models.multioutput_GP(Xlist, likelihoods, kernel4+white4,Z=Z, normalize_X=True,normalize_Y=True)
 
 m4.ensure_default_constraints()
-
 m4.constrain_positive('kappa')
-
+m4.unconstrain('exp_var')
+m4.constrain_fixed('exp_var',1)
 if hasattr(m4,'Z'):
     m4.scale_factor=100#00
     m4.constrain_fixed('iip',m4.Z[:m4._M,1].flatten())
-    m4.unconstrain('exp_var')
-    m4.constrain_fixed('exp_var',1)
-    #m4.unconstrain('icm_rbf_var')
-    #m4.constrain_fixed('icm_rbf_var',1)
-    #m4.set('exp_var',10)
-    m4.set('icm_rbf_len',3.)
-    m4.set('icm_rbf_var',1)
-    m4.set('exp_len',10)
-else:
-    m4.set('exp_len',.1)
-    m4.set('exp_var',10)
-    #m4.set('1_len',10)
-    #m4.set('2_len',3.)
-    #m4.set('1_var',10)
-    #m4.set('rbf_var',.5)
+m4.set('exp_len',.1)
+m4.set('icm_rbf_var',10)
 m4.set('W',.001*np.random.rand(R*2))
-print m4
+
 print m4.checkgrad(verbose=1)
 m4.optimize()
 print m4
-"""
-for i in range(R):
-    subs = 220 + i
-    #fig=pb.subplot(subs)
-    fig = pb.figure()
-    min2_ = X1_.min()
-    max2_ = X1_.max()
-    mean_,var_,lower_,upper_ = m4.predict(Xlist_[i])
-    GPy.util.plot.gpplot(Xlist_[i][:,1],mean_,lower_,upper_)
-    pb.plot(Xlist[i][:,1],Ylist[i],'kx',mew=1.5)
-    pb.plot(Xlist_fut[i][:,1],Ylist_fut[i],'rx',mew=1.5)
-    if hasattr(m4,'Z'):
-        _Z = m4.Z[:m4._M,1]*m4._Zstd[:,1]+m4._Zmean[:,1]
-        pb.plot(_Z,np.repeat(pb.ylim()[0],m4._M),'r|',mew=1.5)
-    #pb.ylim(ym_lim)
-    pb.ylabel('incidences')
-    #fig.xaxis.set_major_locator(pb.MaxNLocator(6))
-    pb.title(all_stations[i])
-"""
+
+#model 5
+#multioutput GP incidences_district ~ time + ndvi
+print '\nMultioutput model incidences ~ time + ndvi'
+
+R = R
+D = 1
+periodic5 = GPy.kern.periodic_exponential(1)
+rbf5 = GPy.kern.rbf(1)
+rbf5_ = GPy.kern.rbf(2)
+linear5 = GPy.kern.linear(1)
+bias5 = GPy.kern.bias(2)
+base_white5 = GPy.kern.white(2)
+white5 = GPy.kern.cor_white(base_white5,R,index=0,Dw=2)
+base5 = GPy.kern.kern.prod_orthogonal(periodic5,rbf5)+rbf5_+bias5
+kernel5 = GPy.kern.icm(base5,R,index=0,Dw=2)
+
+_M = 5
+Z = np.linspace(100,1400,_M)[:,None]
+ndvi_stats = [X2.min(),X2.mean(),X2.max()]
+_Z = []
+for nstats in ndvi_stats:
+    _Z.append(np.hstack([np.repeat(nstats,_M)[:,None],Z]))
+Z = np.vstack(_Z)
+
+#m5 = GPy.models.mGP(Xlist, likelihoods, kernel5+white5, normalize_Y=True)
+m5 = GPy.models.multioutput_GP(XXlist, likelihoods, kernel5+white5,Z=Z, normalize_X=True,normalize_Y=True)
+
+m5.ensure_default_constraints()
+m5.constrain_positive('kappa')
+m5.unconstrain('exp_var')
+m5.constrain_fixed('exp_var',1)
+if hasattr(m5,'Z'):
+    m5.scale_factor=.1
+    m5.constrain_fixed('iip',m5.Z[:m5._M,1].flatten())
+m5.set('exp_len',.1)
+m5.set('icm_rbf_var',10)
+m5.set('W',.001*np.random.rand(R*2))
+
+print m5.checkgrad(verbose=1)
+m5.optimize()
+print m5
+
 #GP regressions
 for district,nd in zip(all_stations,range(R)):
     #data
@@ -167,6 +199,7 @@ for district,nd in zip(all_stations,range(R)):
     print '\n', district
 
     #weather 1
+    #GP regression ndvi_district ~ time
     print '\n', 'ndvi'
     likelihoodw1 = GPy.likelihoods.Gaussian(X2,normalize =True)
 
@@ -188,7 +221,7 @@ for district,nd in zip(all_stations,range(R)):
     w1.optimize()
     print w1
 
-    fig=pb.subplot(223)
+    fig=pb.subplot(234)
     min1_ = X1_.min()
     max1_ = X1_.max()
     X1_star = np.linspace(min1_,max1_,200)[:,None]
@@ -203,7 +236,7 @@ for district,nd in zip(all_stations,range(R)):
 
     #trends comparison
     """
-    fig=pb.subplot(224)
+    fig=pb.subplot(234)
     Yz_ = (Y_-Y_.mean())/Y_.std()
     X2z_ = (X2_-X2_.mean())/X2_.std()
     pb.plot(X1_,Yz_,'b')
@@ -211,8 +244,8 @@ for district,nd in zip(all_stations,range(R)):
     pb.ylabel('Incidence / ndvi\n(standardized)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
     """
-
     #model 1
+    #GP regression incidences_district ~ time
     print '\nmodel 1'
     likelihood1 = GPy.likelihoods.Gaussian(Y,normalize =True)
 
@@ -234,7 +267,7 @@ for district,nd in zip(all_stations,range(R)):
     print m1
 
     #pb.figure()
-    fig=pb.subplot(221)
+    fig=pb.subplot(231)
     min1_ = X1_.min()
     max1_ = X1_.max()
     mean_,var_,lower_,upper_ = m1.predict(X1_)
@@ -246,6 +279,7 @@ for district,nd in zip(all_stations,range(R)):
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
     #model 2
+    #GP regression incidences_district ~ time + ndvi
     print '\nmodel 2'
     likelihood2 = GPy.likelihoods.Gaussian(Y,normalize =True)
 
@@ -267,7 +301,7 @@ for district,nd in zip(all_stations,range(R)):
     m2.optimize()
     print m2
 
-    fig=pb.subplot(224)
+    fig=pb.subplot(235)
     min2_ = X1_.min()
     max2_ = X1_.max()
     mean_,var_,lower_,upper_ = m2.predict(XX_)
@@ -279,17 +313,29 @@ for district,nd in zip(all_stations,range(R)):
     pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
-
     #model 4 plots
-    fig=pb.subplot(222)
+    fig=pb.subplot(232)
     mean_,var_,lower_,upper_ = m4.predict(Xlist_[nd])
     GPy.util.plot.gpplot(Xlist_[nd][:,1],mean_,lower_,upper_)
     pb.plot(Xlist[nd][:,1],Ylist[nd],'kx',mew=1.5)
     pb.plot(Xlist_fut[nd][:,1],Ylist_fut[nd],'rx',mew=1.5)
     if hasattr(m4,'Z'):
         _Z = m4.Z[:m4._M,1]*m4._Zstd[:,1]+m4._Zmean[:,1]
-        pb.plot(_Z,np.repeat(pb.ylim()[0],m4._M),'r|',mew=1.5)
-    pb.ylim(ym_lim)
+        pb.plot(_Z,np.repeat(pb.ylim()[1]*.1,m4._M),'r|',mew=1.5)
+    pb.ylim(ylim)
+    pb.ylabel('incidences')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+
+    #model 5 plots
+    fig=pb.subplot(233)
+    mean_,var_,lower_,upper_ = m5.predict(XXlist_[nd])
+    GPy.util.plot.gpplot(Xlist_[nd][:,1],mean_,lower_,upper_)
+    pb.plot(Xlist[nd][:,1],Ylist[nd],'kx',mew=1.5)
+    pb.plot(Xlist_fut[nd][:,1],Ylist_fut[nd],'rx',mew=1.5)
+    if hasattr(m5,'Z'):
+        _Z = m5.Z[:m5._M,:]*m5._Zstd+m5._Zmean
+        pb.plot(_Z[:,1],np.repeat(pb.ylim()[1]*.1,m5._M),'r|',mew=1.5)
+    pb.ylim(ylim)
     pb.ylabel('incidences')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 

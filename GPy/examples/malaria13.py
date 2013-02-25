@@ -168,4 +168,4 @@ for district,upper in zip(all_stations,upper_lim):
     pb.ylim(0,upper*1000)
     pb.ylabel('incidences')
     pb.xlabel('time (days)')
-    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+    #fig.xaxis.set_major_locator(pb.MaxNLocator(6))
