@@ -1,52 +1,24 @@
 """
-Comparison:
- - GP regression incidences_district ~ time
- - GP regression ndvi_district ~ time
- - GP regression incidences_district ~ time + ndvi
-
----------------------------------
-
-dataset: ../../../playground/malaria/uganda_data_20130213.dat
+Complementary part of malaria17
 """
 
-import numpy as np
-import pylab as pb
-import shelve
-import GPy
-import sys
-
-#My functions
-sys.path.append('../../../playground/malaria')
-import useful
-
-pb.ion()
-pb.close('all')
-
-#Load data
-malaria_data = shelve.open('../../../playground/malaria/uganda_data_20130213.dat',writeback=False)
-all_districts = malaria_data['districts']
-all_variables = malaria_data['headers']
-all_stations = malaria_data['stations']
-malaria_data.close()
-
-#Forcast
-#all_stations2 = all_stations[:5] + all_stations[6:]
-all_stations2 = ['Kampala']
-upper_lim = [12,12,12,8,14,14,12,5,7,12,5,14]
-cut = 56
-#for district in all_stations:
-for district,upper in zip(all_stations,upper_lim):
+#GP regressions
+for district,nd in zip(all_stations,range(R)):
     #data
-    Y_ = useful.weekly_data(district,'incidences')
+    Y_ = useful.ndvi_clean(district,'incidences')
+    X1_ = useful.ndvi_clean(district,'time')
+    X2_ = useful.ndvi_clean(district,'ndvi')
+
+    #cut
+    last = X1_[-1,0]
+    cut = X1_[X1_ < last - 360].size
+
     Y = Y_[:cut,:]
     Y_fut = Y_[cut:,:]
 
-    X1_ = useful.weekly_data(district,'time')
     X1 = X1_[:cut,:]
     X1_fut = X1_[cut:,:]
 
-    X2_name = 'ndvi'
-    X2_ = useful.weekly_data(district,X2_name)
     X2 = X2_[:cut,:]
     X2_fut = X2_[cut:,:]
 
@@ -59,7 +31,7 @@ for district,upper in zip(all_stations,upper_lim):
     print '\n', district
 
     #weather 1
-    print '\n', X2_name
+    print '\n', 'ndvi'
     likelihoodw1 = GPy.likelihoods.Gaussian(X2,normalize =True)
 
     periodicw1 = GPy.kern.periodic_exponential(1)
@@ -70,7 +42,7 @@ for district,upper in zip(all_stations,upper_lim):
 
     w1 = GPy.models.GP(X1, likelihoodw1, periodicw1*rbfw1+rbfw1.copy()+biasw1+whitew1, normalize_X=True)
 
-    #w1.ensure_default_constraints()
+    #w1.ensure_default_constraints() #NOTE not working for sum of rbf's
     w1.constrain_positive('var')
     w1.constrain_positive('len')
     print w1.checkgrad()
@@ -88,19 +60,21 @@ for district,upper in zip(all_stations,upper_lim):
     GPy.util.plot.gpplot(X1_star,mean_,lower_,upper_)
     pb.plot(X1,X2,'kx',mew=1.5)
     pb.plot(X1_fut,X2_fut,'rx',mew=1.5)
-    pb.ylabel(X2_name)
+    pb.ylabel('ndvi')
     #pb.xlabel('time (days)')
     pb.suptitle('%s' %district)
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
     #trends comparison
+    """
     fig=pb.subplot(224)
     Yz_ = (Y_-Y_.mean())/Y_.std()
     X2z_ = (X2_-X2_.mean())/X2_.std()
     pb.plot(X1_,Yz_,'b')
     pb.plot(X1_,X2z_,'k--',linewidth=1.5)
-    pb.ylabel('Incidence / %s\n(standardized)' %X2_name)
+    pb.ylabel('Incidence / ndvi\n(standardized)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+    """
 
     #model 1
     print '\nmodel 1'
@@ -113,7 +87,7 @@ for district,upper in zip(all_stations,upper_lim):
 
     m1 = GPy.models.GP(X1, likelihood1, rbf1*periodic1+rbf1.copy()+white1, normalize_X=True)
 
-    #m1.ensure_default_constraints()
+    #m1.ensure_default_constraints() #NOTE not working for sum of rbf's
     m1.constrain_positive('var')
     m1.constrain_positive('len')
     m1.set('exp_len',.1)
@@ -127,13 +101,12 @@ for district,upper in zip(all_stations,upper_lim):
     fig=pb.subplot(221)
     min1_ = X1_.min()
     max1_ = X1_.max()
-    #X1_star = np.linspace(min1_,max1_,200)
     mean_,var_,lower_,upper_ = m1.predict(X1_)
     GPy.util.plot.gpplot(X1_,mean_,lower_,upper_)
     pb.plot(X1,Y,'kx',mew=1.5)
     pb.plot(X1_fut,Y_fut,'rx',mew=1.5)
     pb.ylabel('incidences')
-    pb.ylim(0,upper*1000)
+    ylim=pb.ylim()
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
     #model 2
@@ -148,7 +121,7 @@ for district,upper in zip(all_stations,upper_lim):
 
     m2 = GPy.models.GP(XX, likelihood2, GPy.kern.kern.prod_orthogonal(rbf2,periodic2)+rbf2_+white2, normalize_X=True)
 
-    #m2.ensure_default_constraints()
+    #m2.ensure_default_constraints() #NOTE not working for sum of rbf's
     m2.constrain_positive('var')
     m2.constrain_positive('len')
     m2.set('exp_len',.1)
@@ -158,14 +131,28 @@ for district,upper in zip(all_stations,upper_lim):
     m2.optimize()
     print m2
 
-    fig=pb.subplot(222)
+    fig=pb.subplot(224)
     min2_ = X1_.min()
     max2_ = X1_.max()
     mean_,var_,lower_,upper_ = m2.predict(XX_)
     GPy.util.plot.gpplot(X1_,mean_,lower_,upper_)
     pb.plot(X1,Y,'kx',mew=1.5)
     pb.plot(X1_fut,Y_fut,'rx',mew=1.5)
-    pb.ylim(0,upper*1000)
+    pb.ylim(ylim)
     pb.ylabel('incidences')
     pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+
+
+    #model 4 plots
+    fig=pb.subplot(222)
+    mean_,var_,lower_,upper_ = m4.predict(Xlist_[nd])
+    GPy.util.plot.gpplot(Xlist_[nd][:,1],mean_,lower_,upper_)
+    pb.plot(Xlist[nd][:,1],Ylist[nd],'kx',mew=1.5)
+    pb.plot(Xlist_fut[nd][:,1],Ylist_fut[nd],'rx',mew=1.5)
+    if hasattr(m4,'Z'):
+        _Z = m4.Z[:m4._M,1]*m4._Zstd[:,1]+m4._Zmean[:,1]
+        pb.plot(_Z,np.repeat(pb.ylim()[0],m4._M),'r|',mew=1.5)
+    pb.ylim(ym_lim)
+    pb.ylabel('incidences')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
