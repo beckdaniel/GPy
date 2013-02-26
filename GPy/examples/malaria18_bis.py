@@ -120,7 +120,7 @@ for i,district in zip(I,stations):
     #Y1_ = incidences_new[i]
     Y1_ = useful.ndvi_clean(district,'incidences')
     X1_ = useful.ndvi_clean(district,'time')
-    aux = useful.raw_data(district,'ndvi')
+    aux = useful.raw_data(district,'rain')
     Y2_ = aux[:,1][:,None]
     X2_ = aux[:,0][:,None]
 
@@ -197,48 +197,45 @@ white4 = GPy.kern.cor_white(base_white4,R,index=0,Dw=2)
 base4 = periodic4*rbf4+rbf4.copy()+bias4
 kernel4 = GPy.kern.icm(base4,R,index=0,Dw=2)
 
-Z = np.linspace(100,1400,20)[:,None]
+Z = np.linspace(100,1400,9)[:,None]
 
-#m6 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=False)
-m6 = GPy.models.multioutput_GP(Xlist, likelihoods, kernel4+white4,Z=Z, normalize_X=True,normalize_Y=True)
+#m7 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=False)
+m7 = GPy.models.multioutput_GP(Xlist, likelihoods, kernel4+white4,Z=Z, normalize_X=True,normalize_Y=True)
 
-m6.ensure_default_constraints()
-m6.constrain_positive('kappa')
-#m6.tie_param('periodic_*.*_var')
-m6.unconstrain('exp_var')
-m6.constrain_fixed('exp_var',1)
-m6.unconstrain('rbf_rbf_var')
-m6.constrain_fixed('rbf_rbf_var',1)
-if hasattr(m6,'Z'):
-    m6.scale_factor=100#00
-    m6.constrain_fixed('iip',m6.Z[:m6._M,1].flatten())
-m6.set('exp_len',1.) #=1 if not using log
-#m6.unconstrain('icm_rbf_var')
-#m6.constrain_fixed('icm_rbf_var',1)
-m6.set('icm_rbf_var',5)
-m6.set('icm_rbf_len',.0001)
-m6.set('W',.01*np.random.rand(R*2))
+m7.ensure_default_constraints()
+m7.constrain_positive('kappa')
+m7.unconstrain('exp_var')
+m7.constrain_fixed('exp_var',1)
+if hasattr(m7,'Z'):
+    m7.scale_factor=100#00
+    m7.constrain_fixed('iip',m7.Z[:m7._M,1].flatten())
+m7.set('exp_len',1) #=1 if not using log
+m7.set('icm_rbf_var',2)
+m7.set('icm_rbf_len',.0001)
+m7.set('W',.001*np.random.rand(R*2))
 
-print m6.checkgrad(verbose=1)
-m6.optimize()
-print m6
+print m7.checkgrad(verbose=1)
+m7.optimize()
+print m7
 
 for nd in range(R):
     #model 6 plots
     #fig=pb.subplot(233)
     fig = pb.figure()
-    mean_,var_,lower_,upper_ = m6.predict(Xlist_[nd])
+    mean_,var_,lower_,upper_ = m7.predict(Xlist_[nd])
     GPy.util.plot.gpplot(Xlist_[nd][:,1],mean_,lower_,upper_)
     pb.plot(Xlist[nd][:,1],YYlist[nd],'kx',mew=1.5)
+    print '%s' %nd
+    print Xlist[nd][:,1].size,YYlist[nd].size
     pb.plot(Xlist_fut[nd][:,1],YYlist_fut[nd],'rx',mew=1.5)
-    if hasattr(m6,'Z'):
-        #_Z = m6.Z[:m6._M,:]
-        #pb.plot(_Z[:,1],np.repeat(pb.ylim()[1]*.1,m6._M),'r|',mew=1.5)
-        _Z = m6.Z[:m6._M,1]*m6._Zstd[0,1]+m6._Zmean[0,1]
-        pb.plot(_Z,np.repeat(pb.ylim()[1]*.1,m6._M),'r|',mew=1.5)
+    if hasattr(m7,'Z'):
+        #_Z = m7.Z[:m7._M,:]
+        #pb.plot(_Z[:,1],np.repeat(pb.ylim()[1]*.1,m7._M),'r|',mew=1.5)
+        _Z = m7.Z[:m7._M,1]*m7._Zstd[0,1]+m7._Zmean[0,1]
+        pb.plot(_Z,np.repeat(pb.ylim()[1]*.1,m7._M),'r|',mew=1.5)
     #pb.ylim(ylim)
     if nd < R/2:
         pb.ylabel('incidences')
     else:
-        pb.ylabel('ndvi')
+        pb.ylabel('rain')
     #fig.xaxis.set_major_locator(pb.MaxNLocator(6))
