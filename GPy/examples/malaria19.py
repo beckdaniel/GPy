@@ -93,10 +93,6 @@ X2list_ = []
 X2list = []
 X2list_fut = []
 
-Hlist_ = []
-Hlist = []
-Hlist_fut = []
-
 Y1list = []
 Y1list_ = []
 Y1list_fut = []
@@ -111,24 +107,24 @@ YYlist_fut = []
 
 likelihoods1 = []
 likelihoods2 = []
-R = 2*len(all_stations)
+R = len(all_stations)
 stations = all_stations
 I = np.arange(len(stations))
 
 for i,district in zip(I,stations):
     #data
-    Y1_ = useful.ndvi_clean(district,'incidences')
-    #Y1_ = incidences_new[i]
+    #Y1_ = useful.ndvi_clean(district,'incidences')
+    Y1_ = incidences_new[i]
     X1_ = useful.ndvi_clean(district,'time')
-    aux = useful.raw_data(district,'ndvi')
-    Y2_ = aux[:,1][:,None]
-    X2_ = aux[:,0][:,None]
+    #aux = useful.raw_data(district,'ndvi')
+    #Y2_ = aux[:,1][:,None]
+    #X2_ = aux[:,0][:,None]
 
     #standradize data incidences and ndvi
-    Y1_mean = Y1_.mean()
-    Y1_std = Y1_.std()
-    Y2_mean = Y2_.mean()
-    Y2_std = Y2_.std()
+    #Y1_mean = Y1_.mean()
+    #Y1_std = Y1_.std()
+    #Y2_mean = Y2_.mean()
+    #Y2_std = Y2_.std()
 
     #Y1_ = (Y1_ - Y1_mean)/Y1_std
     #Y2_ = (Y2_ - Y2_mean)/Y2_std
@@ -136,51 +132,48 @@ for i,district in zip(I,stations):
     #cut
     last = X1_[-1,0]
     cut1 = X1_[X1_ < last - 360].size
-    last = X2_[-1,0]
-    cut2 = X2_[X2_ < last - 360].size
+    #last = X2_[-1,0]
+    #cut2 = X2_[X2_ < last - 360].size
 
     Y1 = Y1_[:cut1,:]
     Y1_fut = Y1_[cut1:,:]
     X1 = X1_[:cut1,:]
     X1_fut = X1_[cut1:,:]
 
-    Y2 = Y2_[:cut2,:]
-    Y2_fut = Y2_[cut2:,:]
-    X2 = X2_[:cut2,:]
-    X2_fut = X2_[cut2:,:]
+    #Y2 = Y2_[:cut2,:]
+    #Y2_fut = Y2_[cut2:,:]
+    #X2 = X2_[:cut2,:]
+    #X2_fut = X2_[cut2:,:]
 
     Y1list_.append(Y1_)
     Y1list.append(Y1)
     Y1list_fut.append(Y1_fut)
-    Y2list_.append(Y2_)
-    Y2list.append(Y2)
-    Y2list_fut.append(Y2_fut)
+    #Y2list_.append(Y2_)
+    #Y2list.append(Y2)
+    #Y2list_fut.append(Y2_fut)
 
     likelihoods1.append(GPy.likelihoods.Gaussian(Y1,normalize=False))
-    likelihoods2.append(GPy.likelihoods.Gaussian(Y2,normalize=False))
+    #likelihoods2.append(GPy.likelihoods.Gaussian(Y2,normalize=False))
 
     #Index time
     X1list_.append(np.hstack([np.repeat(i,X1_.size)[:,None],X1_]))
     X1list.append(np.hstack([np.repeat(i,X1.size)[:,None],X1]))
     X1list_fut.append(np.hstack([np.repeat(i,X1_fut.size)[:,None],X1_fut]))
 
-    X2list_.append(np.hstack([np.repeat(i+len(all_stations),X2_.size)[:,None],X2_]))
-    X2list.append(np.hstack([np.repeat(i+len(all_stations),X2.size)[:,None],X2]))
-    X2list_fut.append(np.hstack([np.repeat(i+len(all_stations),X2_fut.size)[:,None],X2_fut]))
+    #X2list_.append(np.hstack([np.repeat(i+len(all_stations),X2_.size)[:,None],X2_]))
+    #X2list.append(np.hstack([np.repeat(i+len(all_stations),X2.size)[:,None],X2]))
+    #X2list_fut.append(np.hstack([np.repeat(i+len(all_stations),X2_fut.size)[:,None],X2_fut]))
 
-    #Hlist_.append(np.hstack([np.repeat(i+len(all_stations),X1_.size)[:,None],X1_]))
-    #Hlist.append(np.hstack([np.repeat(i+len(all_stations),X1.size)[:,None],X1]))
-    #Hlist_fut.append(np.hstack([np.repeat(i+len(all_stations),X1_fut.size)[:,None],X1_fut]))
 
-YYlist_ = Y1list_ + Y2list_
-YYlist = Y1list + Y2list
-YYlist_fut = Y1list_fut + Y2list_fut
+YYlist_ = Y1list_# + Y2list_
+YYlist = Y1list# + Y2list
+YYlist_fut = Y1list_fut# + Y2list_fut
 
-Xlist_ = X1list_ + X2list_
-Xlist = X1list + X2list
-Xlist_fut = X1list_fut + X2list_fut
+Xlist_ = X1list_# + X2list_
+Xlist = X1list# + X2list
+Xlist_fut = X1list_fut# + X2list_fut
 
-likelihoods = likelihoods1 + likelihoods2
+likelihoods = likelihoods1# + likelihoods2
 
 #model 6
 #multioutput GP incidences_district ~ time
@@ -194,12 +187,12 @@ linear4 = GPy.kern.linear(1)
 bias4 = GPy.kern.bias(1)
 base_white4 = GPy.kern.white(1)
 white4 = GPy.kern.cor_white(base_white4,R,index=0,Dw=2)
-base4 = periodic4*rbf4+rbf4.copy()+bias4
+base4 = periodic4*rbf4+rbf4.copy()#+bias4
 kernel4 = GPy.kern.icm(base4,R,index=0,Dw=2)
 
-Z = np.linspace(100,1400,13)[:,None]
+Z = np.linspace(100,1400,9)[:,None]
 
-#m6 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=False)
+#m6 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=True)
 m6 = GPy.models.multioutput_GP(Xlist, likelihoods, kernel4+white4,Z=Z, normalize_X=True,normalize_Y=True)
 
 m6.ensure_default_constraints()
@@ -209,7 +202,7 @@ m6.constrain_fixed('exp_var',1)
 if hasattr(m6,'Z'):
     m6.scale_factor=100#00
     m6.constrain_fixed('iip',m6.Z[:m6._M,1].flatten())
-m6.set('exp_len',1)
+m6.set('exp_len',1.)
 m6.set('icm_rbf_var',2)
 m6.set('W',.001*np.random.rand(R*2))
 
