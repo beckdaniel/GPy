@@ -71,7 +71,6 @@ I = np.arange(len(stations))
 
 for i,district in zip(I,stations):
     #data
-    #Y1_ = incidences_new[i]
     Y1_ = useful.ndvi_clean(district,'incidences')
     X1_ = useful.ndvi_clean(district,'time')
     aux = useful.raw_data(district,'ndvi')
@@ -80,15 +79,6 @@ for i,district in zip(I,stations):
     aux = useful.raw_data(district,'rain')
     Y3_ = aux[:,1][:,None]
     X3_ = aux[:,0][:,None] - 7 #NOTE 7 days of lag considered
-
-    #standradize data incidences and ndvi
-    #Y1_mean = Y1_.mean()
-    #Y1_std = Y1_.std()
-    #Y2_mean = Y2_.mean()
-    #Y2_std = Y2_.std()
-
-    #Y1_ = (Y1_ - Y1_mean)/Y1_std
-    #Y2_ = (Y2_ - Y2_mean)/Y2_std
 
     #cut
     last = X1_[-1,0]
