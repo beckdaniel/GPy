@@ -80,7 +80,7 @@ for output in outputs_d:
 for od in outputs_s:
     for d in stations:
         #Geta data
-        y,x = useful.filtered(district,output,rm_zero=True)
+        y,x = useful.sampled(district,output,rm_zero=True)
         #Train datasets
         xtrain = x[x<=cut_date][:,None]
         Xlist_train.append( np.hstack([np.repeat(k,xtrain.size)[:,None],xtrain]) )
@@ -118,8 +118,9 @@ if hasattr(m7,'Z'):
     m7.scale_factor=100
     m7.constrain_fixed('iip',m7.Z[:m7._M,1].flatten())
 m7.set('exp_len',1) #=1 if not using log
-m7.set('icm_rbf_var',10)
+m7.set('icm_rbf_var',2)
 m7.set('icm_rbf_len',.0001)
+m7.set('rbf_rbf_len',2)
 m7.set('W',.001*np.random.rand(R*Dw))
 
 print m7.checkgrad(verbose=1)
@@ -225,7 +226,7 @@ for output in outputs_s:
     for district in stations:
         print '\n%s: %s regression' %(district,output)
         #Geta data
-        y,x = useful.filtered(district,output,rm_zero=True)
+        y,x = useful.sampled(district,output,rm_zero=True)
         #Train datasets
         Xwlist_train.append(x[x<=cut_date][:,None])
         Wlist_train.append(y[x<=cut_date][:,None])
