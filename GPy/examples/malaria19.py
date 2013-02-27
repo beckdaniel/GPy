@@ -38,14 +38,13 @@ all_districts = malaria_data['districts']
 all_variables = malaria_data['headers']
 malaria_data.close()
 
-districts = ['Arua','Gulu']
+districts = ['Mbarara','Kasese','Masindi','Wakiso']
 additional_outputs_d = ['ndvi'] #Don't include weather-stations data here
-stations = []
-outputs_s = [] #NOTE this example only supports one output_s
+stations = ['Mbarara','Kasese','Masindi','Wakiso']
+outputs_s = ['rain'] #NOTE this example only supports one output_s
 
 outputs_d = ['incidence'] + additional_outputs_d
 cut_date = 1400
-
 
 """
 Sparse multioutput model
@@ -65,7 +64,11 @@ k = 0 #output index
 for output in outputs_d:
     for district in districts:
         #Geta data
-        y,x = useful.filtered(district,output,rm_zero=True)
+        if output == 'incidence':
+            y,x = useful.filtered(district,output,rm_zero=True)
+        else:
+            #y,x = useful.raw(district,output)
+            y,x = useful.filtered(district,output)
         #Train datasets
         xtrain = x[x<=cut_date][:,None]
         Xlist_train.append( np.hstack([np.repeat(k,xtrain.size)[:,None],xtrain]) )
@@ -76,11 +79,15 @@ for output in outputs_d:
         Xlist_test.append( np.hstack([np.repeat(k,xtest.size)[:,None],xtest]) )
         Ylist_test.append(y[x>cut_date][:,None])
 
+        #Increase output index
+        k += 1
+
 #Data from weather stations
-for od in outputs_s:
-    for d in stations:
+for output in outputs_s:
+    for district in stations:
         #Geta data
-        y,x = useful.sampled(district,output,rm_zero=True)
+        #y,x = useful.raw(district,output)
+        y,x = useful.filtered(district,output)
         #Train datasets
         xtrain = x[x<=cut_date][:,None]
         Xlist_train.append( np.hstack([np.repeat(k,xtrain.size)[:,None],xtrain]) )
@@ -90,6 +97,9 @@ for od in outputs_s:
         xtest = x[x>cut_date][:,None]
         Xlist_test.append( np.hstack([np.repeat(k,xtest.size)[:,None],xtest]) )
         Ylist_test.append(y[x>cut_date][:,None])
+
+        #Increase output index
+        k += 1
 
 #Kernel
 periodic7 = GPy.kern.periodic_exponential(1)
@@ -102,7 +112,7 @@ white7 = GPy.kern.cor_white(base_white7,R,index=0,Dw=Dw)
 kernel7 = GPy.kern.icm(base7,R,index=0,Dw=Dw)
 
 #Inducing inputs
-Z = np.linspace(100,1500,15)[:,None]
+Z = np.linspace(100,1400,20)[:,None]
 
 #m7 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=False)
 m7 = GPy.models.multioutput_GP(Xlist_train, likelihoods, kernel7+white7, Z=Z, normalize_X=True,normalize_Y=True)
@@ -118,10 +128,9 @@ if hasattr(m7,'Z'):
     m7.scale_factor=100
     m7.constrain_fixed('iip',m7.Z[:m7._M,1].flatten())
 m7.set('exp_len',1) #=1 if not using log
-m7.set('icm_rbf_var',2)
+m7.set('icm_rbf_var',5)
 m7.set('icm_rbf_len',.0001)
-m7.set('rbf_rbf_len',2)
-m7.set('W',.001*np.random.rand(R*Dw))
+m7.set('W',.01*np.random.rand(R*Dw))
 
 print m7.checkgrad(verbose=1)
 m7.optimize()
@@ -129,7 +138,6 @@ print m7
 
 """
 Incidence regression
-"""
 """
 Ilist_train = []
 Xilist_train = []
@@ -169,9 +177,7 @@ for district in districts:
     print modelsi[-1]
 
 """
-"""
 ndvi regression
-"""
 """
 Nlist_train = []
 Xnlist_train = []
@@ -183,7 +189,8 @@ for output in additional_outputs_d:
     for district in districts:
         print '\n%s: %s regression' %(district,output)
         #Geta data
-        y,x = useful.filtered(district,output,rm_zero=True)
+        #y,x = useful.raw(district,output)
+        y,x = useful.filtered(district,output)
         #Train datasets
         Xnlist_train.append(x[x<=cut_date][:,None])
         Nlist_train.append(y[x<=cut_date][:,None])
@@ -212,9 +219,7 @@ for output in additional_outputs_d:
         print modelsn[-1]
 
 """
-"""
 Weather outputs regression
-"""
 """
 Wlist_train = []
 Xwlist_train = []
@@ -226,7 +231,8 @@ for output in outputs_s:
     for district in stations:
         print '\n%s: %s regression' %(district,output)
         #Geta data
-        y,x = useful.sampled(district,output,rm_zero=True)
+        #y,x = useful.raw(district,output)
+        y,x = useful.filtered(district,output)
         #Train datasets
         Xwlist_train.append(x[x<=cut_date][:,None])
         Wlist_train.append(y[x<=cut_date][:,None])
@@ -255,13 +261,12 @@ for output in outputs_s:
         print modelsw[-1]
 
 """
-"""
 Plots
 """
 for district,d in zip(districts,range(len(districts))):
     pb.figure()
     pb.suptitle('%s' %district)
-    """
+
     #Incidence regression
     fig = pb.subplot(233)
     time = np.vstack([ Xilist_train[d],Xilist_test[d] ] )
@@ -307,7 +312,6 @@ for district,d in zip(districts,range(len(districts))):
     #pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
-    """
     #multioutput model
     shift = len(districts)
 
@@ -329,7 +333,7 @@ for district,d in zip(districts,range(len(districts))):
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
     #ndvi
-    fig = pb.subplot(234)
+    fig = pb.subplot(235)
     time = np.vstack([ Xlist_train[d+shift],Xlist_test[d+shift] ] )
     tmin = time.min()
     tmax = time.max()
@@ -344,9 +348,9 @@ for district,d in zip(districts,range(len(districts))):
     pb.ylabel(additional_outputs_d[0])
     pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
-    """
+
     #weather
-    fig = pb.subplot(235)
+    fig = pb.subplot(234)
     time = np.vstack([ Xlist_train[d+2*shift],Xlist_test[d+2*shift] ] )
     tmin = time.min()
     tmax = time.max()
@@ -361,4 +365,3 @@ for district,d in zip(districts,range(len(districts))):
     pb.ylabel(outputs_d[0])
     pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
-    """

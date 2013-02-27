@@ -1,10 +1,17 @@
 """
-Sparse multioutput model:
-    - outputs: incidences_district, rain_station, and ndvi_district
-    - inputs: time
+Comparison:
+    - GP regression incidences_district ~ time
+    - GP regression ndvi_district ~ time
+    - GP regression rain_station ~ time
+    - GP regression incidences_district ~ time + ndvi
+    - multioutput GP incidences_distric, ndvi_district ~ time
+
 ---------------------------------
 
-dataset: ../../../playground/malaria/uganda_ndvi_20130213.dat
+datasets: ../../../playground/malaria/raw_incidence_20130213.dat
+datasets: ../../../playground/malaria/raw_ndvi_20130213.dat
+datasets: ../../../playground/malaria/raw_met_20130213.dat
+datasets: ../../../playground/malaria/raw_geographic_20130213.dat
 """
 
 import numpy as np
@@ -31,169 +38,333 @@ all_districts = malaria_data['districts']
 all_variables = malaria_data['headers']
 malaria_data.close()
 
-all_stations = ['Arua']#,'Gulu']#,'Mbarara','Kampala','Kasese']
+districts = ['Mbarara','Kasese','Masindi']#,'Wakiso']
+additional_outputs_d = ['ndvi'] #Don't include weather-stations data here
+stations = ['Mbarara','Kasese','Masindi']#,'Wakiso']
+outputs_s = ['rain'] #NOTE this example only supports one output_s
 
-#Multioutput models outputs/inputs
-X1list_ = []
-X1list = []
-X1list_fut = []
+outputs_d = ['incidence'] + additional_outputs_d
+cut_date = 1400
 
-X2list_ = []
-X2list = []
-X2list_fut = []
+ndvi_sample = 100
+weather_sample = 200
 
-X3list_ = []
-X3list = []
-X3list_fut = []
+"""
+Sparse multioutput model
+"""
+print '\nMultioutput model'
 
-Y1list = []
-Y1list_ = []
-Y1list_fut = []
-
-Y2list_ = []
-Y2list = []
-Y2list_fut = []
-
-Y3list_ = []
-Y3list = []
-Y3list_fut = []
-
-YYlist = []
-YYlist_ = []
-YYlist_fut = []
-
-likelihoods1 = []
-likelihoods2 = []
-likelihoods3 = []
-R = 3*len(all_stations)
-stations = all_stations
+R = len(stations)*len(outputs_s) + len(districts)*len(outputs_d)
 I = np.arange(len(stations))
+Ylist_train = []
+Xlist_train = []
+Ylist_test = []
+Xlist_test = []
+likelihoods = []
 
-for i,district in zip(I,stations):
-    #data
-    Y1_ = useful.ndvi_clean(district,'incidences')
-    X1_ = useful.ndvi_clean(district,'time')
-    aux = useful.raw_data(district,'ndvi')
-    Y2_ = aux[:,1][:,None]
-    X2_ = aux[:,0][:,None]
-    aux = useful.raw_data(district,'rain')
-    Y3_ = aux[:,1][:,None]
-    X3_ = aux[:,0][:,None] - 7 #NOTE 7 days of lag considered
+k = 0 #output index
+#Data from districts
+for output in outputs_d:
+    for district in districts:
+        #Geta data
+        if output == 'incidence':
+            y,x = useful.filtered(district,output,rm_zero=True)
+        else:
+            y,x = useful.sampled(district,output,size=ndvi_sample)
+        #Train datasets
+        xtrain = x[x<=cut_date][:,None]
+        Xlist_train.append( np.hstack([np.repeat(k,xtrain.size)[:,None],xtrain]) )
+        Ylist_train.append(y[x<=cut_date][:,None])
+        likelihoods.append(GPy.likelihoods.Gaussian(Ylist_train[-1],normalize=False))
+        #Test datasets
+        xtest = x[x>cut_date][:,None]
+        Xlist_test.append( np.hstack([np.repeat(k,xtest.size)[:,None],xtest]) )
+        Ylist_test.append(y[x>cut_date][:,None])
 
-    #cut
-    last = X1_[-1,0]
-    cut1 = X1_[X1_ < last - 360].size
-    last = X2_[-1,0]
-    cut2 = X2_[X2_ < last - 360].size
-    last = X3_[-1,0]
-    cut3 = X3_[X3_ < last - 360].size
+        #Increase output index
+        k += 1
 
-    Y1 = Y1_[:cut1,:]
-    Y1_fut = Y1_[cut1:,:]
-    X1 = X1_[:cut1,:]
-    X1_fut = X1_[cut1:,:]
+#Data from weather stations
+for output in outputs_s:
+    for district in stations:
+        #Geta data
+        y,x = useful.sampled(district,output,size=weather_sample)
+        #Train datasets
+        xtrain = x[x<=cut_date][:,None]
+        Xlist_train.append( np.hstack([np.repeat(k,xtrain.size)[:,None],xtrain]) )
+        Ylist_train.append(y[x<=cut_date][:,None])
+        likelihoods.append(GPy.likelihoods.Gaussian(Ylist_train[-1],normalize=False))
+        #Test datasets
+        xtest = x[x>cut_date][:,None]
+        Xlist_test.append( np.hstack([np.repeat(k,xtest.size)[:,None],xtest]) )
+        Ylist_test.append(y[x>cut_date][:,None])
 
-    Y2 = Y2_[:cut2,:]
-    Y2_fut = Y2_[cut2:,:]
-    X2 = X2_[:cut2,:]
-    X2_fut = X2_[cut2:,:]
+        #Increase output index
+        k += 1
 
-    Y3 = Y3_[:cut3,:]
-    Y3_fut = Y3_[cut3:,:]
-    X3 = X3_[:cut3,:]
-    X3_fut = X3_[cut3:,:]
+#Kernel
+periodic7 = GPy.kern.periodic_exponential(1)
+rbf7 = GPy.kern.rbf(1)
+bias7 = GPy.kern.bias(1)
+base7 = periodic7*rbf7+rbf7.copy()+bias7
+base_white7 = GPy.kern.white(1)
+Dw = 2
+white7 = GPy.kern.cor_white(base_white7,R,index=0,Dw=Dw)
+kernel7 = GPy.kern.icm(base7,R,index=0,Dw=Dw)
 
-    Y1list_.append(Y1_)
-    Y1list.append(Y1)
-    Y1list_fut.append(Y1_fut)
-    Y2list_.append(Y2_)
-    Y2list.append(Y2)
-    Y2list_fut.append(Y2_fut)
-    Y3list_.append(Y3_)
-    Y3list.append(Y3)
-    Y3list_fut.append(Y3_fut)
+#Inducing inputs
+Z = np.linspace(100,1400,20)[:,None]
 
-    likelihoods1.append(GPy.likelihoods.Gaussian(Y1,normalize=False))
-    likelihoods2.append(GPy.likelihoods.Gaussian(Y2,normalize=False))
-    likelihoods3.append(GPy.likelihoods.Gaussian(Y3,normalize=False))
+#m7 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=False)
+m7 = GPy.models.multioutput_GP(Xlist_train, likelihoods, kernel7+white7, Z=Z, normalize_X=True,normalize_Y=True)
 
-    #Index time
-    X1list_.append(np.hstack([np.repeat(i,X1_.size)[:,None],X1_]))
-    X1list.append(np.hstack([np.repeat(i,X1.size)[:,None],X1]))
-    X1list_fut.append(np.hstack([np.repeat(i,X1_fut.size)[:,None],X1_fut]))
+m7.ensure_default_constraints()
+m7.constrain_positive('kappa')
+#m7.tie_param('periodic_*.*_var')
+m7.unconstrain('exp_var')
+m7.constrain_fixed('exp_var',1)
+m7.unconstrain('rbf_rbf_var')
+m7.constrain_fixed('rbf_rbf_var',1)
+if hasattr(m7,'Z'):
+    m7.scale_factor=100
+    m7.constrain_fixed('iip',m7.Z[:m7._M,1].flatten())
+m7.set('exp_len',1) #=1 if not using log
+m7.set('icm_rbf_var',5)
+m7.set('icm_rbf_len',.0001)
+m7.set('W',.01*np.random.rand(R*Dw))
 
-    X2list_.append(np.hstack([np.repeat(i+len(all_stations),X2_.size)[:,None],X2_]))
-    X2list.append(np.hstack([np.repeat(i+len(all_stations),X2.size)[:,None],X2]))
-    X2list_fut.append(np.hstack([np.repeat(i+len(all_stations),X2_fut.size)[:,None],X2_fut]))
+print m7.checkgrad(verbose=1)
+m7.optimize()
+print m7
 
-    X3list_.append(np.hstack([np.repeat(i+len(all_stations),X3_.size)[:,None],X3_]))
-    X3list.append(np.hstack([np.repeat(i+len(all_stations),X3.size)[:,None],X3]))
-    X3list_fut.append(np.hstack([np.repeat(i+len(all_stations),X3_fut.size)[:,None],X3_fut]))
+"""
+Incidence regression
+"""
+Ilist_train = []
+Xilist_train = []
+Ilist_test = []
+Xilist_test = []
+likelihoodsi = []
+modelsi = []
+for district in districts:
+    print '\n%s: incidence regression' %district
+    #Geta data
+    y,x = useful.filtered(district,'incidence',rm_zero=True)
+    #Train datasets
+    Xilist_train.append(x[x<=cut_date][:,None])
+    Ilist_train.append(y[x<=cut_date][:,None])
+    likelihoodsi.append(GPy.likelihoods.Gaussian(Ilist_train[-1],normalize=True))
+    #Test datasets
+    Xilist_test.append(x[x>cut_date][:,None])
+    Ilist_test.append(y[x>cut_date][:,None])
 
-YYlist_ = Y1list_ + Y2list_ + Y3list_
-YYlist = Y1list + Y2list + Y3list
-YYlist_fut = Y1list_fut + Y2list_fut + Y3list_fut
+    periodici = GPy.kern.periodic_exponential(1)
+    rbfi = GPy.kern.rbf(1)
+    biasi = GPy.kern.bias(1)
+    whitei = GPy.kern.white(1)
 
-Xlist_ = X1list_ + X2list_ + X3list_
-Xlist = X1list + X2list + X3list
-Xlist_fut = X1list_fut + X2list_fut + X3list_fut
+    modelsi.append(GPy.models.GP(Xilist_train[-1], likelihoodsi[-1], periodici*rbfi+rbfi.copy()+biasi+whitei, normalize_X=True))
 
-likelihoods = likelihoods1 + likelihoods2 + likelihoods3
+    #modelsi[-1].ensure_default_constraints() #NOTE not working for sum of rbf's
+    modelsi[-1].constrain_positive('var')
+    modelsi[-1].constrain_positive('len')
+    modelsi[-1].tie_param('periodic*.*var')
+    print modelsi[-1].checkgrad()
+    modelsi[-1].set('exp_len',.001)
+    modelsi[-1].set('_rbf_len',.01)
+    modelsi[-1].set('exp_var',2)
+    modelsi[-1].set('rbf_var',.5)
+    modelsi[-1].optimize()
+    print modelsi[-1]
 
-#model 6
-#multioutput GP incidences_district ~ time
-print '\nMultioutput model incidences ~ time'
+"""
+ndvi regression
+"""
+"""
+Nlist_train = []
+Xnlist_train = []
+Nlist_test = []
+Xnlist_test = []
+likelihoodsn = []
+modelsn = []
+for output in additional_outputs_d:
+    for district in districts:
+        print '\n%s: %s regression' %(district,output)
+        #Geta data
+        y,x = useful.sampled(district,output,size=ndvi_sample)
+        #Train datasets
+        Xnlist_train.append(x[x<=cut_date][:,None])
+        Nlist_train.append(y[x<=cut_date][:,None])
+        likelihoodsn.append(GPy.likelihoods.Gaussian(Nlist_train[-1],normalize=True))
+        #Test datasets
+        Xnlist_test.append(x[x>cut_date][:,None])
+        Nlist_test.append(y[x>cut_date][:,None])
 
-R = R
-D = 1
-periodic4 = GPy.kern.periodic_exponential(1)
-rbf4 = GPy.kern.rbf(1)
-linear4 = GPy.kern.linear(1)
-bias4 = GPy.kern.bias(1)
-base_white4 = GPy.kern.white(1)
-white4 = GPy.kern.cor_white(base_white4,R,index=0,Dw=2)
-base4 = periodic4*rbf4+rbf4.copy()+bias4
-kernel4 = GPy.kern.icm(base4,R,index=0,Dw=2)
+        periodicn = GPy.kern.periodic_exponential(1)
+        rbfn = GPy.kern.rbf(1)
+        biasn = GPy.kern.bias(1)
+        whiten = GPy.kern.white(1)
 
-Z = np.linspace(100,1400,9)[:,None]
+        modelsn.append(GPy.models.GP(Xnlist_train[-1], likelihoodsn[-1], periodicn*rbfn+rbfn.copy()+biasn+whiten, normalize_X=True))
 
-#m6 = GPy.models.mGP(Xlist, likelihoods, kernel4+white4, normalize_Y=False)
-m6 = GPy.models.multioutput_GP(Xlist, likelihoods, kernel4+white4,Z=Z, normalize_X=True,normalize_Y=True)
+        #modelsn[-1].ensure_default_constraints() #NOTE not working for sum of rbf's
+        modelsn[-1].constrain_positive('var')
+        modelsn[-1].constrain_positive('len')
+        modelsn[-1].tie_param('periodic*.*var')
+        modelsn[-1].set('exp_len',.001)
+        modelsn[-1].set('_rbf_len',.01)
+        modelsn[-1].set('exp_var',2)
+        modelsn[-1].set('rbf_var',.5)
+        print modelsn[-1].checkgrad()
+        modelsn[-1].optimize()
+        print modelsn[-1]
+"""
 
-m6.ensure_default_constraints()
-m6.constrain_positive('kappa')
-m6.unconstrain('exp_var')
-m6.constrain_fixed('exp_var',1)
-if hasattr(m6,'Z'):
-    m6.scale_factor=100#00
-    m6.constrain_fixed('iip',m6.Z[:m6._M,1].flatten())
-m6.set('exp_len',1) #=1 if not using log
-m6.set('icm_rbf_var',2)
-m6.set('W',.001*np.random.rand(R*2))
+"""
+Weather outputs regression
+"""
+"""
+Wlist_train = []
+Xwlist_train = []
+Wlist_test = []
+Xwlist_test = []
+likelihoodsw = []
+modelsw = []
+for output in outputs_s:
+    for district in stations:
+        print '\n%s: %s regression' %(district,output)
+        #Geta data
+        y,x = useful.sampled(district,output,size=weather_sample)
+        #Train datasets
+        Xwlist_train.append(x[x<=cut_date][:,None])
+        Wlist_train.append(y[x<=cut_date][:,None])
+        likelihoodsw.append(GPy.likelihoods.Gaussian(Wlist_train[-1],normalize=True))
+        #Test datasets
+        Xwlist_test.append(x[x>cut_date][:,None])
+        Wlist_test.append(y[x>cut_date][:,None])
 
-print m6.checkgrad(verbose=1)
-m6.optimize()
-print m6
+        periodicw = GPy.kern.periodic_exponential(1)
+        rbfw = GPy.kern.rbf(1)
+        biasw = GPy.kern.bias(1)
+        whitew = GPy.kern.white(1)
 
-for nd in range(R):
-    #model 6 plots
-    #fig=pb.subplot(233)
-    fig = pb.figure()
-    mean_,var_,lower_,upper_ = m6.predict(Xlist_[nd])
-    GPy.util.plot.gpplot(Xlist_[nd][:,1],mean_,lower_,upper_)
-    pb.plot(Xlist[nd][:,1],YYlist[nd],'kx',mew=1.5)
-    print '%s' %nd
-    print Xlist[nd][:,1].size,YYlist[nd].size
-    pb.plot(Xlist_fut[nd][:,1],YYlist_fut[nd],'rx',mew=1.5)
-    if hasattr(m6,'Z'):
-        #_Z = m6.Z[:m6._M,:]*m6._Zstd+m6._Zmean
-        _Z = m6.Z[:m6._M,:]
-        pb.plot(_Z[:,1],np.repeat(pb.ylim()[1]*.1,m6._M),'r|',mew=1.5)
-    #pb.ylim(ylim)
-    if nd < R/3:
-        pb.ylabel('incidences')
-    elif nd < 2*R/3:
-        pb.ylabel('ndvi')
-    else:
-        pb.ylabel('rain')
-    #fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+        modelsw.append(GPy.models.GP(Xwlist_train[-1], likelihoodsw[-1], periodicw*rbfw+rbfw.copy()+biasw+whitew, normalize_X=True))
+
+        #modelsw[-1].ensure_default_constraints() #NOTE not working for sum of rbf's
+        modelsw[-1].constrain_positive('var')
+        modelsw[-1].constrain_positive('len')
+        modelsw[-1].tie_param('periodic*.*var')
+        modelsw[-1].set('exp_len',.001)
+        modelsw[-1].set('_rbf_len',.01)
+        modelsw[-1].set('exp_var',2)
+        modelsw[-1].set('rbf_var',.5)
+        modelsw[-1].optimize()
+        print modelsw[-1].checkgrad()
+        print modelsw[-1]
+"""
+
+"""
+Plots
+"""
+for district,d in zip(districts,range(len(districts))):
+    pb.figure()
+    pb.suptitle('%s' %district)
+
+    #Incidence regression
+    fig = pb.subplot(233)
+    time = np.vstack([ Xilist_train[d],Xilist_test[d] ] )
+    tmin = time.min()
+    tmax = time.max()
+    X_star = np.linspace(tmin,tmax,200)[:,None]
+    mean_,var_,lower_,upper_ = modelsi[d].predict(X_star)
+    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
+    pb.plot(Xilist_train[d],Ilist_train[d],'kx',mew=1.5)
+    pb.plot(Xilist_test[d],Ilist_test[d],'rx',mew=1.5)
+    pb.xlim(0,1800)
+    pb.ylabel('incidence')
+    #pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+    """
+    #ndvi regression
+    fig = pb.subplot(232)
+    time = np.vstack([ Xnlist_train[d],Xnlist_test[d] ] )
+    tmin = time.min()
+    tmax = time.max()
+    X_star = np.linspace(tmin,tmax,200)[:,None]
+    mean_,var_,lower_,upper_ = modelsn[d].predict(X_star)
+    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
+    pb.plot(Xnlist_train[d],Nlist_train[d],'kx',mew=1.5)
+    pb.plot(Xnlist_test[d],Nlist_test[d],'rx',mew=1.5)
+    pb.xlim(0,1800)
+    pb.ylabel('ndvi')
+    #pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+
+    #weather regression
+    fig = pb.subplot(231)
+    time = np.vstack([ Xwlist_train[d],Xwlist_test[d] ] )
+    tmin = time.min()
+    tmax = time.max()
+    X_star = np.linspace(tmin,tmax,200)[:,None]
+    mean_,var_,lower_,upper_ = modelsw[d].predict(X_star)
+    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
+    pb.plot(Xwlist_train[d],Wlist_train[d],'kx',mew=1.5)
+    pb.plot(Xwlist_test[d],Wlist_test[d],'rx',mew=1.5)
+    pb.ylabel(outputs_s[0])
+    pb.xlim(0,1800)
+    #pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+    """
+    #multioutput model
+    shift = len(districts)
+
+    #incidence
+    fig = pb.subplot(236)
+    time = np.vstack([ Xlist_train[d],Xlist_test[d] ] )
+    tmin = time.min()
+    tmax = time.max()
+    aux = np.linspace(tmin,tmax,200)[:,None]
+    index = np.repeat(d,aux.size)[:,None]
+    X_star = np.hstack([index,aux])
+    mean_,var_,lower_,upper_ = m7.predict(X_star)
+    GPy.util.plot.gpplot(X_star[:,1],mean_,lower_,upper_)
+    pb.plot(Xlist_train[d][:,1],Ylist_train[d],'kx',mew=1.5)
+    pb.plot(Xlist_test[d][:,1],Ylist_test[d],'rx',mew=1.5)
+    pb.xlim(0,1800)
+    pb.ylabel('incidence')
+    pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+
+    #ndvi
+    fig = pb.subplot(235)
+    time = np.vstack([ Xlist_train[d+shift],Xlist_test[d+shift] ] )
+    tmin = time.min()
+    tmax = time.max()
+    aux = np.linspace(tmin,tmax,200)[:,None]
+    index = np.repeat(d+shift,aux.size)[:,None]
+    X_star = np.hstack([index,aux])
+    mean_,var_,lower_,upper_ = m7.predict(X_star)
+    GPy.util.plot.gpplot(X_star[:,1],mean_,lower_,upper_)
+    pb.plot(Xlist_train[d+shift][:,1],Ylist_train[d+shift],'kx',mew=1.5)
+    pb.plot(Xlist_test[d+shift][:,1],Ylist_test[d+shift],'rx',mew=1.5)
+    pb.xlim(0,1800)
+    pb.ylabel(additional_outputs_d[0])
+    pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+
+    #weather
+    fig = pb.subplot(234)
+    time = np.vstack([ Xlist_train[d+2*shift],Xlist_test[d+2*shift] ] )
+    tmin = time.min()
+    tmax = time.max()
+    aux = np.linspace(tmin,tmax,200)[:,None]
+    index = np.repeat(d+2*shift,aux.size)[:,None]
+    X_star = np.hstack([index,aux])
+    mean_,var_,lower_,upper_ = m7.predict(X_star)
+    GPy.util.plot.gpplot(X_star[:,1],mean_,lower_,upper_)
+    pb.plot(Xlist_train[d+2*shift][:,1],Ylist_train[d+2*shift],'kx',mew=1.5)
+    pb.plot(Xlist_test[d+2*shift][:,1],Ylist_test[d+2*shift],'rx',mew=1.5)
+    pb.xlim(0,1800)
+    pb.ylabel(outputs_d[0])
+    pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
