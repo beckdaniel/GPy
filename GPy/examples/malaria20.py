@@ -45,7 +45,6 @@ outputs_s = ['rain'] #NOTE this example only supports one output_s
 
 outputs_d = ['incidence'] + additional_outputs_d
 cut_date = 1400
-
 ndvi_sample = 100
 weather_sample = 150
 
