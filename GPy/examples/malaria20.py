@@ -1,5 +1,5 @@
 """
-Comparison:
+Comparison using samples:
     - GP regression incidences_district ~ time
     - GP regression ndvi_district ~ time
     - GP regression rain_station ~ time
@@ -47,7 +47,7 @@ outputs_d = ['incidence'] + additional_outputs_d
 cut_date = 1400
 
 ndvi_sample = 100
-weather_sample = 200
+weather_sample = 150
 
 """
 Sparse multioutput model
@@ -269,57 +269,11 @@ Plots
 for district,d in zip(districts,range(len(districts))):
     pb.figure()
     pb.suptitle('%s' %district)
-
-    #Incidence regression
-    fig = pb.subplot(233)
-    time = np.vstack([ Xilist_train[d],Xilist_test[d] ] )
-    tmin = time.min()
-    tmax = time.max()
-    X_star = np.linspace(tmin,tmax,200)[:,None]
-    mean_,var_,lower_,upper_ = modelsi[d].predict(X_star)
-    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
-    pb.plot(Xilist_train[d],Ilist_train[d],'kx',mew=1.5)
-    pb.plot(Xilist_test[d],Ilist_test[d],'rx',mew=1.5)
-    pb.xlim(0,1800)
-    pb.ylabel('incidence')
-    #pb.xlabel('time (days)')
-    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
-    """
-    #ndvi regression
-    fig = pb.subplot(232)
-    time = np.vstack([ Xnlist_train[d],Xnlist_test[d] ] )
-    tmin = time.min()
-    tmax = time.max()
-    X_star = np.linspace(tmin,tmax,200)[:,None]
-    mean_,var_,lower_,upper_ = modelsn[d].predict(X_star)
-    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
-    pb.plot(Xnlist_train[d],Nlist_train[d],'kx',mew=1.5)
-    pb.plot(Xnlist_test[d],Nlist_test[d],'rx',mew=1.5)
-    pb.xlim(0,1800)
-    pb.ylabel('ndvi')
-    #pb.xlabel('time (days)')
-    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
-
-    #weather regression
-    fig = pb.subplot(231)
-    time = np.vstack([ Xwlist_train[d],Xwlist_test[d] ] )
-    tmin = time.min()
-    tmax = time.max()
-    X_star = np.linspace(tmin,tmax,200)[:,None]
-    mean_,var_,lower_,upper_ = modelsw[d].predict(X_star)
-    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
-    pb.plot(Xwlist_train[d],Wlist_train[d],'kx',mew=1.5)
-    pb.plot(Xwlist_test[d],Wlist_test[d],'rx',mew=1.5)
-    pb.ylabel(outputs_s[0])
-    pb.xlim(0,1800)
-    #pb.xlabel('time (days)')
-    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
-    """
-    #multioutput model
+    #shifts for multioutput model
     shift = len(districts)
 
-    #incidence
-    fig = pb.subplot(236)
+    #incidence - multioutput
+    fig = pb.subplot(212)
     time = np.vstack([ Xlist_train[d],Xlist_test[d] ] )
     tmin = time.min()
     tmax = time.max()
@@ -335,7 +289,24 @@ for district,d in zip(districts,range(len(districts))):
     pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
-    #ndvi
+    #incidence - regression
+    fig = pb.subplot(211)
+    time = np.vstack([ Xilist_train[d],Xilist_test[d] ] )
+    tmin = time.min()
+    tmax = time.max()
+    X_star = np.linspace(tmin,tmax,200)[:,None]
+    mean_,var_,lower_,upper_ = modelsi[d].predict(X_star)
+    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
+    pb.plot(Xilist_train[d],Ilist_train[d],'kx',mew=1.5)
+    pb.plot(Xilist_test[d],Ilist_test[d],'rx',mew=1.5)
+    pb.xlim(0,1800)
+    pb.ylabel('incidence')
+    #pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+
+
+    """
+    #ndvi - multioutput
     fig = pb.subplot(235)
     time = np.vstack([ Xlist_train[d+shift],Xlist_test[d+shift] ] )
     tmin = time.min()
@@ -352,7 +323,7 @@ for district,d in zip(districts,range(len(districts))):
     pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
 
-    #weather
+    #weather - multioutput
     fig = pb.subplot(234)
     time = np.vstack([ Xlist_train[d+2*shift],Xlist_test[d+2*shift] ] )
     tmin = time.min()
@@ -368,3 +339,37 @@ for district,d in zip(districts,range(len(districts))):
     pb.ylabel(outputs_d[0])
     pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+    """
+
+    """
+    #ndvi - regression
+    fig = pb.subplot(232)
+    time = np.vstack([ Xnlist_train[d],Xnlist_test[d] ] )
+    tmin = time.min()
+    tmax = time.max()
+    X_star = np.linspace(tmin,tmax,200)[:,None]
+    mean_,var_,lower_,upper_ = modelsn[d].predict(X_star)
+    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
+    pb.plot(Xnlist_train[d],Nlist_train[d],'kx',mew=1.5)
+    pb.plot(Xnlist_test[d],Nlist_test[d],'rx',mew=1.5)
+    pb.xlim(0,1800)
+    pb.ylabel('ndvi')
+    #pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+
+    #weather - regression
+    fig = pb.subplot(231)
+    time = np.vstack([ Xwlist_train[d],Xwlist_test[d] ] )
+    tmin = time.min()
+    tmax = time.max()
+    X_star = np.linspace(tmin,tmax,200)[:,None]
+    mean_,var_,lower_,upper_ = modelsw[d].predict(X_star)
+    GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
+    pb.plot(Xwlist_train[d],Wlist_train[d],'kx',mew=1.5)
+    pb.plot(Xwlist_test[d],Wlist_test[d],'rx',mew=1.5)
+    pb.ylabel(outputs_s[0])
+    pb.xlim(0,1800)
+    #pb.xlabel('time (days)')
+    fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+    """
+

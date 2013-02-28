@@ -1,5 +1,5 @@
 """
-Comparison:
+Comparison full dataset:
     - GP regression incidences_district ~ time
     - GP regression ndvi_district ~ time
     - GP regression rain_station ~ time
