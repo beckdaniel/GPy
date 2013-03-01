@@ -285,7 +285,7 @@ Gulu,Lira,Pader
 
 districts = ['Mubende','Masindi','Mbarara','Kampala','Kasese']
 additional_outputs_d = []
-stations = []#'Masindi','Kasese','Mbarara','Kampala']
+stations = []#'Masindi','Mbarara','Kampala','Kasese']
 outputs_s = []#'rain'] #NOTE this example only supports one output_s
 
 outputs_d = ['incidence'] + additional_outputs_d
@@ -312,7 +312,7 @@ for output in outputs_d:
         else:
             y,x = useful.sampled(district,output,size=ndvi_sample)
         #Train datasets
-        if district == 'Mubende':
+        if district == districts[0]:
             xtrain = x[x<=cut_date][:,None]
             Xlist_train.append( np.hstack([np.repeat(k,xtrain.size)[:,None],xtrain]) )
             Ylist_train.append(y[x<=cut_date][:,None])
@@ -353,19 +353,22 @@ for output in outputs_s:
         k += 1
 
 #Kernel
-periodic7 = GPy.kern.periodic_exponential(1)
-rbf7 = GPy.kern.rbf(1)
+periodic7 = GPy.kern.periodic_exponential(1,lengthscale=.1,period=365.,n_freq=10,upper=1800.)
+rbf7 = GPy.kern.rbf(1,lengthscale=700.)
+rbf7_2 = GPy.kern.rbf(1,lengthscale=80.)
+rbf7_3 = GPy.kern.rbf(1,lengthscale=5.)
 base7_1 = periodic7*rbf7
 base_white7 = GPy.kern.white(1)
 Dw = 2
 kernel7_1 = GPy.kern.icm(base7_1,R,index=0,Dw=Dw)
-kernel7_2 = GPy.kern.icm(rbf7.copy(),R,index=0,Dw=Dw)
+kernel7_2 = GPy.kern.icm(rbf7_2,R,index=0,Dw=Dw)
+kernel7_3 = GPy.kern.icm(rbf7_3,R,index=0,Dw=Dw)
 white7 = GPy.kern.cor_white(base_white7,R,index=0,Dw=Dw)
 
 #Inducing inputs
 Z = np.linspace(100,1800,20)[:,None]
 
-m7 = GPy.models.multioutput_GP(Xlist_train, likelihoods, kernel7_1+kernel7_2+white7, Z=Z, normalize_X=True,normalize_Y=True)
+m7 = GPy.models.multioutput_GP(Xlist_train, likelihoods, kernel7_1+kernel7_2+kernel7_3+white7, Z=Z, normalize_X=False,normalize_Y=True)
 
 
 m7.ensure_default_constraints()
@@ -376,11 +379,13 @@ m7.unconstrain('icm*.*var')
 m7.constrain_fixed('icm*.*var',1)
 m7.scale_factor=100
 #m7.constrain_fixed('iip',m7.Z[:m7._M,1].flatten())
-m7.set('icm_2*.*exp_len',2)
-m7.set('icm_2*.*rbf_len',.1)
-m7.set('icm_1*.*rbf_len',.01)
+#m7.set('icm_3*.*rbf_len',.001)
+#m7.set('icm_2*.*exp_len',.002)
+#m7.set('icm_2*.*rbf_len',1)
+#m7.set('icm_1*.*rbf_len',10)
 m7.set('1_W',.01*np.random.rand(R*Dw))
 m7.set('2_W',.001*np.random.rand(R*Dw))
+#m7.set('3_W',.001*np.random.rand(R*Dw))
 
 
 
@@ -454,6 +459,7 @@ for district,d in zip(districts[:1],range(len(districts[:1]))):
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
     _Z = m7.Z[:m7._M,1]*m7._Zstd[0,1]+m7._Zmean[0,1]
     pb.plot(_Z,np.repeat(200,m7._M),'r|',mew=1.5)
+    #pb.ylim(0,12000)
     pb.ylim(0,5000)
 
     #incidence - regression
@@ -470,6 +476,7 @@ for district,d in zip(districts[:1],range(len(districts[:1]))):
     pb.ylabel('incidence',size=15)
     #pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
+    #pb.ylim(0,12000)
     pb.ylim(0,5000)
     fig_name = '%s_coregionalization_2.png' %district
     pb.savefig(route+fig_name)
