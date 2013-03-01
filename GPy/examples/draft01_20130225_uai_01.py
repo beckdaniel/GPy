@@ -283,7 +283,7 @@ Coregionalization vs single location learning
 Gulu,Lira,Pader
 """
 
-districts = ['Mubende','Masindi','Mbarara','Kampala','Kasese']
+districts = ['Mubende','Masindi']#,'Mbarara','Kampala','Kasese']
 additional_outputs_d = []
 stations = []#'Masindi','Mbarara','Kampala','Kasese']
 outputs_s = []#'rain'] #NOTE this example only supports one output_s
@@ -353,10 +353,10 @@ for output in outputs_s:
         k += 1
 
 #Kernel
-periodic7 = GPy.kern.periodic_exponential(1,lengthscale=.1,period=365.,n_freq=10,upper=1800.)
+periodic7 = GPy.kern.periodict_Matern32(1,lengthscale=.1,period=365.,n_freq=10,upper=1800.)
 rbf7 = GPy.kern.rbf(1,lengthscale=700.)
-rbf7_2 = GPy.kern.rbf(1,lengthscale=80.)
-rbf7_3 = GPy.kern.rbf(1,lengthscale=5.)
+rbf7_2 = GPy.kern.rbf(1,lengthscale=3.65)
+rbf7_3 = GPy.kern.rbf(1,lengthscale=.30)
 base7_1 = periodic7*rbf7
 base_white7 = GPy.kern.white(1)
 Dw = 2
@@ -383,8 +383,8 @@ m7.scale_factor=100
 #m7.set('icm_2*.*exp_len',.002)
 #m7.set('icm_2*.*rbf_len',1)
 #m7.set('icm_1*.*rbf_len',10)
-m7.set('1_W',.01*np.random.rand(R*Dw))
-m7.set('2_W',.001*np.random.rand(R*Dw))
+m7.set('1_W',np.random.rand(R*Dw))
+m7.set('2_W',.1*np.random.rand(R*Dw))
 #m7.set('3_W',.001*np.random.rand(R*Dw))
 
 
