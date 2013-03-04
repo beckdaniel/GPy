@@ -283,7 +283,7 @@ Coregionalization vs single location learning
 Gulu,Lira,Pader
 """
 
-districts = ['Mubende','Masindi']#,'Mbarara','Kampala','Kasese']
+districts = ['Mubende','Masindi','Mbarara','Kampala','Kasese']
 additional_outputs_d = []
 stations = []#'Masindi','Mbarara','Kampala','Kasese']
 outputs_s = []#'rain'] #NOTE this example only supports one output_s
@@ -368,12 +368,12 @@ white7 = GPy.kern.cor_white(base_white7,R,index=0,Dw=Dw)
 #Inducing inputs
 Z = np.linspace(100,1800,20)[:,None]
 
-#m7 = GPy.models.multioutput_GP(Xlist_train, likelihoods, kernel7_1+kernel7_2+white7, Z=Z, normalize_X=False,normalize_Y=True)
-m7 = GPy.models.mGP(Xlist_train, likelihoods, kernel7_1+kernel7_2+white7, normalize_X=False,normalize_Y=True)
+m7 = GPy.models.multioutput_GP(Xlist_train, likelihoods, kernel7_1+kernel7_2+white7, Z=Z, normalize_X=True,normalize_Y=True)
+#m7 = GPy.models.mGP(Xlist_train, likelihoods, kernel7_1+kernel7_2+white7, normalize_X=False,normalize_Y=True)
 
 m7.ensure_default_constraints()
 m7.scale_factor=100
-#m7.constrain_fixed('iip',m7.Z[:m7._M,1].flatten())
+m7.constrain_fixed('iip',m7.Z[:m7._M,1].flatten())
 m7.constrain_positive('kappa')
 m7.unconstrain('icm_1*.*var')
 m7.constrain_fixed('icm_1*.*var',1)
@@ -388,8 +388,8 @@ m7.scale_factor=100
 #m7.set('1_W',5*np.random.rand(R*Dw))
 #m7.set('2_W',1*np.random.rand(R*Dw))
 #m7.set('3_W',.001*np.random.rand(R*Dw))
-m7.set('1_W', 10*np.random.rand(R*Dw))
-m7.set('2_W', np.random.rand(R*Dw))
+m7.set('1_W', .008*np.random.rand(R*Dw))
+m7.set('2_W', .008*np.random.rand(R*Dw))
 #m7.set('3_W', np.random.rand(R*Dw))
 #m7.constrain_fixed('2_W',0)
 #m7.constrain_fixed('3_W',0)
@@ -429,12 +429,14 @@ for district in districts[:1]:
     lineari = GPy.kern.bias(1)
     whitei = GPy.kern.white(1)
 
-    #modelsi.append(GPy.models.GP(Xilist_train[-1], likelihoodsi[-1], periodici*lineari+rbfi.copy()+whitei, normalize_X=True))
-    modelsi.append(GPy.models.GP(Xilist_train[-1], likelihoodsi[-1], rbf1_1 + rbf1_2 + whitei, normalize_X=True))
+    Z = np.linspace(100,1800,20)[:,None]
+    #modelsi.append(GPy.models.GP(Xilist_train[-1], likelihoodsi[-1], rbf1_1 + rbf1_2 + whitei, normalize_X=True))
+    modelsi.append(GPy.models.sparse_GP(Xilist_train[-1], likelihoodsi[-1], rbf1_1 + rbf1_2 + whitei, Z, normalize_X=True))
 
     #modelsi[-1].ensure_default_constraints() #NOTE not working for sum of rbf's
     modelsi[-1].constrain_positive('var')
     modelsi[-1].constrain_positive('len')
+    modelsi[-1].constrain_fixed('iip',modelsi[-1].Z.flatten())
     #modelsi[-1].tie_param('periodic*.*var')
     print modelsi[-1].checkgrad()
     #modelsi[-1].set('exp_len',.1)
@@ -464,13 +466,13 @@ for district,d in zip(districts[:1],range(len(districts[:1]))):
     pb.plot(Xlist_train[d][:,1],Ylist_train[d],'kx',mew=1.5)
     pb.plot(Xlist_test[d][:,1],Ylist_test[d],'rx',mew=1.5)
     pb.xlim(0,1800)
-    pb.ylabel('incidence',size=15)
-    pb.xlabel('time (days)')
+    pb.ylabel('multiple output\nincidence',size=15)
+    pb.xlabel('time (days)',size = 15)
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
-    #_Z = m7.Z[:m7._M,1]*m7._Zstd[0,1]+m7._Zmean[0,1]
-    #pb.plot(_Z,np.repeat(200,m7._M),'r|',mew=1.5)
+    _Z = m7.Z[:m7._M,1]*m7._Zstd[0,1]+m7._Zmean[0,1]
+    pb.plot(_Z,np.repeat(200,m7._M),'r|',mew=1.5)
     #pb.ylim(0,12000)
-    pb.ylim(0,6000)
+    pb.ylim(0,5500)
 
     #incidence - regression
     fig = pb.subplot(211)
@@ -480,15 +482,17 @@ for district,d in zip(districts[:1],range(len(districts[:1]))):
     X_star = np.linspace(tmin,1800,200)[:,None]
     mean_,var_,lower_,upper_ = modelsi[0].predict(X_star)
     GPy.util.plot.gpplot(X_star,mean_,lower_,upper_)
+    _Z = modelsi[0].Z*modelsi[0]._Xstd+modelsi[0]._Xmean
+    pb.plot(_Z,np.repeat(200,modelsi[0].M),'r|',mew=1.5)
     pb.plot(Xilist_train[0],Ilist_train[0],'kx',mew=1.5)
     pb.plot(Xilist_test[0],Ilist_test[0],'rx',mew=1.5)
     pb.xlim(0,1800)
-    pb.ylabel('incidence',size=15)
+    pb.ylabel('sparse regression\nincidence',size=15)
     #pb.xlabel('time (days)')
     fig.xaxis.set_major_locator(pb.MaxNLocator(6))
     #pb.ylim(0,12000)
-    pb.ylim(0,6000)
-    fig_name = '%s_coregionalization_2.png' %district
+    pb.ylim(0,5500)
+    fig_name = '%s_coregionalization_sparse.png' %district
     pb.savefig(route+fig_name)
 
     """
