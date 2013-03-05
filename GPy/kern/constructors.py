@@ -20,6 +20,7 @@ from periodic_Matern32 import periodic_Matern32 as periodic_Matern32part
 from periodic_Matern52 import periodic_Matern52 as periodic_Matern52part
 from product import product as productpart
 from product_orthogonal import product_orthogonal as product_orthogonalpart
+from symmetric import symmetric as symmetric_part
 #TODO these s=constructors are not as clean as we'd like. Tidy the code up
 #using meta-classes to make the objects construct properly wthout them.
 from icm import icm as icmpart
@@ -276,3 +277,11 @@ def cor_white(base_kern,R,index=None,Dw=1):
     part = cor_whitepart(base_kern,R=R,Dw=Dw)
     D = base_kern.D
     return coreg_kern(D,[part],index=index)
+
+def symmetric(k):
+    """
+    Construct a symmetrical kernel from an existing kernel
+    """
+    k_ = k.copy()
+    k_.parts = [symmetric_part(p) for p in k.parts]
+    return k_

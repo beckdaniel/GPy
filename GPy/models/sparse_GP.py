@@ -58,6 +58,19 @@ class sparse_GP(GP):
         if self.has_uncertain_inputs:
             self.X_uncertainty /= np.square(self._Xstd)
 
+
+    def _compute_kernel_matrices(self):
+        # kernel computations, using BGPLVM notation
+        self.Kmm = self.kern.K(self.Z)
+        if self.has_uncertain_inputs:
+            self.psi0 = self.kern.psi0(self.Z,self.X, self.X_uncertainty)
+            self.psi1 = self.kern.psi1(self.Z,self.X, self.X_uncertainty).T
+            self.psi2 = self.kern.psi2(self.Z,self.X, self.X_uncertainty)
+        else:
+            self.psi0 = self.kern.Kdiag(self.X,slices=self.Xslices)
+            self.psi1 = self.kern.K(self.Z,self.X)
+            self.psi2 = None
+
     def _computations(self):
         # TODO find routine to multiply triangular matrices
         #TODO: slices for psi statistics (easy enough)
@@ -65,26 +78,20 @@ class sparse_GP(GP):
         sf = self.scale_factor
         sf2 = sf**2
 
-        # kernel computations, using BGPLVM notation
-        self.Kmm = self.kern.K(self.Z)
-        if self.has_uncertain_inputs:
-            self.psi0 = self.kern.psi0(self.Z,self.X, self.X_uncertainty)
-            self.psi1 = self.kern.psi1(self.Z,self.X, self.X_uncertainty).T
-            self.psi2 = self.kern.psi2(self.Z,self.X, self.X_uncertainty)
-            if self.likelihood.is_heteroscedastic:
+        #The rather complex computations of psi2_beta_scaled
+        if self.likelihood.is_heteroscedastic:
+            assert self.likelihood.D == 1 #TODO: what is the likelihood is heterscedatic and there are multiple independent outputs?
+            if self.has_uncertain_inputs:
                 self.psi2_beta_scaled = (self.psi2*(self.likelihood.precision.reshape(self.N,1,1)/sf2)).sum(0)
-                #TODO: what is the likelihood is heterscedatic and there are multiple independent outputs?
             else:
-                self.psi2_beta_scaled = (self.psi2*(self.likelihood.precision/sf2)).sum(0)
+                tmp = self.psi1.T*(np.sqrt(self.likelihood.precision.reshape(1,self.N))/sf)
+                self.psi2_beta_scaled = np.dot(tmp,tmp.T)
         else:
-            self.psi0 = self.kern.Kdiag(self.X,slices=self.Xslices)
-            self.psi1 = self.kern.K(self.Z,self.X)
-            if self.likelihood.is_heteroscedastic:
-                tmp = self.psi1*(np.sqrt(self.likelihood.precision.reshape(self.N,1))/sf)
+            if self.has_uncertain_inputs:
+                self.psi2_beta_scaled = (self.psi2*(self.likelihood.precision/sf2)).sum(0)
             else:
                 tmp = self.psi1*(np.sqrt(self.likelihood.precision)/sf)
-            self.psi2_beta_scaled = np.dot(tmp,tmp.T)
-            self.psi2 = self.psi1.T[:,:,None]*self.psi1.T[:,None,:] # TODO: remove me for efficiency and stability
+                self.psi2_beta_scaled = np.dot(tmp,tmp.T)
 
         self.Kmmi, self.Lm, self.Lmi, self.Kmm_logdet = pdinv(self.Kmm)
 
@@ -106,12 +113,20 @@ class sparse_GP(GP):
             self.dL_dpsi2 = 0.5 * self.likelihood.precision[:,None,None] * self.D * self.Kmmi[None,:,:] # dB
             self.dL_dpsi2 += - 0.5 * self.likelihood.precision[:,None,None]/sf2 * self.D * self.C[None,:,:] # dC
             self.dL_dpsi2 += - 0.5 * self.likelihood.precision[:,None,None]* self.E[None,:,:] # dD
+            if not self.has_uncertain_inputs:
+                raise NotImplementedError, "TODO: recaste derivatibes in psi2 back into psi1"
+
         else:
             self.dL_dpsi2 = 0.5 * self.likelihood.precision * self.D * self.Kmmi # dB
             self.dL_dpsi2 += - 0.5 * self.likelihood.precision/sf2 * self.D * self.C # dC
             self.dL_dpsi2 += - 0.5 * self.likelihood.precision * self.E # dD
-            #repeat for each of the N psi_2 matrices
-            self.dL_dpsi2 = np.repeat(self.dL_dpsi2[None,:,:],self.N,axis=0)
+            if self.has_uncertain_inputs:
+                #repeat for each of the N psi_2 matrices
+                self.dL_dpsi2 = np.repeat(self.dL_dpsi2[None,:,:],self.N,axis=0)
+            else:
+                self.dL_dpsi1 += 2.*np.dot(self.dL_dpsi2,self.psi1)
+                self.dL_dpsi2 = None
+
 
         # Compute dL_dKmm
         self.dL_dKmm = -0.5 * self.D * mdot(self.Lmi.T, self.A, self.Lmi)*sf2 # dB
@@ -142,6 +157,7 @@ class sparse_GP(GP):
         self.Z = p[:self.M*self.Q].reshape(self.M, self.Q)
         self.kern._set_params(p[self.Z.size:self.Z.size+self.kern.Nparam])
         self.likelihood._set_params(p[self.Z.size+self.kern.Nparam:])
+        self._compute_kernel_matrices()
         self._computations()
 
     def _get_params(self):
@@ -175,13 +191,7 @@ class sparse_GP(GP):
             dL_dtheta += self.kern.dpsi1_dtheta(self.dL_dpsi1.T,self.Z,self.X, self.X_uncertainty)
             dL_dtheta += self.kern.dpsi2_dtheta(self.dL_dpsi2,self.dL_dpsi1.T, self.Z,self.X, self.X_uncertainty)
         else:
-            #re-cast computations in psi2 back to psi1:
-            #dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2.sum(0),self.psi1)
-            if not self.likelihood.is_heteroscedastic:
-                dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2[0,:,:],self.psi1)
-            else:
-                raise NotImplementedError, "TODO"
-            dL_dtheta += self.kern.dK_dtheta(dL_dpsi1,self.Z,self.X)
+            dL_dtheta += self.kern.dK_dtheta(self.dL_dpsi1,self.Z,self.X)
             dL_dtheta += self.kern.dKdiag_dtheta(self.dL_dpsi0, self.X)
 
         return dL_dtheta
@@ -195,12 +205,7 @@ class sparse_GP(GP):
             dL_dZ += self.kern.dpsi1_dZ(self.dL_dpsi1,self.Z,self.X, self.X_uncertainty)
             dL_dZ += 2.*self.kern.dpsi2_dZ(self.dL_dpsi2,self.Z,self.X, self.X_uncertainty) # 'stripes'
         else:
-            #re-cast computations in psi2 back to psi1:
-            if not self.likelihood.is_heteroscedastic:
-                dL_dpsi1 = self.dL_dpsi1 + 2.*np.dot(self.dL_dpsi2[0,:,:],self.psi1)
-            else:
-                raise NotImplementedError, "TODO"
-            dL_dZ += self.kern.dK_dX(dL_dpsi1,self.Z,self.X)
+            dL_dZ += self.kern.dK_dX(self.dL_dpsi1,self.Z,self.X)
         return dL_dZ
 
     def _raw_predict(self, Xnew, slices, full_cov=False):

@@ -82,20 +82,26 @@ class product(kernpart):
         self.k1.dK_dX(partial*K2, X, X2, target)
         self.k2.dK_dX(partial*K1, X, X2, target)
 
-    def dKdiag_dX(self,X,target):
-        pass
+    def dKdiag_dX(self,partial,X,target):
+        target1 = np.zeros((X.shape[0],))
+        target2 = np.zeros((X.shape[0],))
+        self.k1.Kdiag(X,target1)
+        self.k2.Kdiag(X,target2)
+
+        self.k1.dKdiag_dX(partial*target2, X, target)
+        self.k2.dKdiag_dX(partial*target1, X, target)
 
     def dKdiag_dtheta(self,partial,X,target):
-        """derivative of the diagonal of the covariance matrix with respect to the parameters."""
-        K1 = np.zeros((X.shape[0],))
-        K2 = K1.copy()
-        self.k1.Kdiag(X,K1)
-        self.k2.Kdiag(X,K2)
+        """Compute the diagonal of the covariance matrix associated to X."""
+        target1 = np.zeros((X.shape[0],))
+        target2 = np.zeros((X.shape[0],))
+        self.k1.Kdiag(X,target1)
+        self.k2.Kdiag(X,target2)
 
         k1_target = np.zeros(self.k1.Nparam)
         k2_target = np.zeros(self.k2.Nparam)
-        self.k1.dKdiag_dtheta(partial*K2, X, k1_target)
-        self.k2.dKdiag_dtheta(partial*K1, X, k2_target)
+        self.k1.dKdiag_dtheta(partial*target2, X, k1_target)
+        self.k2.dKdiag_dtheta(partial*target1, X, k2_target)
 
         target[:self.k1.Nparam] += k1_target
         target[self.k1.Nparam:] += k2_target
