@@ -11,6 +11,7 @@ from scipy import linalg
 import numpy
 import itertools
 import pylab
+from multiprocessing import Queue
 
 class MRD(model):
     """
@@ -355,12 +356,12 @@ class MRD(model):
         self.plot_scales()
 
     def _debug_optimize(self, opt='scg', maxiters=500, itersteps=10):
-        iters = 0
-        optstep = lambda: self.optimize(opt, messages=1, max_f_eval=itersteps)
         self._debug_plot()
         raw_input("enter to start debug")
-        while iters < maxiters:
-            optstep()
-            self._debug_plot()
-            iters += itersteps
+        for m in self.optimize(opt, messages=1, max_f_eval=itersteps, cb_freq=8):
+            m._debug_plot()
+#         while iters < maxiters:
+#             optstep()
+#             self._debug_plot()
+#             iters += itersteps
 

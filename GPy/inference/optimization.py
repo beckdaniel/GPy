@@ -6,6 +6,9 @@ import pylab as pb
 import datetime as dt
 from scipy import optimize
 import numpy as np
+from multiprocessing.process import Process
+from multiprocessing.queues import Queue
+import itertools
 
 try:
     import rasmussens_minimize as rasm
@@ -14,7 +17,9 @@ except ImportError:
     rasm_available = False
 from SCG import SCG
 
-class Optimizer():
+SENTINEL = object()
+
+class Optimizer(Process):
     """
     Superclass for all the optimizers.
 
@@ -29,7 +34,25 @@ class Optimizer():
     :rtype: optimizer object.
 
     """
-    def __init__(self, x_init, messages=False, model = None, max_f_eval=1e4, max_iters = 1e3, ftol=None, gtol=None, xtol=None):
+    def __init__(self, x_init, f_fp, f, fp,
+                 messages=False, model=None,
+                 max_f_eval=1e4, max_iters=1e3,
+                 ftol=None, gtol=None, xtol=None,
+                 cb_freq=100, outq=None,
+                 *ar, **kw):
+        self.x_init = x_init
+
+        if outq:
+            self.outq = outq
+            self.counter = itertools.count()
+            self.f_fp = self.fun_wrap(f_fp, 'f_fp')
+            self.f = self.fun_wrap(f, 'f')
+            self.fp = self.fun_wrap(fp, 'fp')
+            self.cb_freq = cb_freq
+        else:
+            self.f_fp = f_fp
+            self.f = f
+            self.fp = fp
         self.opt_name = None
         self.x_init = x_init
         self.messages = messages
@@ -45,14 +68,23 @@ class Optimizer():
         self.gtol = gtol
         self.ftol = ftol
         self.model = model
+        super(Optimizer, self).__init__(*ar, **kw)
 
-    def run(self, **kwargs):
+    def fun_wrap(self, fun, name):
+        def do(x):
+            if self.counter.next() % self.cb_freq == 0:
+                self.outq.put([name, self.model.copy()])
+            fun(x)
+        return do
+
+    def run(self):
         start = dt.datetime.now()
-        self.opt(**kwargs)
+        self.opt(self.f_fp, self.f, self.fp)
+        self.outq.put(SENTINEL)
         end = dt.datetime.now()
-        self.time = str(end-start)
+        self.time = str(end - start)
 
-    def opt(self, f_fp = None, f = None, fp = None):
+    def opt(self, f_fp=None, f=None, fp=None):
         raise NotImplementedError, "this needs to be implemented to use the optimizer class"
 
     def plot(self):
@@ -77,7 +109,7 @@ class opt_tnc(Optimizer):
         Optimizer.__init__(self, *args, **kwargs)
         self.opt_name = "TNC (Scipy implementation)"
 
-    def opt(self, f_fp = None, f = None, fp = None):
+    def opt(self, f_fp=None, f=None, fp=None):
         """
         Run the TNC optimizer
 
@@ -95,8 +127,8 @@ class opt_tnc(Optimizer):
         if self.gtol is not None:
             opt_dict['pgtol'] = self.gtol
 
-        opt_result = optimize.fmin_tnc(f_fp, self.x_init, messages = self.messages,
-                       maxfun = self.max_f_eval, **opt_dict)
+        opt_result = optimize.fmin_tnc(f_fp, self.x_init, messages=self.messages,
+                       maxfun=self.max_f_eval, **opt_dict)
         self.x_opt = opt_result[0]
         self.f_opt = f_fp(self.x_opt)[0]
         self.funct_eval = opt_result[1]
@@ -107,7 +139,7 @@ class opt_lbfgsb(Optimizer):
         Optimizer.__init__(self, *args, **kwargs)
         self.opt_name = "L-BFGS-B (Scipy implementation)"
 
-    def opt(self, f_fp = None, f = None, fp = None):
+    def opt(self, f_fp=None, f=None, fp=None):
         """
         Run the optimizer
 
@@ -129,8 +161,8 @@ class opt_lbfgsb(Optimizer):
         if self.gtol is not None:
             opt_dict['pgtol'] = self.gtol
 
-        opt_result = optimize.fmin_l_bfgs_b(f_fp, self.x_init, iprint = iprint,
-                                            maxfun = self.max_f_eval, **opt_dict)
+        opt_result = optimize.fmin_l_bfgs_b(f_fp, self.x_init, iprint=iprint,
+                                            maxfun=self.max_f_eval, **opt_dict)
         self.x_opt = opt_result[0]
         self.f_opt = f_fp(self.x_opt)[0]
         self.funct_eval = opt_result[2]['funcalls']
@@ -141,12 +173,12 @@ class opt_simplex(Optimizer):
         Optimizer.__init__(self, *args, **kwargs)
         self.opt_name = "Nelder-Mead simplex routine (via Scipy)"
 
-    def opt(self, f_fp = None, f = None, fp = None):
+    def opt(self, f_fp=None, f=None, fp=None):
         """
         The simplex optimizer does not require gradients.
         """
 
-        statuses = ['Converged', 'Maximum number of function evaluations made','Maximum number of iterations reached']
+        statuses = ['Converged', 'Maximum number of function evaluations made', 'Maximum number of iterations reached']
 
         opt_dict = {}
         if self.xtol is not None:
@@ -156,8 +188,8 @@ class opt_simplex(Optimizer):
         if self.gtol is not None:
             print "WARNING: simplex doesn't have an gtol arg, so I'm going to ignore it"
 
-        opt_result = optimize.fmin(f, self.x_init, (), disp = self.messages,
-                   maxfun = self.max_f_eval, full_output=True, **opt_dict)
+        opt_result = optimize.fmin(f, self.x_init, (), disp=self.messages,
+                   maxfun=self.max_f_eval, full_output=True, **opt_dict)
 
         self.x_opt = opt_result[0]
         self.f_opt = opt_result[1]
@@ -171,7 +203,7 @@ class opt_rasm(Optimizer):
         Optimizer.__init__(self, *args, **kwargs)
         self.opt_name = "Rasmussen's Conjugate Gradient"
 
-    def opt(self, f_fp = None, f = None, fp = None):
+    def opt(self, f_fp=None, f=None, fp=None):
         """
         Run Rasmussen's Conjugate Gradient optimizer
         """
@@ -188,8 +220,8 @@ class opt_rasm(Optimizer):
         if self.gtol is not None:
             print "WARNING: minimize doesn't have an gtol arg, so I'm going to ignore it"
 
-        opt_result = rasm.minimize(self.x_init, f_fp, (), messages = self.messages,
-                                   maxnumfuneval = self.max_f_eval)
+        opt_result = rasm.minimize(self.x_init, f_fp, (), messages=self.messages,
+                                   maxnumfuneval=self.max_f_eval)
         self.x_opt = opt_result[0]
         self.f_opt = opt_result[1][-1]
         self.funct_eval = opt_result[2]
@@ -202,10 +234,10 @@ class opt_SCG(Optimizer):
         Optimizer.__init__(self, *args, **kwargs)
         self.opt_name = "Scaled Conjugate Gradients"
 
-    def opt(self, f_fp = None, f = None, fp = None):
+    def opt(self, f_fp=None, f=None, fp=None):
         assert not f is None
         assert not fp is None
-        opt_result = SCG(f,fp,self.x_init, display=self.messages, maxiters=self.max_iters, max_f_eval=self.max_f_eval, xtol=self.xtol, ftol=self.ftol)
+        opt_result = SCG(f, fp, self.x_init, display=self.messages, maxiters=self.max_iters, max_f_eval=self.max_f_eval, xtol=self.xtol, ftol=self.ftol)
         self.x_opt = opt_result[0]
         self.trace = opt_result[1]
         self.f_opt = self.trace[-1]
