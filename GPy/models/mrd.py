@@ -347,7 +347,7 @@ class MRD(model):
     def _debug_optimize(self, opt='scg', maxiters=500, itersteps=10):
         self._debug_plot()
         raw_input("enter to start debug")
-        for m in self.optimize(opt, messages=1, max_f_eval=itersteps, cb_freq=8):
+        for _, m in self.optimize(opt, messages=1, max_f_eval=itersteps, cb_freq=8):
             m._debug_plot()
 #         while iters < maxiters:
 #             optstep()

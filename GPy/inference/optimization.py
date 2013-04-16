@@ -17,7 +17,7 @@ except ImportError:
     rasm_available = False
 from SCG import SCG
 
-SENTINEL = object()
+SENTINEL = "SENTINEL"
 
 class Optimizer(Process):
     """
@@ -74,7 +74,7 @@ class Optimizer(Process):
         def do(x):
             if self.counter.next() % self.cb_freq == 0:
                 self.outq.put([name, self.model.copy()])
-            fun(x)
+            return fun(x)
         return do
 
     def run(self):
@@ -129,6 +129,7 @@ class opt_tnc(Optimizer):
 
         opt_result = optimize.fmin_tnc(f_fp, self.x_init, messages=self.messages,
                        maxfun=self.max_f_eval, **opt_dict)
+        import ipdb;ipdb.set_trace()
         self.x_opt = opt_result[0]
         self.f_opt = f_fp(self.x_opt)[0]
         self.funct_eval = opt_result[1]

@@ -272,7 +272,7 @@ class model(parameterised):
         obj_grads = -LL_gradients - prior_gradients
         return obj_f, obj_grads
 
-    def optimize(self, optimizer=None, start=None, outq=Queue(), **kwargs):
+    def optimize(self, optimizer=None, start=None, outq=None, **kwargs):
         """
         Optimize the model using self.log_likelihood and self.log_likelihood_gradient, as well as self.priors.
         kwargs are passed to the optimizer. They can be:
@@ -288,6 +288,9 @@ class model(parameterised):
         if start == None:
             start = self._get_params_transformed()
 
+        if outq is None:
+            outq = Queue()
+
         optimizer = optimization.get_optimizer(optimizer)
         opt = optimizer(start, model=self,
                         f_fp=self.objective_and_gradients,
@@ -295,17 +298,24 @@ class model(parameterised):
                         fp=self.objective_function_gradients,
                         outq=outq,
                         **kwargs)
+#         try:
+#             opt.run()
         opt.start()
-        if outq:
-            for m in iter(outq, optimization.SENTINEL):
-                yield m
-        else:
-            while opt.is_alive():
-                opt.join(1)
+        try:
+            if outq:
+                for m in iter(outq.get, optimization.SENTINEL):
+                    yield m
+            else:
+                while opt.is_alive():
+                    opt.join(1)
+        except KeyboardInterrupt:
+            opt.terminate()
+        finally:
+            opt.join()
 
         self.optimization_runs.append(opt)
-
         self._set_params_transformed(opt.x_opt)
+        return
 
     def optimize_SGD(self, momentum=0.1, learning_rate=0.01, iterations=20, **kwargs):
         # assert self.Y.shape[1] > 1, "SGD only works with D > 1"
