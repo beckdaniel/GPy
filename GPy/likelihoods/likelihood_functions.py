@@ -1,12 +1,13 @@
 # Copyright (c) 2012, 2013 Ricardo Andrade
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
-
 import numpy as np
 from scipy import stats
 import scipy as sp
 import pylab as pb
 from ..util.plot import gpplot
+from ..util.univariate_Gaussian import std_norm_pdf,std_norm_cdf,norm_pdf
+#from scipy import weave
 
 class likelihood_function:
     """
@@ -28,7 +29,6 @@ class probit(likelihood_function):
     L(x) = \\Phi (Y_i*f_i)
     $$
     """
-
     def moments_match(self,data_i,tau_i,v_i):
         """
         Moments match of the marginal approximation in EP algorithm
@@ -40,8 +40,8 @@ class probit(likelihood_function):
         if data_i == 0: data_i = -1 #NOTE Binary classification algorithm works better with classes {-1,1}, 1D-plotting works better with classes {0,1}.
         # TODO: some version of assert
         z = data_i*v_i/np.sqrt(tau_i**2 + tau_i)
-        Z_hat = stats.norm.cdf(z)
-        phi = stats.norm.pdf(z)
+        Z_hat = std_norm_cdf(z)
+        phi = std_norm_pdf(z) #1./np.sqrt(2.*np.pi)*np.exp(-.5*z**2)   #stats.norm.pdf(z)
         mu_hat = v_i/tau_i + data_i*phi/(Z_hat*np.sqrt(tau_i**2 + tau_i))
         sigma2_hat = 1./tau_i - (phi/((tau_i**2+tau_i)*Z_hat))*(z+phi/Z_hat)
         return Z_hat, mu_hat, sigma2_hat
@@ -50,6 +50,7 @@ class probit(likelihood_function):
         """
         Compute  mean, variance and conficence interval (percentiles 5 and 95) of the  prediction
         """
+        N = mu.size
         mu = mu.flatten()
         var = var.flatten()
         mean = stats.norm.cdf(mu/np.sqrt(1+var))
