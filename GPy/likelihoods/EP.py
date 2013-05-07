@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import stats, linalg
-from ..util.linalg import pdinv,mdot,jitchol
+from ..util.linalg import pdinv,mdot,jitchol,cholupdate,tdot
 from likelihood import likelihood
 
 class EP(likelihood):
@@ -131,7 +131,6 @@ class EP(likelihood):
 
         return self._compute_GP_variables()
 
-    #def fit_DTC(self, Knn_diag, Kmn, Kmm):
     def fit_DTC(self, Kmm, Kmn):
         """
         The expectation-propagation algorithm with sparse pseudo-input.
@@ -196,16 +195,15 @@ class EP(likelihood):
                 self.tau_tilde[i] = self.tau_tilde[i] + Delta_tau
                 self.v_tilde[i] = self.v_tilde[i] + Delta_v
                 #Posterior distribution parameters update
-                #LLT = LLT + np.outer(Kmn[:,i],Kmn[:,i])*Delta_tau
-                #L = jitchol(LLT)
-                cholupdate(L,Kmn[:,i]*np.sqrt(Delta_tau))
+                LLT = LLT + np.outer(Kmn[:,i],Kmn[:,i])*Delta_tau
+                L = jitchol(LLT)
                 V,info = linalg.lapack.flapack.dtrtrs(L,Kmn,lower=1)
                 Sigma_diag = np.sum(V*V,-2)
                 si = np.sum(V.T*V[:,i],-1)
                 mu = mu + (Delta_v-Delta_tau*mu[i])*si
                 self.iterations += 1
             #Sigma recomputation with Cholesky decompositon
-            LLT0 = LLT0 + np.dot(Kmn*self.tau_tilde[None,:],Kmn.T)
+            LLT = LLT0 + np.dot(Kmn*self.tau_tilde[None,:],Kmn.T)
             L = jitchol(LLT)
             V,info = linalg.lapack.flapack.dtrtrs(L,Kmn,lower=1)
             V2,info = linalg.lapack.flapack.dtrtrs(L.T,V,lower=0)
@@ -237,7 +235,9 @@ class EP(likelihood):
         KmmiKmn = np.dot(Kmmi,P0.T)
         Qnn_diag = np.sum(P0.T*KmmiKmn,-2)
         Diag0 = Knn_diag - Qnn_diag
-        R0 = jitchol(Kmmi).T
+        #R0 = jitchol(Kmmi).T
+        R0 = self.Lmi.T
+        RPT0 = np.dot(R0,P0.T)
 
         """
         Posterior approximation: q(f|y) = N(f| mu, Sigma)
@@ -299,20 +299,14 @@ class EP(likelihood):
                 self.w[i] = self.w[i] + (Delta_v - Delta_tau*self.w[i])*dii/dtd1
                 self.gamma = self.gamma + (Delta_v - Delta_tau*mu[i])*np.dot(RTR,P[i,:].T)
                 RPT = np.dot(R,P.T)
-                Sigma_diag = Diag + np.sum(RPT.T*RPT.T,-1)
+                Sigma_diag = Diag + np.sum(RPT*RPT,-2)
                 mu = self.w + np.dot(P,self.gamma)
                 self.iterations += 1
             #Sigma recomptutation with Cholesky decompositon
             Iplus_Dprod_i = 1./(1.+ Diag0 * self.tau_tilde)
             Diag = Diag0 * Iplus_Dprod_i
             P = Iplus_Dprod_i[:,None] * P0
-
-            #Diag = Diag0/(1.+ Diag0 * self.tau_tilde)
-            #P = (Diag / Diag0)[:,None] * P0
-            RPT0 = np.dot(R0,P0.T)
             L = jitchol(np.eye(M) + np.dot(RPT0,((1. - Iplus_Dprod_i)/Diag0)[:,None]*RPT0.T))
-            #L = jitchol(np.eye(M) + np.dot(RPT0,(1./Diag0 - Iplus_Dprod_i/Diag0)[:,None]*RPT0.T))
-            #L = jitchol(np.eye(M) + np.dot(RPT0,(1./Diag0 - Diag/(Diag0**2))[:,None]*RPT0.T))
             R,info = linalg.lapack.flapack.dtrtrs(L,R0,lower=1)
             RPT = np.dot(R,P.T)
             Sigma_diag = Diag + np.sum(RPT.T*RPT.T,-1)

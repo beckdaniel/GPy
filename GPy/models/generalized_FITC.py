@@ -81,11 +81,8 @@ class generalized_FITC(sparse_GP):
 
 
             self.P = Iplus_Dprod_i[:,None] * self.psi1.T
-            #self.P = (self.Diag / self.Diag0)[:,None] * self.psi1.T
             self.RPT0 = np.dot(self.Lmi,self.psi1)
             self.L = np.linalg.cholesky(np.eye(self.M) + np.dot(self.RPT0,((1. - Iplus_Dprod_i)/self.Diag0)[:,None]*self.RPT0.T))
-            #self.L = np.linalg.cholesky(np.eye(self.M) + np.dot(self.RPT0,(1./self.Diag0 - Iplus_Dprod_i/self.Diag0)[:,None]*self.RPT0.T))
-            #self.L = np.linalg.cholesky(np.eye(self.M) + np.dot(self.RPT0,(1./self.Diag0 - self.Diag/(self.Diag0**2))[:,None]*self.RPT0.T))
             self.R,info = linalg.flapack.dtrtrs(self.L,self.Lmi,lower=1)
             self.RPT = np.dot(self.R,self.P.T)
             self.Sigma = np.diag(self.Diag) + np.dot(self.RPT.T,self.RPT)
@@ -141,7 +138,10 @@ class generalized_FITC(sparse_GP):
         else:
             A = -0.5*self.N*self.D*(np.log(2.*np.pi) + np.log(self.likelihood._variance)) -0.5*self.likelihood.precision*self.likelihood.trYYT
         C = -0.5*self.D * (self.B_logdet + self.M*np.log(sf2))
-        D = 0.5*np.trace(self.Cpsi1VVpsi1)
+        #self.Cpsi1V = np.dot(self.C,self.psi1V)
+        #self.Cpsi1VVpsi1 = np.dot(self.Cpsi1V,self.psi1V.T)
+        #D = 0.5*np.trace(self.Cpsi1VVpsi1)
+        D = 0.5*np.sum(np.square(self._LBi_Lmi_psi1V))
         return A+C+D
 
     def _raw_predict(self, Xnew, which_parts, full_cov=False):
@@ -181,8 +181,6 @@ class generalized_FITC(sparse_GP):
                 var = Kxx + np.dot(KR0T,np.dot(Sigma_H - np.eye(self.M),KR0T.T))
             else:
                 Kxx = self.kern.Kdiag(Xnew,which_parts=which_parts)
-                Kxx_ = self.kern.K(Xnew,which_parts=which_parts) # TODO: RA, is this line needed?
-                var_ = Kxx_ + np.dot(KR0T,np.dot(Sigma_H - np.eye(self.M),KR0T.T)) # TODO: RA, is this line needed?
                 var = (Kxx + np.sum(KR0T.T*np.dot(Sigma_H - np.eye(self.M),KR0T.T),0))[:,None]
             return mu_star[:,None],var
         else:
