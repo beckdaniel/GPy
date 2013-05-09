@@ -12,3 +12,4 @@ from sparse_GPLVM import sparse_GPLVM
 from Bayesian_GPLVM import Bayesian_GPLVM
 from mrd import MRD
 from generalized_FITC import generalized_FITC
+from toy_GP import toy_GP
