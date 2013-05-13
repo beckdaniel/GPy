@@ -3,10 +3,10 @@
 
 import numpy as np
 from scipy import weave
-
+one_over_sqrt_2pi = 1./np.sqrt(2.*np.pi)
 def std_norm_pdf(x):
     """Standard Gaussian density function"""
-    return 1./np.sqrt(2.*np.pi)*np.exp(-.5*x**2)
+    return one_over_sqrt_2pi*np.exp(-.5*x**2)
 
 def std_norm_cdf(x):
     """
