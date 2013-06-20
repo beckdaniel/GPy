@@ -41,6 +41,10 @@ class KernelTests(unittest.TestCase):
         m = GPy.models.GPRegression(X,Y,kernel=k)
         self.assertTrue(m.checkgrad())
 
+    def test_treekernel(self):
+        tk = GPy.kern.TreeKernel()
+        self.assertTrue(True)
+
 
 
 
