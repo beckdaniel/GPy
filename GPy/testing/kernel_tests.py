@@ -5,6 +5,9 @@ import unittest
 import numpy as np
 import GPy
 
+import nltk # Need to cope with this in a better way...
+
+
 class KernelTests(unittest.TestCase):
     def test_kerneltie(self):
         K = GPy.kern.rbf(5, ARD=True)
@@ -41,9 +44,26 @@ class KernelTests(unittest.TestCase):
         m = GPy.models.GPRegression(X,Y,kernel=k)
         self.assertTrue(m.checkgrad())
 
+
+class TreeKernelTests(unittest.TestCase):
+
+    def test_treekernel_params1(self):
+        tk = GPy.kern.TreeKernel()
+        self.assertTrue((tk._get_params() == np.array([1, 1])).all())
+
+    def test_treekernel_params1(self):
+        tk = GPy.kern.TreeKernel()
+        tk._set_params(np.array([1, 0]))
+        self.assertTrue((tk._get_params() == np.array([1, 0])).all())
+        
     def test_treekernel(self):
         tk = GPy.kern.TreeKernel()
-        self.assertTrue(True)
+        X1 = nltk.Tree("(S (NP (ADJ colorless) (N ideas)) VP (V sleep) (ADV furiously))")
+        X2 = X1.copy()
+        #print X2
+        #print X1
+        self.assertTrue(tk.K(X1, X2) == 7)
+
 
 
 
