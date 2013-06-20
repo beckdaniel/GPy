@@ -4,7 +4,7 @@
 import unittest
 import numpy as np
 import GPy
-
+import ipdb
 import nltk # Need to cope with this in a better way...
 
 
@@ -49,7 +49,11 @@ class TreeKernelTests(unittest.TestCase):
 
     def test_treekernel_params1(self):
         tk = GPy.kern.TreeKernel()
-        self.assertTrue((tk._get_params() == np.array([1, 1])).all())
+        #print tk.parts[0]._get_params()
+        #print tk._get_params()
+        tk._set_params(np.array([1, 1]))
+        #ipdb.set_trace()
+        self.assertTrue((tk.parts[0]._get_params() == np.array([1, 1])).all())
 
     def test_treekernel_params2(self):
         tk = GPy.kern.TreeKernel()
@@ -58,19 +62,26 @@ class TreeKernelTests(unittest.TestCase):
 
     def test_treekernel_params3(self):
         tk = GPy.kern.TreeKernel()
-        self.assertTrue(tk._get_param_names() == ['decay', 'branch'])
+        #print tk._get_param_names()
+        self.assertTrue(tk._get_param_names() == ['tree_kernel_decay', 'tree_kernel_branch'])
         
     def test_treekernel_mock1(self):
-        tk = GPy.kern.TreeKernel()
-        X1 = nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")
-        target = np.array([0])
-        tk.K(X1, X1, target, mock=True)
-        self.assertTrue(target[0] == 4)
+        tk = GPy.kern.TreeKernel(mock=True)
+        #print tk.parts[0].mock
+        X1 = np.array([[nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")]], dtype=nltk.Tree)
+        target = tk.K(X1, X1)
+        #print target
+        #print len(X1)
+        #print len(X1[0][0])
+        self.assertTrue(target[0] == [4])
 
-    def test_treekernel_mock2(self):
-        tk = GPy.kern.TreeKernel()
-
-
+    #def test_treekernel_mock2(self):
+    #    tk = GPy.kern.TreeKernel(mock=True)
+    #    X = np.array([['a' * i] for i in range(10)], dtype=str)
+    #    Y = np.ones((10,1))
+        #print X
+        #print Y
+    #    m = GPy.models.GPRegression(X,Y,kernel=tk)
 
 
 

@@ -324,8 +324,13 @@ def IndependentOutputs(k):
     parts = [independent_output_part(p) for p in k.parts]
     return kern(k.input_dim+1,parts)
 
-def TreeKernel():
+def TreeKernel(mock=False):
     """
     Tree kernel
     """
-    return TreeKernelPart()
+    #print "Inside constructors:" + str(mock)
+    part = TreeKernelPart(mock=mock)
+    #print part._get_params()
+    #import ipdb
+    #ipdb.set_trace()
+    return kern(1, [part])
