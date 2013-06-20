@@ -1,5 +1,6 @@
 
 from kernpart import Kernpart
+import sys
 
 
 class TreeKernel(Kernpart):
@@ -9,6 +10,11 @@ class TreeKernel(Kernpart):
     def __init__(self, ):
         """blah
         """
-        pass
+        try:
+            import nltk
+        except ImportError:
+            sys.stderr.write("Tree Kernels need NLTK. Install it using \"pip install nltk\"")
+            raise
+        
         
         
