@@ -141,7 +141,8 @@ class GP(GPBase):
 
         """
         # normalize X values
-        #Xnew = (Xnew.copy() - self._Xoffset) / self._Xscale
+        if Xnew.dtype == float:
+            Xnew = (Xnew.copy() - self._Xoffset) / self._Xscale
         mu, var = self._raw_predict(Xnew, full_cov=full_cov, which_parts=which_parts)
 
         # now push through likelihood

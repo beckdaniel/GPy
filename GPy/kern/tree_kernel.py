@@ -47,9 +47,7 @@ class TreeKernel(Kernpart):
                 for j in range(result.shape[1]):
                     if i > j:
                         result[i][j] = 0
-            #print result
             target += result.T.dot(result)
-            #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
         else:
             pass
 
@@ -61,6 +59,3 @@ class TreeKernel(Kernpart):
                     if i > j:
                         result[i][j] = 0
             target += np.diag(result.T.dot(result))
-            #target += np.array([self.decay + self.branch for i in range(X.shape[0])])
-                               
-

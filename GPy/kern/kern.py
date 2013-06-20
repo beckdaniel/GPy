@@ -210,11 +210,30 @@ class kern(Parameterised):
     def K(self, X, X2=None, which_parts='all'):
         if which_parts == 'all':
             which_parts = [True] * self.Nparts
-        assert X.shape[1] == self.input_dim
+        ##########################
+        # START
+        if len(X.shape) == 2:
+            assert X.shape[1] == self.input_dim
+        elif len(X.shape) == 1:
+            assert X['f1'].shape[1] + 1 == self.input_dim
+            metaX = X['f0']
+            X = X['f1']
+            print self.parts
+            which_parts = [False, True] # hack...
+        #assert X.shape[1] == self.input_dim
+        # END
+        ##########################
         if X2 is None:
             target = np.zeros((X.shape[0], X.shape[0]))
             [p.K(X[:, i_s], None, target=target) for p, i_s, part_i_used in zip(self.parts, self.input_slices, which_parts) if part_i_used]
         else:
+            ##########################
+            # START
+            if len(X2.shape) == 1:
+                metaX2 = X2['f0']
+                X2 = X2['f1']
+            # END
+            ##########################
             target = np.zeros((X.shape[0], X2.shape[0]))
             [p.K(X[:, i_s], X2[:, i_s], target=target) for p, i_s, part_i_used in zip(self.parts, self.input_slices, which_parts) if part_i_used]
         return target
@@ -250,7 +269,19 @@ class kern(Parameterised):
     def Kdiag(self, X, which_parts='all'):
         if which_parts == 'all':
             which_parts = [True] * self.Nparts
-        assert X.shape[1] == self.input_dim
+        ##########################
+        # START
+        if len(X.shape) == 2:
+            assert X.shape[1] == self.input_dim
+        elif len(X.shape) == 1:
+            assert X['f1'].shape[1] + 1 == self.input_dim
+            metaX = X['f0']
+            X = X['f1']
+            print self.parts
+            which_parts = [False, True] # hack...
+        #assert X.shape[1] == self.input_dim
+        # END
+        ##########################
         target = np.zeros(X.shape[0])
         [p.Kdiag(X[:, i_s], target=target) for p, i_s, part_on in zip(self.parts, self.input_slices, which_parts) if part_on]
         return target

@@ -12,11 +12,22 @@ class GPBase(Model):
 
     def __init__(self, X, likelihood, kernel, normalize_X=False):
         self.X = X
-        assert len(self.X.shape) == 2
-        self.num_data, self.input_dim = self.X.shape
+        #########################
+        # START
+        if len(X.shape) == 2:
+            self.num_data, self.input_dim = self.X.shape
+        elif len(X.shape) == 1:  # hack... need to find a better way
+            self.X = X
+            self.num_data = self.X['f1'].shape[0]
+            self.input_dim = self.X['f1'].shape[1] + 1
+        #assert len(self.X.shape) == 2
+        # END
+        ##########################
         assert isinstance(kernel, kern.kern)
         self.kern = kernel
         self.likelihood = likelihood
+        #print self.X.shape
+        #print self.likelihood.data.shape
         assert self.X.shape[0] == self.likelihood.data.shape[0]
         self.num_data, self.output_dim = self.likelihood.data.shape
 
