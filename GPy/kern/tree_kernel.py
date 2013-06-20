@@ -37,6 +37,6 @@ class TreeKernel(Kernpart):
         The mock parameter is mainly for testing and debugging.
         """
         if mock:
-            target += np.array([self.decay * self.branch])
+            target += np.array([self.decay + self.branch + len(X)])
         else:
             pass
