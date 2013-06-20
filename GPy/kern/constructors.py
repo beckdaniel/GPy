@@ -328,9 +328,5 @@ def TreeKernel(mock=False):
     """
     Tree kernel
     """
-    #print "Inside constructors:" + str(mock)
     part = TreeKernelPart(mock=mock)
-    #print part._get_params()
-    #import ipdb
-    #ipdb.set_trace()
     return kern(1, [part])
