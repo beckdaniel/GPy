@@ -28,3 +28,6 @@ class TreeKernel(Kernpart):
     def _set_params(self, x):
         self.decay = x[0]
         self.branch = x[1]
+
+    def _get_param_names(self):
+        return ['decay', 'branch']

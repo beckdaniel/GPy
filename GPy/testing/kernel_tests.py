@@ -51,10 +51,14 @@ class TreeKernelTests(unittest.TestCase):
         tk = GPy.kern.TreeKernel()
         self.assertTrue((tk._get_params() == np.array([1, 1])).all())
 
-    def test_treekernel_params1(self):
+    def test_treekernel_params2(self):
         tk = GPy.kern.TreeKernel()
         tk._set_params(np.array([1, 0]))
         self.assertTrue((tk._get_params() == np.array([1, 0])).all())
+
+    def test_treekernel_params3(self):
+        tk = GPy.kern.TreeKernel()
+        self.assertTrue(tk._get_param_names() == ['decay', 'branch'])
         
     def test_treekernel(self):
         tk = GPy.kern.TreeKernel()
