@@ -64,14 +64,17 @@ class TreeKernelTests(unittest.TestCase):
         tk = GPy.kern.TreeKernel(mock=True)
         X1 = np.array([[nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")]], dtype=nltk.Tree)
         target = tk.K(X1, X1)
-        self.assertTrue(target[0] == [2])
+        #print target
+        self.assertTrue(target[0] == [36])
 
     def test_treekernel_mock2(self):
         tk = GPy.kern.TreeKernel(mock=True)
         X = np.array([['a' * i] for i in range(10)], dtype=str)
         Y = np.array([[a] for a in range(10)])
         m = GPy.models.GPRegression(X,Y,kernel=tk)
-        m['noise'] = 0
+        m['noise'] = 1
+        print m.K
+        print m.predict(X)
 
 
 if __name__ == "__main__":

@@ -40,10 +40,27 @@ class TreeKernel(Kernpart):
         if X2 == None:
             X2 = X
         if self.mock:
-            #target += np.array([[(self.decay + self.branch + len(x1[0]) + len(x2[0])) for x1 in X] for x2 in X2])
-            target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
+            # we have to ensure positive semi-definiteness, so we build a triangular matrix
+            # and them multiply it by its transpose (like a "reverse" Cholesky)
+            result = np.array([[(self.decay + self.branch + len(x1[0]) + len(x2[0])) for x1 in X] for x2 in X2])
+            for i in range(result.shape[0]):
+                for j in range(result.shape[1]):
+                    if i > j:
+                        result[i][j] = 0
+            #print result
+            target += result.T.dot(result)
+            #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
         else:
             pass
 
     def Kdiag(self, X, target):
-        pass
+        if self.mock:
+            result = np.array([[(self.decay + self.branch + len(x1[0]) + len(x2[0])) for x1 in X] for x2 in X])
+            for i in range(result.shape[0]):
+                for j in range(result.shape[1]):
+                    if i > j:
+                        result[i][j] = 0
+            target += np.diag(result.T.dot(result))
+            #target += np.array([self.decay + self.branch for i in range(X.shape[0])])
+                               
+
