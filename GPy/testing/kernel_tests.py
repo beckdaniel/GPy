@@ -60,13 +60,12 @@ class TreeKernelTests(unittest.TestCase):
         tk = GPy.kern.TreeKernel()
         self.assertTrue(tk._get_param_names() == ['decay', 'branch'])
         
-    def test_treekernel(self):
+    def test_treekernel_mock(self):
         tk = GPy.kern.TreeKernel()
         X1 = nltk.Tree("(S (NP (ADJ colorless) (N ideas)) VP (V sleep) (ADV furiously))")
-        X2 = X1.copy()
-        #print X2
-        #print X1
-        self.assertTrue(tk.K(X1, X2) == 7)
+        target = np.array([0])
+        tk.K(X1, X1, target, mock=True)
+        self.assertTrue(target[0] == 1)
 
 
 

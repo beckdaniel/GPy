@@ -31,3 +31,12 @@ class TreeKernel(Kernpart):
 
     def _get_param_names(self):
         return ['decay', 'branch']
+
+    def K(self, X, X2, target, mock=False):
+        """
+        The mock parameter is mainly for testing and debugging.
+        """
+        if mock:
+            target += np.array([self.decay * self.branch])
+        else:
+            pass
