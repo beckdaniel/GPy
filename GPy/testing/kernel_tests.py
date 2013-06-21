@@ -90,7 +90,7 @@ class TreeKernelTests(unittest.TestCase):
         m = GPy.models.GPRegression(X, Y, kernel=kernel)
         #print m
         #print X
-        #print m.predict(X)
+        print m.predict(X)
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

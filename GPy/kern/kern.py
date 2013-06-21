@@ -294,6 +294,12 @@ class kern(Parameterised):
         # END
         ##########################
         target = np.zeros(X.shape[0])
+        ##########################
+        # START - assuming first part being the tree kernel...
+        if X.shape[1] == self.input_dim - 1:
+            self.parts[0].Kdiag(metaX, target=target)
+        # END
+        ##########################
         [p.Kdiag(X[:, i_s], target=target) for p, i_s, part_on in zip(self.parts, self.input_slices, which_parts) if part_on]
         return target
 
