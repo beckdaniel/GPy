@@ -84,13 +84,13 @@ class TreeKernelTests(unittest.TestCase):
         X[2] = (nltk.Tree('(S NP)'), [7, -15])
         Y = np.array([[1],[2],[3]])
         kernel = tk.add(rbf, tensor=True)
-        print kernel
-        print X.shape
-        print X['f1']
+        #print kernel
+        #print X.shape
+        #print X['f1']
         m = GPy.models.GPRegression(X, Y, kernel=kernel)
-        print m
-        print X
-        print m.predict(X)
+        #print m
+        #print X
+        #print m.predict(X)
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

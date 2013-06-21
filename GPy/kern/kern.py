@@ -218,13 +218,18 @@ class kern(Parameterised):
             assert X['f1'].shape[1] + 1 == self.input_dim
             metaX = X['f0']
             X = X['f1']
-            print self.parts
             which_parts = [False, True] # hack...
         #assert X.shape[1] == self.input_dim
         # END
         ##########################
         if X2 is None:
             target = np.zeros((X.shape[0], X.shape[0]))
+            ##########################
+            # START - assuming first part being the tree kernel...
+            if X.shape[1] == self.input_dim - 1:
+                self.parts[0].K(metaX, None, target=target)
+            # END
+            ##########################
             [p.K(X[:, i_s], None, target=target) for p, i_s, part_i_used in zip(self.parts, self.input_slices, which_parts) if part_i_used]
         else:
             ##########################
@@ -235,6 +240,12 @@ class kern(Parameterised):
             # END
             ##########################
             target = np.zeros((X.shape[0], X2.shape[0]))
+            ##########################
+            # START - assuming first part being the tree kernel...
+            if X.shape[1] == self.input_dim - 1:
+                self.parts[0].K(metaX, metaX2, target=target)
+            # END
+            ##########################
             [p.K(X[:, i_s], X2[:, i_s], target=target) for p, i_s, part_i_used in zip(self.parts, self.input_slices, which_parts) if part_i_used]
         return target
 
