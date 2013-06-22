@@ -142,10 +142,26 @@ class TreeKernelTests(unittest.TestCase):
         #m['noise'] = 0
         print m
         print m.predict(X)
-        #m.constrain_positive('')
-        #m.optimize(max_f_eval=10)
-        #print m
-        #print m.predict(X)
+
+    def test_treekernel_real2(self):
+        tk = GPy.kern.TreeKernel()
+        X = np.array([['(S (NP N) (VP V))'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
+        #print X.dtype
+        #print X[0].dtype
+        Y = np.array([[1],[2],[30]])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        #m['noise'] = 0
+        print m
+        print m.predict(X)
+        #m.constrain_fixed('tk_decay')
+        #m.constrain_fixed('noise')
+        #m.constrain_positive('tk')
+        m.constrain_positive('')
+        
+        m.optimize(max_f_eval=500)
+        print m
+        print m.predict(X)
+
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
