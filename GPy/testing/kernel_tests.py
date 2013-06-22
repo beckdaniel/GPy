@@ -89,15 +89,14 @@ class TreeKernelTests(unittest.TestCase):
         #print X[0].dtype
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=k)
-        print m
-        print m.predict(X)
+        #print m
+        #print m.predict(X)
         m.constrain_positive('')
         m.optimize(max_f_eval=10)
-        print m
-        print m.predict(X)
+        #print m
+        #print m.predict(X)
 
-
-    def test_treekernel_mock5(self):
+    def test_treekernel_mock4(self):
         tk = GPy.kern.TreeKernel(mock=True)
         X = np.array([[nltk.Tree('(S NP VP)')], [nltk.Tree('(S NP ADJ)')], [nltk.Tree('(S NP)')]])
         #print X.dtype
@@ -110,6 +109,21 @@ class TreeKernelTests(unittest.TestCase):
         m.optimize(max_f_eval=10)
         #print m
         #print m.predict(X)
+
+    def test_treekernel_k1(self):
+        tk = GPy.kern.TreeKernel()
+        tk.decay = 1
+        tk.branch = 0
+        #tk.input_slices = [slice(0)]
+        #t = nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")
+        t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        print t
+        X1 = np.array([[t]], dtype=object)
+        print X1
+        target = tk.K(X1, X1)
+        print target
+        self.assertTrue(target[0] == [7])
+        
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

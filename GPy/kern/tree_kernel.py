@@ -2,7 +2,7 @@
 from kernpart import Kernpart
 import numpy as np
 import sys
-
+import nltk
 
 class TreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
@@ -51,7 +51,16 @@ class TreeKernel(Kernpart):
             target += result.T.dot(result)
             #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
         else:
-            pass
+            #print X
+            for i, x1 in enumerate(X):
+                for j, x2 in enumerate(X2):
+                    x1 = nltk.Tree(x1[0])
+                    x2 = nltk.Tree(x2[0])
+                    result = 0
+                    for node1 in x1.treepositions():
+                        for node2 in x2.treepositions():
+                            result += self.delta(x1[node1], x2[node2])
+                    target[i][j] += result
 
     def Kdiag(self, X, target):
         if self.mock:
@@ -63,7 +72,6 @@ class TreeKernel(Kernpart):
             target += np.diag(result.T.dot(result))
             #target += np.array([self.decay + self.branch for i in range(X.shape[0])])
                                
-
     def dK_dtheta(self, dL_dK, X, X2, target):
         if self.mock:
             #print dL_dK
@@ -71,3 +79,8 @@ class TreeKernel(Kernpart):
             s = np.sum(dL_dK)
             target += [s, s]
 
+    def delta(self, node1, node2):
+        result = np.abs(len(node1) - len(node2))
+        print result
+        return result
+        
