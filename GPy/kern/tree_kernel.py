@@ -51,17 +51,14 @@ class TreeKernel(Kernpart):
             target += result.T.dot(result)
             #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
         else:
-            #print X
-            print self.decay
-            print self.branch
             for i, x1 in enumerate(X):
                 for j, x2 in enumerate(X2):
-                    x1 = nltk.Tree(x1[0])
-                    x2 = nltk.Tree(x2[0])
+                    t1 = nltk.Tree(x1[0])
+                    t2 = nltk.Tree(x2[0])
                     result = 0
-                    for node1 in x1.treepositions():
-                        for node2 in x2.treepositions():
-                            result += self.delta(x1[node1], x2[node2])
+                    for node1 in t1.treepositions():
+                        for node2 in t2.treepositions():
+                            result += self.delta(t1[node1], t2[node2])
                     target[i][j] += result
 
     def Kdiag(self, X, target):
@@ -73,6 +70,14 @@ class TreeKernel(Kernpart):
                         result[i][j] = 0
             target += np.diag(result.T.dot(result))
             #target += np.array([self.decay + self.branch for i in range(X.shape[0])])
+        else:
+            for i, x1 in enumerate(X):
+                t1 = nltk.Tree(x1[0])
+                result = 0
+                for node1 in t1.treepositions():
+                    for node2 in t1.treepositions():
+                        result += self.delta(t1[node1], t1[node2])
+                target[i] += result
                                
     def dK_dtheta(self, dL_dK, X, X2, target):
         if self.mock:

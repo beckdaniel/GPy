@@ -114,24 +114,38 @@ class TreeKernelTests(unittest.TestCase):
         tk = GPy.kern.TreeKernel()
         tk._set_params([1,0])
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        print t
+        #print t
         X1 = np.array([[t]], dtype=object)
-        print X1
+        #print X1
         target = tk.K(X1, X1)
-        print target
+        #print target
         self.assertTrue(target[0] == [7])
 
     def test_treekernel_k2(self):
         tk = GPy.kern.TreeKernel()
         tk._set_params([1,1])
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        print t
+        #print t
         X1 = np.array([[t]], dtype=object)
-        print X1
+        #print X1
         target = tk.K(X1, X1)
-        print target
+        #print target
         self.assertTrue(target[0] == [37])
-        
+
+    def test_treekernel_real1(self):
+        tk = GPy.kern.TreeKernel()
+        X = np.array([['(S NP VP)'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
+        #print X.dtype
+        #print X[0].dtype
+        Y = np.array([[1],[2],[3]])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        #m['noise'] = 0
+        print m
+        print m.predict(X)
+        #m.constrain_positive('')
+        #m.optimize(max_f_eval=10)
+        #print m
+        #print m.predict(X)
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
