@@ -82,6 +82,13 @@ class rbf(Kernpart):
             return ['variance'] + ['lengthscale_%i' % i for i in range(self.lengthscale.size)]
 
     def K(self, X, X2, target):
+        ##############
+        # START
+        X = np.array(X, dtype=float)
+        if X2 != None:
+            X2 = np.array(X2, dtype=float)
+        # END
+        ##############
         self._K_computations(X, X2)
         target += self.variance * self._K_dvar
 
@@ -89,6 +96,13 @@ class rbf(Kernpart):
         np.add(target, self.variance, target)
 
     def dK_dtheta(self, dL_dK, X, X2, target):
+        ##############
+        # START
+        X = np.array(X, dtype=float)
+        if X2 != None:
+            X2 = np.array(X2, dtype=float)
+        # END
+        ##############
         self._K_computations(X, X2)
         target[0] += np.sum(self._K_dvar * dL_dK)
         if self.ARD:
@@ -235,7 +249,11 @@ class rbf(Kernpart):
                 X = X / self.lengthscale
                 X2 = X2 / self.lengthscale
                 self._K_dist2 = -2.*np.dot(X, X2.T) + (np.sum(np.square(X), 1)[:, None] + np.sum(np.square(X2), 1)[None, :])
-            self._K_dvar = np.exp(-0.5 * self._K_dist2)
+            try:
+                self._K_dvar = np.exp(-0.5 * self._K_dist2)
+            except:
+                print self._K_dist2
+                raise
 
     def _psi_computations(self, Z, mu, S):
         # here are the "statistics" for psi1 and psi2

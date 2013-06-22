@@ -42,7 +42,7 @@ class TreeKernel(Kernpart):
         if self.mock:
             # we have to ensure positive semi-definiteness, so we build a triangular matrix
             # and them multiply it by its transpose (like a "reverse" Cholesky)
-            result = np.array([[(self.decay + self.branch + len(x1[0]) + len(x2[0])) for x1 in X] for x2 in X2])
+            result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X2])
             for i in range(result.shape[0]):
                 for j in range(result.shape[1]):
                     if i > j:
@@ -55,7 +55,7 @@ class TreeKernel(Kernpart):
 
     def Kdiag(self, X, target):
         if self.mock:
-            result = np.array([[(self.decay + self.branch + len(x1[0]) + len(x2[0])) for x1 in X] for x2 in X])
+            result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X])
             for i in range(result.shape[0]):
                 for j in range(result.shape[1]):
                     if i > j:
@@ -67,7 +67,7 @@ class TreeKernel(Kernpart):
     def dK_dtheta(self, dL_dK, X, X2, target):
         if self.mock:
             #print dL_dK
-            print X
+            #print X
             s = np.sum(dL_dK)
             target += [s, s]
 

@@ -66,7 +66,7 @@ class TreeKernelTests(unittest.TestCase):
         #print X1.dtype
         target = tk.K(X1, X1)
         #print target
-        self.assertTrue(target[0] == [36])
+        self.assertTrue(target[0] == [16])
 
     def test_treekernel_mock2(self):
         tk = GPy.kern.TreeKernel(mock=True)
@@ -74,22 +74,42 @@ class TreeKernelTests(unittest.TestCase):
         Y = np.array([[a] for a in range(10)])
         m = GPy.models.GPRegression(X,Y,kernel=tk)
         m['noise'] = 1
-        print m.K
-        print m.predict(X)
+        #print m.K
+        #print m.predict(X)
 
-    def test_treekernel_mock5(self):
+    def test_treekernel_mock3(self):
         tk = GPy.kern.TreeKernel(mock=True)
-        X = np.array([[nltk.Tree('(S NP VP)')], [nltk.Tree('(S NP ADJ)')], [nltk.Tree('(S NP)')]])
-        print X.dtype
-        print X[0].dtype
+        rbf = GPy.kern.rbf(2, ARD=True)
+        k = tk.add(rbf, tensor=True)
+        k.input_slices = [slice(0),slice(1,2)]
+        X = np.array([[nltk.Tree('(S NP VP)'), 0.1, 4],
+                      [nltk.Tree('(S NP ADJ)'), 0.4, 5],
+                      [nltk.Tree('(S NP)'), 1.6, 67.8]])
+        #print X.dtype
+        #print X[0].dtype
         Y = np.array([[1],[2],[3]])
-        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        m = GPy.models.GPRegression(X, Y, kernel=k)
         print m
         print m.predict(X)
         m.constrain_positive('')
         m.optimize(max_f_eval=10)
         print m
         print m.predict(X)
+
+
+    def test_treekernel_mock5(self):
+        tk = GPy.kern.TreeKernel(mock=True)
+        X = np.array([[nltk.Tree('(S NP VP)')], [nltk.Tree('(S NP ADJ)')], [nltk.Tree('(S NP)')]])
+        #print X.dtype
+        #print X[0].dtype
+        Y = np.array([[1],[2],[3]])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        #print m
+        #print m.predict(X)
+        m.constrain_positive('')
+        m.optimize(max_f_eval=10)
+        #print m
+        #print m.predict(X)
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
