@@ -63,6 +63,7 @@ class TreeKernelTests(unittest.TestCase):
     def test_treekernel_mock1(self):
         tk = GPy.kern.TreeKernel(mock=True)
         X1 = np.array([[nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")]], dtype=nltk.Tree)
+        #print X1.dtype
         target = tk.K(X1, X1)
         #print target
         self.assertTrue(target[0] == [36])
@@ -76,13 +77,11 @@ class TreeKernelTests(unittest.TestCase):
         print m.K
         print m.predict(X)
 
-
     def test_treekernel_mock5(self):
         tk = GPy.kern.TreeKernel(mock=True)
-        X = np.zeros(3, dtype=('object'))
-        X[0] = (nltk.Tree('(S NP VP)'))
-        X[1] = (nltk.Tree('(S NP ADJ)'))
-        X[2] = (nltk.Tree('(S NP)'))
+        X = np.array([[nltk.Tree('(S NP VP)')], [nltk.Tree('(S NP ADJ)')], [nltk.Tree('(S NP)')]])
+        print X.dtype
+        print X[0].dtype
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
         print m
