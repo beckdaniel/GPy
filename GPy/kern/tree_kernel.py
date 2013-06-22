@@ -59,3 +59,9 @@ class TreeKernel(Kernpart):
                     if i > j:
                         result[i][j] = 0
             target += np.diag(result.T.dot(result))
+
+    def dK_dtheta(self, dL_dK, X, X2, target):
+        if self.mock:
+            #print dL_dK
+            s = np.sum(dL_dK)
+            target += [s, s]
