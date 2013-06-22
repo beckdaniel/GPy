@@ -52,6 +52,8 @@ class TreeKernel(Kernpart):
             #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
         else:
             #print X
+            print self.decay
+            print self.branch
             for i, x1 in enumerate(X):
                 for j, x2 in enumerate(X2):
                     x1 = nltk.Tree(x1[0])
@@ -80,7 +82,19 @@ class TreeKernel(Kernpart):
             target += [s, s]
 
     def delta(self, node1, node2):
-        result = np.abs(len(node1) - len(node2))
-        print result
+        #result = np.abs(len(node1) - len(node2))
+        # zeroth case -> leaves
+        if type(node1) == str or type(node2) == str:
+            return 0
+        # first case
+        if node1.productions()[0] != node2.productions()[0]:
+            return 0
+        # second case -> preterms
+        if node1.height() == 2 and node2.height() == 2:
+            return self.decay
+        # third case
+        result = self.decay
+        for i, child in enumerate(node1): #node2 has the same children
+            result *= (self.branch + self.delta(node1[i], node2[i]))
         return result
         

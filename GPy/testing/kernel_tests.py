@@ -112,10 +112,7 @@ class TreeKernelTests(unittest.TestCase):
 
     def test_treekernel_k1(self):
         tk = GPy.kern.TreeKernel()
-        tk.decay = 1
-        tk.branch = 0
-        #tk.input_slices = [slice(0)]
-        #t = nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")
+        tk._set_params([1,0])
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         print t
         X1 = np.array([[t]], dtype=object)
@@ -123,6 +120,17 @@ class TreeKernelTests(unittest.TestCase):
         target = tk.K(X1, X1)
         print target
         self.assertTrue(target[0] == [7])
+
+    def test_treekernel_k2(self):
+        tk = GPy.kern.TreeKernel()
+        tk._set_params([1,1])
+        t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        print t
+        X1 = np.array([[t]], dtype=object)
+        print X1
+        target = tk.K(X1, X1)
+        print target
+        self.assertTrue(target[0] == [37])
         
 
 if __name__ == "__main__":
