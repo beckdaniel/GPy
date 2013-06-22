@@ -228,7 +228,17 @@ class kern(Parameterised):
         :param X2: Observed dara inputs (optional, defaults to X)
         :type X2: np.ndarray (num_inducing x input_dim)
         """
-        assert X.shape[1] == self.input_dim
+        ##########################
+        # START
+        if len(X.shape) == 2:
+            assert X.shape[1] == self.input_dim
+        elif len(X.shape) == 1:
+            assert X['f1'].shape[1] + 1 == self.input_dim
+            metaX = X['f0']
+            X = X['f1']
+        #assert X.shape[1] == self.input_dim
+        # END
+        ##########################
         target = np.zeros(self.num_params)
         if X2 is None:
             [p.dK_dtheta(dL_dK, X[:, i_s], None, target[ps]) for p, i_s, ps, in zip(self.parts, self.input_slices, self.param_slices)]

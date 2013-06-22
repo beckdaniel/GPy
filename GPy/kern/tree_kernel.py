@@ -64,3 +64,10 @@ class TreeKernel(Kernpart):
             #target += np.array([self.decay + self.branch for i in range(X.shape[0])])
                                
 
+    def dK_dtheta(self, dL_dK, X, X2, target):
+        if self.mock:
+            #print dL_dK
+            print X
+            s = np.sum(dL_dK)
+            target += [s, s]
+

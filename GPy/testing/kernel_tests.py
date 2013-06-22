@@ -77,6 +77,21 @@ class TreeKernelTests(unittest.TestCase):
         print m.predict(X)
 
 
+    def test_treekernel_mock5(self):
+        tk = GPy.kern.TreeKernel(mock=True)
+        X = np.zeros(3, dtype=('object'))
+        X[0] = (nltk.Tree('(S NP VP)'))
+        X[1] = (nltk.Tree('(S NP ADJ)'))
+        X[2] = (nltk.Tree('(S NP)'))
+        Y = np.array([[1],[2],[3]])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        print m
+        print m.predict(X)
+        m.constrain_positive('')
+        m.optimize(max_f_eval=10)
+        print m
+        print m.predict(X)
+
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
     unittest.main()
