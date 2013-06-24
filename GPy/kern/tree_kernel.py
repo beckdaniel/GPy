@@ -97,12 +97,12 @@ class TreeKernel(Kernpart):
                     t2 = nltk.Tree(x2[0])
                     for node1 in t1.treepositions():
                         for node2 in t2.treepositions():
+                            d, b = self.delta_params(t1[node1], t2[node2])
                             dK_ddecay += self.delta_decay(t1[node1], t2[node2])
                             dK_dbranch += self.delta_branch(t1[node1], t2[node2])
             target += [dK_ddecay * s, dK_dbranch * s]
 
     def delta(self, node1, node2):
-        #result = np.abs(len(node1) - len(node2))
         # zeroth case -> leaves
         if type(node1) == str or type(node2) == str:
             return 0
@@ -117,6 +117,35 @@ class TreeKernel(Kernpart):
         for i, child in enumerate(node1): #node2 has the same children
             result *= (self.branch + self.delta(node1[i], node2[i]))
         return result
+
+    def delta_params(self, node1, node2):
+        #return (self.delta_decay(node1, node2), self.delta_branch(node1, node2))
+        # zeroth case -> leaves
+        if type(node1) == str or type(node2) == str:
+            return (0, 0)
+        # first case
+        if node1.productions()[0] != node2.productions()[0]:
+            return (0, 0)
+        # second case -> preterms
+        if node1.height() == 2 and node2.height() == 2:
+            return (1, 0)
+        # third case
+        result_d = 1
+        result_b = self.decay
+        sum_d = 0
+        sum_b = 0
+        for i, child in enumerate(node1): #node2 has the same children
+            fac = self.branch + self.delta(node1[i], node2[i])
+            result_d *= fac
+            result_b *= fac
+            d, b = self.delta_params(node1[i], node2[i])
+            sum_d += (1 + d) / fac
+            sum_b += (1 + b) / fac
+        result_d *= (1 + self.decay * sum_d)
+        result_b *= sum_b
+        return (result_d, result_b)
+        
+
 
     def delta_decay(self, node1, node2):
         # zeroth case -> leaves
@@ -134,7 +163,7 @@ class TreeKernel(Kernpart):
         for i, child in enumerate(node1): #node2 has the same children
             fac = self.branch + self.delta(node1[i], node2[i])
             result *= fac
-            summation += (1 + self.delta_branch(node1[i], node2[i])) / fac
+            summation += (1 + self.delta_decay(node1[i], node2[i])) / fac
         result *= (1 + self.decay * summation)
         return result
         

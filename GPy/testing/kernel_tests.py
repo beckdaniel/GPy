@@ -5,7 +5,7 @@ import unittest
 import numpy as np
 import GPy
 import nltk # Need to cope with this in a better way...
-
+from GPy.kern.tree_kernel import TreeKernel
 
 class KernelTests(unittest.TestCase):
     def test_kerneltie(self):
@@ -85,82 +85,105 @@ class TreeKernelTests(unittest.TestCase):
         X = np.array([[nltk.Tree('(S NP VP)'), 0.1, 4],
                       [nltk.Tree('(S NP ADJ)'), 0.4, 5],
                       [nltk.Tree('(S NP)'), 1.6, 67.8]])
-        #print X.dtype
-        #print X[0].dtype
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=k)
-        #print m
-        #print m.predict(X)
         m.constrain_positive('')
         m.optimize(max_f_eval=10)
-        #print m
-        #print m.predict(X)
 
     def test_treekernel_mock4(self):
         tk = GPy.kern.TreeKernel(mock=True)
         X = np.array([[nltk.Tree('(S NP VP)')], [nltk.Tree('(S NP ADJ)')], [nltk.Tree('(S NP)')]])
-        #print X.dtype
-        #print X[0].dtype
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
-        #print m
-        #print m.predict(X)
         m.constrain_positive('')
         m.optimize(max_f_eval=10)
-        #print m
-        #print m.predict(X)
 
     def test_treekernel_k1(self):
         tk = GPy.kern.TreeKernel()
         tk._set_params([1,0])
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        #print t
         X1 = np.array([[t]], dtype=object)
-        #print X1
         target = tk.K(X1, X1)
-        #print target
         self.assertTrue(target[0] == [7])
 
     def test_treekernel_k2(self):
         tk = GPy.kern.TreeKernel()
         tk._set_params([1,1])
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        #print t
         X1 = np.array([[t]], dtype=object)
-        #print X1
         target = tk.K(X1, X1)
-        #print target
         self.assertTrue(target[0] == [37])
+
+    def test_treekernel_delta1(self):
+        node1 = 'test'
+        node2 = 'test'
+        tk = TreeKernel()
+        self.assertTrue(tk.delta(node1,node2) == 0)
+
+    def test_treekernel_delta2(self):
+        node1 = nltk.Tree('(S NP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel()
+        self.assertTrue(tk.delta(node1,node2) == 0)
+
+    def test_treekernel_delta3(self):
+        node1 = nltk.Tree('(S NP VP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel()
+        self.assertTrue(tk.delta(node1,node2) == 1)
+
+    def test_treekernel_delta4(self):
+        node1 = nltk.Tree('(S NP VP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel(decay=0.5)
+        self.assertTrue(tk.delta(node1,node2) == 0.5)
+
+    def test_treekernel_delta5(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel()
+        self.assertTrue(tk.delta(node1,node2) == 4)
+
+    def test_treekernel_delta6(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(branch=0.5)
+        self.assertTrue(tk.delta(node1,node2) == 2.25)
+    
+    def test_treekernel_delta7(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(decay=0.5)
+        self.assertTrue(tk.delta(node1,node2) == 1.125)
+
+    def test_treekernel_delta8(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(decay=0.5, branch=0.5)
+        self.assertTrue(tk.delta(node1,node2) == 0.5)
+
+    def test_treekernel_delta9(self):
+        node1 = nltk.Tree('(S (NP NS) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel()
+        self.assertTrue(tk.delta(node1,node2) == 2)
+
 
     def test_treekernel_real1(self):
         tk = GPy.kern.TreeKernel()
         X = np.array([['(S NP VP)'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
-        #print X.dtype
-        #print X[0].dtype
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
-        #m['noise'] = 0
-        print m
-        print m.predict(X)
 
     def test_treekernel_real2(self):
         tk = GPy.kern.TreeKernel()
         X = np.array([['(S (NP N) (VP V))'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
-        #print X.dtype
-        #print X[0].dtype
         Y = np.array([[1],[2],[30]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
-        #m['noise'] = 0
-        print m
-        print m.predict(X)
-        #m.constrain_fixed('tk_decay')
-        #m.constrain_fixed('noise')
-        #m.constrain_positive('tk')
         m.constrain_positive('')
-        
-        m.optimize(max_f_eval=500)
-        print m
-        print m.predict(X)
+        m.optimize(max_f_eval=50)
+
+    
 
 
 if __name__ == "__main__":
