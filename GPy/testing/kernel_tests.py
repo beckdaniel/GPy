@@ -292,21 +292,37 @@ class TreeKernelTests(unittest.TestCase):
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -90],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
         #print X.shape
-        Y = np.array([[(a+10)*5] for a in range(5)])
+        Y = np.array([[(a+10)*5] for a in range(20)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         #m['noise'] = 0
         #print m
+        print m.predict(X)
         import cProfile
         #cProfile.runctx("m.predict(X)", globals(), {'m': m, 'X': X})
         m.constrain_positive('')
         cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
                         globals(), {'m': m, 'X': X})
-        #print m
-        #print m.predict(X)
-        #print Y
+        print m
+        print m.predict(X)
+        print Y
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
