@@ -81,7 +81,7 @@ class TreeKernelTests(unittest.TestCase):
         tk = GPy.kern.TreeKernel(mock=True)
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
-        k.input_slices = [slice(0),slice(1,2)]
+        k.input_slices = [slice(0,1),slice(1,3)]
         X = np.array([[nltk.Tree('(S NP VP)'), 0.1, 4],
                       [nltk.Tree('(S NP ADJ)'), 0.4, 5],
                       [nltk.Tree('(S NP)'), 1.6, 67.8]])
@@ -239,13 +239,29 @@ class TreeKernelTests(unittest.TestCase):
         Y = np.array([[1],[2],[30]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
         m.constrain_positive('')
-        print m
-        print m.predict(X)
+        #print m
+        #print m.predict(X)
         m.optimize(max_f_eval=50)
+        #print m
+        #print m.predict(X)
+    
+    def test_treekernel_real3(self):
+        tk = GPy.kern.TreeKernel()
+        rbf = GPy.kern.rbf(2, ARD=True)
+        k = tk.add(rbf, tensor=True)
+        k.input_slices = [slice(0,1),slice(1,3)]
+        X = np.array([['(S NP VP)', 0.1, 4],
+                      ['(S NP ADJ)', 0.4, 5],
+                      ['(S NP)', 1.6, 67.8]], dtype=object)
+        #print X
+        Y = np.array([[1],[2],[3]])
+        m = GPy.models.GPRegression(X, Y, kernel=k)
         print m
         print m.predict(X)
-
-    
+        m.constrain_positive('')
+        m.optimize(max_f_eval=100)
+        print m
+        print m.predict(X)
 
 
 if __name__ == "__main__":

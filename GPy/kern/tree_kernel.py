@@ -51,6 +51,7 @@ class TreeKernel(Kernpart):
             target += result.T.dot(result)
             #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
         else:
+            #print X
             for i, x1 in enumerate(X):
                 for j, x2 in enumerate(X2):
                     t1 = nltk.Tree(x1[0])
