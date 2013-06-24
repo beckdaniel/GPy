@@ -54,13 +54,16 @@ class TreeKernel(Kernpart):
             #print X
             for i, x1 in enumerate(X):
                 for j, x2 in enumerate(X2):
-                    t1 = nltk.Tree(x1[0])
-                    t2 = nltk.Tree(x2[0])
-                    result = 0
-                    for node1 in t1.treepositions():
-                        for node2 in t2.treepositions():
-                            result += self.delta(t1[node1], t2[node2])
-                    target[i][j] += result
+                    if i <= j:
+                        t1 = nltk.Tree(x1[0])
+                        t2 = nltk.Tree(x2[0])
+                        result = 0
+                        for node1 in t1.treepositions():
+                            for node2 in t2.treepositions():
+                                result += self.delta(t1[node1], t2[node2])
+                        target[i][j] += result
+                        if i != j:
+                            target[j][i] += result
 
     def Kdiag(self, X, target):
         if self.mock:

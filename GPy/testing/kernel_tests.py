@@ -66,7 +66,7 @@ class TreeKernelTests(unittest.TestCase):
         #print X1.dtype
         target = tk.K(X1, X1)
         #print target
-        self.assertTrue(target[0] == [16])
+        self.assertEqual(target[0], [16])
 
     def test_treekernel_mock2(self):
         tk = GPy.kern.TreeKernel(mock=True)
@@ -104,7 +104,7 @@ class TreeKernelTests(unittest.TestCase):
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         X1 = np.array([[t]], dtype=object)
         target = tk.K(X1, X1)
-        self.assertTrue(target[0] == [7])
+        self.assertEqual(target[0], [7])
 
     def test_treekernel_k2(self):
         tk = GPy.kern.TreeKernel()
@@ -112,7 +112,7 @@ class TreeKernelTests(unittest.TestCase):
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         X1 = np.array([[t]], dtype=object)
         target = tk.K(X1, X1)
-        self.assertTrue(target[0] == [37])
+        self.assertEqual(target[0], [37])
 
     def test_treekernel_delta1(self):
         node1 = 'test'
@@ -256,12 +256,12 @@ class TreeKernelTests(unittest.TestCase):
         #print X
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=k)
-        print m
-        print m.predict(X)
+        #print m
+        #print m.predict(X)
         m.constrain_positive('')
         m.optimize(max_f_eval=100)
-        print m
-        print m.predict(X)
+        #print m
+        #print m.predict(X)
 
     def test_treekernel_real4(self):
         tk = GPy.kern.TreeKernel()
@@ -275,13 +275,13 @@ class TreeKernelTests(unittest.TestCase):
         Y = np.array([[(a+10)*5] for a in range(5)])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
         #m['noise'] = 0
-        print m
-        print m.predict(X)
+        #print m
+        #print m.predict(X)
         m.constrain_positive('')
-        m.optimize(optimizer='tnc', max_f_eval=100, messages=True)
-        print m
-        print m.predict(X)
-        print Y
+        #m.optimize(optimizer='tnc', max_f_eval=100, messages=True)
+        #print m
+        #print m.predict(X)
+        #print Y
 
     def test_treekernel_real5(self):
         tk = GPy.kern.TreeKernel()
@@ -298,13 +298,15 @@ class TreeKernelTests(unittest.TestCase):
         Y = np.array([[(a+10)*5] for a in range(5)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         #m['noise'] = 0
-        print m
-        print m.predict(X)
+        #print m
+        import cProfile
+        #cProfile.runctx("m.predict(X)", globals(), {'m': m, 'X': X})
         m.constrain_positive('')
-        m.optimize(optimizer='tnc', max_f_eval=100, messages=True)
-        print m
-        print m.predict(X)
-        print Y
+        cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
+                        globals(), {'m': m, 'X': X})
+        #print m
+        #print m.predict(X)
+        #print Y
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
