@@ -169,11 +169,69 @@ class TreeKernelTests(unittest.TestCase):
         self.assertTrue(tk.delta(node1,node2) == 2)
 
 
+    def test_treekernel_deltaparams1(self):
+        node1 = 'test'
+        node2 = 'test'
+        tk = TreeKernel()
+        self.assertEqual(tk.delta_params(node1,node2), (0,0))
+
+    def test_treekernel_deltaparams2(self):
+        node1 = nltk.Tree('(S NP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel()
+        self.assertEqual(tk.delta_params(node1,node2), (0,0))
+
+    def test_treekernel_deltaparams3(self):
+        node1 = nltk.Tree('(S NP VP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel()
+        self.assertEqual(tk.delta_params(node1,node2), (1,0))
+
+    def test_treekernel_deltaparams4(self):
+        node1 = nltk.Tree('(S NP VP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel(decay=0.5)
+        self.assertEqual(tk.delta_params(node1,node2), (1,0))
+
+    def test_treekernel_deltaparams5(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel()
+        self.assertEqual(tk.delta_params(node1,node2), (6,2))
+
+    def test_treekernel_deltaparams6(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(branch=0.5)
+        self.assertEqual(tk.delta_params(node1,node2), (3.75, 1.5))
+    
+    def test_treekernel_deltaparams7(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(decay=0.5)
+        self.assertEqual(tk.delta_params(node1,node2), (3, 0.75))
+
+    def test_treekernel_deltaparams8(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(decay=0.5, branch=0.5)
+        self.assertEqual(tk.delta_params(node1,node2), (1.5, 0.5))
+
+    def test_treekernel_deltaparams9(self):
+        node1 = nltk.Tree('(S (NP NS) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel()
+        self.assertEqual(tk.delta_params(node1,node2), (8/3. , 4/3.))
+
+
+
     def test_treekernel_real1(self):
         tk = GPy.kern.TreeKernel()
         X = np.array([['(S NP VP)'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
+        #print m
+        #print m.predict(X)
 
     def test_treekernel_real2(self):
         tk = GPy.kern.TreeKernel()
@@ -181,7 +239,11 @@ class TreeKernelTests(unittest.TestCase):
         Y = np.array([[1],[2],[30]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
         m.constrain_positive('')
+        print m
+        print m.predict(X)
         m.optimize(max_f_eval=50)
+        print m
+        print m.predict(X)
 
     
 

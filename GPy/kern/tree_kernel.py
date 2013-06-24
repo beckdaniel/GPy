@@ -130,6 +130,27 @@ class TreeKernel(Kernpart):
         if node1.height() == 2 and node2.height() == 2:
             return (1, 0)
         # third case
+        prod = 1
+        sum_delta = 0
+        sum_decay = 0
+        sum_branch = 0
+        for i, child in enumerate(node1): #node2 has the same children
+            g = self.branch + self.delta(node1[i], node2[i])
+            prod *= g
+            sum_delta += g
+            d, b = self.delta_params(node1[i], node2[i])
+            sum_decay += d
+            sum_branch += (1 + b)
+        h = (prod * self.decay) / float(sum_delta)
+        #print h
+        #print prod
+        #print self.decay
+        #print sum_delta
+        ddecay = prod + (h * sum_decay)
+        dbranch = h * sum_branch
+        return (ddecay, dbranch)
+
+
         result_d = 1
         result_b = self.decay
         sum_d = 0
