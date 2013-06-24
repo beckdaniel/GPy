@@ -263,6 +263,48 @@ class TreeKernelTests(unittest.TestCase):
         print m
         print m.predict(X)
 
+    def test_treekernel_real4(self):
+        tk = GPy.kern.TreeKernel()
+        X = np.array([['(S NP VP)'],
+                      ['(S (NP N) (VP V))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        #print X.shape
+        Y = np.array([[(a+10)*5] for a in range(5)])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        #m['noise'] = 0
+        print m
+        print m.predict(X)
+        m.constrain_positive('')
+        m.optimize(optimizer='tnc', max_f_eval=100, messages=True)
+        print m
+        print m.predict(X)
+        print Y
+
+    def test_treekernel_real5(self):
+        tk = GPy.kern.TreeKernel()
+        rbf = GPy.kern.rbf(2, ARD=True)
+        k = tk.add(rbf, tensor=True)
+        k.input_slices = [slice(0,1),slice(1,3)]
+        X = np.array([['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
+                     dtype=object)
+        #print X.shape
+        Y = np.array([[(a+10)*5] for a in range(5)])
+        m = GPy.models.GPRegression(X, Y, kernel=k)
+        #m['noise'] = 0
+        print m
+        print m.predict(X)
+        m.constrain_positive('')
+        m.optimize(optimizer='tnc', max_f_eval=100, messages=True)
+        print m
+        print m.predict(X)
+        print Y
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
