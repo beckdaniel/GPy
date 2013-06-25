@@ -292,37 +292,52 @@ class TreeKernelTests(unittest.TestCase):
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -90],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
         #print X.shape
-        Y = np.array([[(a+10)*5] for a in range(20)])
+        Y = np.array([[(a+10)*5] for a in range(5)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         #m['noise'] = 0
         #print m
-        print m.predict(X)
-        import cProfile
+        #print m.predict(X)
+        #import cProfile
         #cProfile.runctx("m.predict(X)", globals(), {'m': m, 'X': X})
         m.constrain_positive('')
-        cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
-                        globals(), {'m': m, 'X': X})
-        print m
-        print m.predict(X)
-        print Y
+        #cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
+        #                globals(), {'m': m, 'X': X})
+        #print m
+        #print m.predict(X)
+        #print Y
+
+    def test_treekernel_kernel1(self):
+        tk = GPy.kern.TreeKernel()
+        X = np.array([['(S (NP a) (VP v))'],
+                      ['(S (NP a1) (VP v))'],
+                      ['(S (NP (NP a)) (VP (V c)))'],
+                      ['(S (VP v2))']],
+                     dtype=object)
+        k = tk.K(X, X)
+        result = np.array([[6,3,2,0],
+                           [3,6,1,0],
+                           [2,1,15,0],
+                           [0,0,0,3]])
+        self.assertTrue((k == result).all())
+
+    def test_treekernel_kernel3(self):
+        tk = GPy.kern.TreeKernel()
+        X = np.array([['(S (NP a) (VP v))']], dtype=object)
+        X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
+        k = tk.dK_dtheta(1, X, X2)
+        #print k
+        self.assertTrue((k == [2,1]).all())
+
+    def test_treekernel_kernel4(self):
+        tk = GPy.kern.TreeKernel()
+        X = np.array([['(S (NP a) (VP v))']], dtype=object)
+        X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
+        k = tk.K(X, X2)
+        #print k
+        self.assertTrue((k == 2))
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
