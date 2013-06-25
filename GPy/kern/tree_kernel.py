@@ -8,7 +8,7 @@ class TreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
     """
     
-    def __init__(self, decay=1, branch=1, mock=False):
+    def __init__(self, decay=1, branch=1, mode="naive"):
         """blah
         """
         try:
@@ -21,7 +21,14 @@ class TreeKernel(Kernpart):
         self.name = 'tk'
         self.decay = decay
         self.branch = branch
-        self.mock = mock
+        if mode == "mock":
+            self.K = self.K_mock
+            self.Kdiag = self.Kdiag_mock
+            self.dK_dtheta = self.dK_dtheta_mock
+        elif mode == "naive":
+            self.K = self.K_naive
+            self.Kdiag = self.Kdiag_naive
+            self.dK_dtheta = self.dK_dtheta_naive
         
     def _get_params(self):
         return np.hstack((self.decay, self.branch))
@@ -33,85 +40,84 @@ class TreeKernel(Kernpart):
     def _get_param_names(self):
         return ['decay', 'branch']
 
-    def K(self, X, X2, target):
+    def K_mock(self, X, X2, target):
         """
         The mock parameter is mainly for testing and debugging.
         """
         if X2 == None:
             X2 = X
-        if self.mock:
-            # we have to ensure positive semi-definiteness, so we build a triangular matrix
-            # and them multiply it by its transpose (like a "reverse" Cholesky)
-            result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X2])
-            for i in range(result.shape[0]):
-                for j in range(result.shape[1]):
-                    if i > j:
-                        result[i][j] = 0
-            #print result
-            target += result.T.dot(result)
-            #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
-        else:
-            #print X
-            for i, x1 in enumerate(X):
-                for j, x2 in enumerate(X2):
-                    if i <= j:
-                        t1 = nltk.Tree(x1[0])
-                        t2 = nltk.Tree(x2[0])
-                        result = 0
-                        for pos1 in t1.treepositions():
-                            node1 = t1[pos1]
-                            for pos2 in t2.treepositions():
-                                result += self.delta(node1, t2[pos2])
-                        target[i][j] += result
-                        if i != j:
-                            target[j][i] += result
+        # we have to ensure positive semi-definiteness, so we build a triangular matrix
+        # and them multiply it by its transpose (like a "reverse" Cholesky)
+        result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X2])
+        for i in range(result.shape[0]):
+            for j in range(result.shape[1]):
+                if i > j:
+                    result[i][j] = 0
+        #print result
+        target += result.T.dot(result)
+        #target += np.array([[(self.decay + self.branch) for x1 in X] for x2 in X2])
 
-    def Kdiag(self, X, target):
-        if self.mock:
-            result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X])
-            for i in range(result.shape[0]):
-                for j in range(result.shape[1]):
-                    if i > j:
-                        result[i][j] = 0
-            target += np.diag(result.T.dot(result))
-            #target += np.array([self.decay + self.branch for i in range(X.shape[0])])
-        else:
-            for i, x1 in enumerate(X):
+    def K_naive(self, X, X2, target):
+        if X2 == None:
+            X2 = X
+        #print X
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
                 t1 = nltk.Tree(x1[0])
+                t2 = nltk.Tree(x2[0])
                 result = 0
                 for pos1 in t1.treepositions():
                     node1 = t1[pos1]
-                    for pos2 in t1.treepositions():
-                        result += self.delta(node1, t1[pos2])
-                target[i] += result
+                    for pos2 in t2.treepositions():
+                        result += self.delta(node1, t2[pos2])
+                target[i][j] += result
+                    
+    def Kdiag_mock(self, X, target):
+        result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X])
+        for i in range(result.shape[0]):
+            for j in range(result.shape[1]):
+                if i > j:
+                    result[i][j] = 0
+        target += np.diag(result.T.dot(result))
+        #target += np.array([self.decay + self.branch for i in range(X.shape[0])])
+
+    def Kdiag_naive(self, X, target):
+        for i, x1 in enumerate(X):
+            t1 = nltk.Tree(x1[0])
+            result = 0
+            for pos1 in t1.treepositions():
+                node1 = t1[pos1]
+                for pos2 in t1.treepositions():
+                    result += self.delta(node1, t1[pos2])
+            target[i] += result
                                
-    def dK_dtheta(self, dL_dK, X, X2, target):
+    def dK_dtheta_mock(self, dL_dK, X, X2, target):
         if X2 == None:
             X2 = X
-        if self.mock:
-            #print dL_dK
-            #print X
-            s = np.sum(dL_dK)
-            target += [s, s]
-        else:
-            s = np.sum(dL_dK)
-            dK_ddecay = 0
-            dK_dbranch = 0
-            for i, x1 in enumerate(X):
-                for j, x2 in enumerate(X2):
-                    if i <= j:
-                        t1 = nltk.Tree(x1[0])
-                        t2 = nltk.Tree(x2[0])
-                        for pos1 in t1.treepositions():
-                            node1 = t1[pos1]
-                            for pos2 in t2.treepositions():
-                                d, b = self.delta_params(node1, t2[pos2])
+        s = np.sum(dL_dK)
+        target += [s, s]
+
+    def dK_dtheta_naive(self, dL_dK, X, X2, target):
+        if X2 == None:
+            X2 = X
+        s = np.sum(dL_dK)
+        dK_ddecay = 0
+        dK_dbranch = 0
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                if i <= j:
+                    t1 = nltk.Tree(x1[0])
+                    t2 = nltk.Tree(x2[0])
+                    for pos1 in t1.treepositions():
+                        node1 = t1[pos1]
+                        for pos2 in t2.treepositions():
+                            d, b = self.delta_params(node1, t2[pos2])
+                            dK_ddecay += d #self.delta_decay(t1[node1], t2[node2])
+                            dK_dbranch += b #self.delta_branch(t1[node1], t2[node2])
+                            if i < j:
                                 dK_ddecay += d #self.delta_decay(t1[node1], t2[node2])
                                 dK_dbranch += b #self.delta_branch(t1[node1], t2[node2])
-                                if i < j:
-                                    dK_ddecay += d #self.delta_decay(t1[node1], t2[node2])
-                                    dK_dbranch += b #self.delta_branch(t1[node1], t2[node2])
-            target += [dK_ddecay * s, dK_dbranch * s]
+        target += [dK_ddecay * s, dK_dbranch * s]
 
     def delta(self, node1, node2):
         # zeroth case -> leaves

@@ -61,7 +61,7 @@ class TreeKernelTests(unittest.TestCase):
         self.assertTrue(tk._get_param_names() == ['tk_decay', 'tk_branch'])
         
     def test_treekernel_mock1(self):
-        tk = GPy.kern.TreeKernel(mock=True)
+        tk = GPy.kern.TreeKernel(mode="mock")
         X1 = np.array([[nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")]], dtype=nltk.Tree)
         #print X1.dtype
         target = tk.K(X1, X1)
@@ -69,7 +69,7 @@ class TreeKernelTests(unittest.TestCase):
         self.assertEqual(target[0], [16])
 
     def test_treekernel_mock2(self):
-        tk = GPy.kern.TreeKernel(mock=True)
+        tk = GPy.kern.TreeKernel(mode="mock")
         X = np.array([['a' * i] for i in range(10)], dtype=str)
         Y = np.array([[a] for a in range(10)])
         m = GPy.models.GPRegression(X,Y,kernel=tk)
@@ -78,7 +78,7 @@ class TreeKernelTests(unittest.TestCase):
         #print m.predict(X)
 
     def test_treekernel_mock3(self):
-        tk = GPy.kern.TreeKernel(mock=True)
+        tk = GPy.kern.TreeKernel(mode="mock")
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
@@ -91,7 +91,7 @@ class TreeKernelTests(unittest.TestCase):
         m.optimize(max_f_eval=10)
 
     def test_treekernel_mock4(self):
-        tk = GPy.kern.TreeKernel(mock=True)
+        tk = GPy.kern.TreeKernel(mode="mock")
         X = np.array([[nltk.Tree('(S NP VP)')], [nltk.Tree('(S NP ADJ)')], [nltk.Tree('(S NP)')]])
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
@@ -338,6 +338,21 @@ class TreeKernelTests(unittest.TestCase):
         k = tk.K(X, X2)
         #print k
         self.assertTrue((k == 2))
+
+    def test_treekernel_kernel5(self):
+        tk = GPy.kern.TreeKernel()
+        X = np.array([['(S (NP a) (VP v))'],
+                      ['(S (NP (NP a)) (VP (V c)))']], dtype=object)
+        Y = np.array([[2],[3]])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        Xnew = np.array([['(S (NP b) (VP v))']], dtype=object)
+        print tk.K(X)
+        print tk.K(Xnew,X)
+        print m.likelihood.Y
+        print Xnew
+        print m.predict(Xnew)
+        #print k
+        #self.assertTrue((k == 2))
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

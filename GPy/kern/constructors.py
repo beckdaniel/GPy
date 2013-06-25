@@ -324,9 +324,9 @@ def IndependentOutputs(k):
     parts = [independent_output_part(p) for p in k.parts]
     return kern(k.input_dim+1,parts)
 
-def TreeKernel(mock=False):
+def TreeKernel(mode="naive"):
     """
     Tree kernel
     """
-    part = TreeKernelPart(mock=mock)
+    part = TreeKernelPart(mode=mode)
     return kern(1, [part])
