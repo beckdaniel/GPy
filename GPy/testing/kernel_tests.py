@@ -284,7 +284,7 @@ class TreeKernelTests(unittest.TestCase):
         #print Y
 
     def test_treekernel_real5(self):
-        tk = GPy.kern.TreeKernel()
+        tk = GPy.kern.TreeKernel(mode="naive")
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
@@ -292,19 +292,39 @@ class TreeKernelTests(unittest.TestCase):
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
         #print X.shape
-        Y = np.array([[(a+10)*5] for a in range(5)])
+        Y = np.array([[(a+10)*5] for a in range(25)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         #m['noise'] = 0
         #print m
         #print m.predict(X)
-        #import cProfile
+        import cProfile
         #cProfile.runctx("m.predict(X)", globals(), {'m': m, 'X': X})
         m.constrain_positive('')
-        #cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
-        #                globals(), {'m': m, 'X': X})
+        cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
+                        globals(), {'m': m, 'X': X})
         #print m
         #print m.predict(X)
         #print Y
@@ -346,13 +366,27 @@ class TreeKernelTests(unittest.TestCase):
         Y = np.array([[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
         Xnew = np.array([['(S (NP b) (VP v))']], dtype=object)
-        print tk.K(X)
-        print tk.K(Xnew,X)
-        print m.likelihood.Y
-        print Xnew
-        print m.predict(Xnew)
+        #print tk.K(X)
+        #print tk.K(Xnew,X)
+        #print m.likelihood.Y
+        #print Xnew
+        #print m.predict(Xnew)
         #print k
         #self.assertTrue((k == 2))
+
+    def test_treekernel_kernel6(self):
+        tk = GPy.kern.TreeKernel(mode="cache")
+        X = np.array([['(S (NP a) (VP v))'],
+                      ['(S (NP a1) (VP v))'],
+                      ['(S (NP (NP a)) (VP (V c)))'],
+                      ['(S (VP v2))']],
+                     dtype=object)
+        k = tk.K(X, X)
+        result = np.array([[6,3,2,0],
+                           [3,6,1,0],
+                           [2,1,15,0],
+                           [0,0,0,3]])
+        self.assertTrue((k == result).all())
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

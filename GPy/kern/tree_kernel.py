@@ -29,6 +29,10 @@ class TreeKernel(Kernpart):
             self.K = self.K_naive
             self.Kdiag = self.Kdiag_naive
             self.dK_dtheta = self.dK_dtheta_naive
+        elif mode == "cache":
+            self.K = self.K_cache
+            self.Kdiag = self.Kdiag_naive
+            self.dK_dtheta = self.dK_dtheta_naive
         
     def _get_params(self):
         return np.hstack((self.decay, self.branch))
@@ -71,6 +75,59 @@ class TreeKernel(Kernpart):
                     for pos2 in t2.treepositions():
                         result += self.delta(node1, t2[pos2])
                 target[i][j] += result
+
+    def K_cache(self, X, X2, target):
+        if X2 == None:
+            X2 = X
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                t1 = nltk.Tree(x1[0])
+                t2 = nltk.Tree(x2[0])
+                result = 0
+                # DP
+                self.cache = {}
+                for pos1 in t1.treepositions(order="postorder"):
+                    node1 = t1[pos1]
+                    for pos2 in t2.treepositions(order="postorder"):
+                        node2 = t2[pos2]
+                        key = (pos1, pos2)
+                        #print key
+                        result += self.delta_cache(node1, node2, key)
+                target[i][j] += result
+
+    def delta_cache(self, node1, node2, key):
+        # zeroth case -> leaves
+        if type(node1) == str or type(node2) == str:
+            return 0
+
+        # first case
+        if node1.node != node2.node: #optimization
+            self.cache[key] = 0
+            return 0
+        if node1.productions()[0] != node2.productions()[0]:
+            self.cache[key] = 0
+            return 0
+
+        # second case -> preterms
+        if node1.height() == 2 and node2.height() == 2:
+            self.cache[key] = self.decay
+            return self.decay
+
+        # third case
+        result = self.decay
+        for i, child in enumerate(node1): #node2 has the same children
+            #result *= (self.branch + self.delta(node1[i], node2[i]))
+            #print key
+            #print key[0]
+            #print list(key[0])
+            #print list(key[0]).append(i)
+            #c_key1 = 
+            child_key = (tuple(list(key[0]) + [i]),
+                         tuple(list(key[1]) + [i]))
+            result *= (self.branch + self.cache[child_key])
+        self.cache[key] = result
+        return result
+
                     
     def Kdiag_mock(self, X, target):
         result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X])
