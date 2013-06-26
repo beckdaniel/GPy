@@ -33,6 +33,10 @@ class TreeKernel(Kernpart):
             self.K = self.K_cache
             self.Kdiag = self.Kdiag_cache
             self.dK_dtheta = self.dK_dtheta_cache
+        elif mode == "fast":
+            self.K = self.K_fast
+            self.Kdiag = self.Kdiag_cache
+            self.dK_dtheta = self.dK_dtheta_cache
         self.cache = {}
         self.cache_ddecay = {}
         self.cache_dbranch = {}
@@ -189,7 +193,7 @@ class TreeKernel(Kernpart):
     ###############
     # CACHE METHODS
     #
-    # 
+    # These methods use DP to reach polynomial complexity.
     ###############
 
     def K_cache(self, X, X2, target):
@@ -233,7 +237,7 @@ class TreeKernel(Kernpart):
                 if i <= j:
                     t1 = nltk.Tree(x1[0])
                     t2 = nltk.Tree(x2[0])
-                    self.cache
+                    self.cache = {}
                     self.cache_ddecay = {}
                     self.cache_dbranch = {}
                     for pos1 in t1.treepositions(order="postorder"):
@@ -330,3 +334,52 @@ class TreeKernel(Kernpart):
         self.cache_ddecay[key] = ddecay
         self.cache_dbranch[key] = dbranch
         return (ddecay, dbranch)
+
+    ##############
+    # FAST METHODS
+    #
+    # These methods also use DP but have an implementation
+    # that rely less on NLTK methods (which are slow because
+    # they traverse the entire tree).
+    ##############
+
+    def K_fast(self, X, X2, target):
+        if X2 == None:
+            X2 = X
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                t1 = nltk.Tree(x1[0])
+                t2 = nltk.Tree(x2[0])
+                print repr(t1)
+                print repr(t2)
+                self.delta_result = 0
+                self.cache = {} # DP
+                self.delta_fast(t1, t2, ((),()))
+                target[i][j] += self.delta_result
+
+    def Kdiag_fast(self, X, target):
+        pass
+    
+    def dK_dtheta_fast(self, dL_dK, X, X2, target):
+        pass
+
+    def delta_fast(self, t1, t2, key):
+        if type(t1[0]) != str:
+            for i1, child1 in enumerate(t1):
+                self.delta_fast(child1, t2, key)
+                print "T1: %s\tT2: %s" % (str(child1), str(t2))
+            if type(t2[0]) != str:
+                for i2, child2 in enumerate(t2):
+                    self.delta_fast(t1, child2, key)
+                    print "T1: %s\tT2: %s" % (str(t1), str(child2))
+        else:
+            if type(t2[0]) != str:
+                for i2, child2 in enumerate(t2):
+                    self.delta_fast(t1, child2, key)
+                    print "T1: %s\tT2: %s" % (str(t1), str(child2))
+
+
+
+
+    def delta_params_fast(self, node1, node2, key):
+        pass
