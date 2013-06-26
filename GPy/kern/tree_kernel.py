@@ -364,6 +364,20 @@ class TreeKernel(Kernpart):
         pass
 
     def delta_fast(self, t1, t2, key):
+        for i1, child1 in enumerate(t1):
+            if type(child1) != str:
+                self.delta_fast(child1, t2, key)
+        self.fill_cache(t1, t2, key)
+            
+    def fill_cache(self, t1, t2, key):
+        for i2, child2 in enumerate(t2):
+            if type(child2) != str:
+                self.fill_cache(t1, child2, key)
+        # DO STUFF
+        print "T1: %s\tT2: %s" % (str(t1), str(t2))
+        
+
+    def delta_fast2(self, t1, t2, key):
         if type(t1[0]) != str:
             for i1, child1 in enumerate(t1):
                 self.delta_fast(child1, t2, key)
