@@ -223,6 +223,67 @@ class TreeKernelTests(unittest.TestCase):
         tk = TreeKernel()
         self.assertEqual(tk.delta_params(node1,node2), (8/3. , 4/3.))
 
+########
+# CACHE
+########
+    def test_treekernel_deltaparams_cache1(self):
+        node1 = 'test'
+        node2 = 'test'
+        tk = TreeKernel(mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (0,0))
+
+    def test_treekernel_deltaparams_cache2(self):
+        node1 = nltk.Tree('(S NP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel(mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (0,0))
+
+    def test_treekernel_deltaparams_cache3(self):
+        node1 = nltk.Tree('(S NP VP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel(mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (1,0))
+
+    def test_treekernel_deltaparams_cache4(self):
+        node1 = nltk.Tree('(S NP VP)')
+        node2 = nltk.Tree('(S NP VP)')
+        tk = TreeKernel(decay=0.5, mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (1,0))
+
+    def test_treekernel_deltaparams_cache5(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (6,2))
+
+    def test_treekernel_deltaparams_cache6(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(branch=0.5, mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (3.75, 1.5))
+    
+    def test_treekernel_deltaparams_cache7(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(decay=0.5, mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (3, 0.75))
+
+    def test_treekernel_deltaparams_cache8(self):
+        node1 = nltk.Tree('(S (NP N) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(decay=0.5, branch=0.5, mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (1.5, 0.5))
+
+    def test_treekernel_deltaparams_cache9(self):
+        node1 = nltk.Tree('(S (NP NS) (VP V))')
+        node2 = nltk.Tree('(S (NP N) (VP V))')
+        tk = TreeKernel(mode="cache")
+        self.assertEqual(tk.delta_params(node1,node2), (8/3. , 4/3.))
+
+
+########
+# NON-UNIT
+########
 
 
     def test_treekernel_real1(self):
@@ -284,7 +345,7 @@ class TreeKernelTests(unittest.TestCase):
         #print Y
 
     def test_treekernel_real5(self):
-        tk = GPy.kern.TreeKernel(mode="naive")
+        tk = GPy.kern.TreeKernel(mode="cache")
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
@@ -302,31 +363,22 @@ class TreeKernelTests(unittest.TestCase):
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
         #print X.shape
-        Y = np.array([[(a+10)*5] for a in range(25)])
+        #X = X[:5]
+        Y = np.array([[(a+10)*5] for a in range(15)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         #m['noise'] = 0
         #print m
-        #print m.predict(X)
+        #print m.predict(X)[0]
         import cProfile
         #cProfile.runctx("m.predict(X)", globals(), {'m': m, 'X': X})
         m.constrain_positive('')
         cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
-                        globals(), {'m': m, 'X': X})
+                        globals(), {'m': m, 'X': X}, sort="cumulative")
         #print m
-        #print m.predict(X)
+        #print m.predict(X)[0]
         #print Y
 
     def test_treekernel_kernel1(self):

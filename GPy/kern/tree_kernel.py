@@ -31,8 +31,8 @@ class TreeKernel(Kernpart):
             self.dK_dtheta = self.dK_dtheta_naive
         elif mode == "cache":
             self.K = self.K_cache
-            self.Kdiag = self.Kdiag_naive
-            self.dK_dtheta = self.dK_dtheta_naive
+            self.Kdiag = self.Kdiag_cache
+            self.dK_dtheta = self.dK_dtheta_cache
         
     def _get_params(self):
         return np.hstack((self.decay, self.branch))
@@ -113,10 +113,10 @@ class TreeKernel(Kernpart):
             t1 = nltk.Tree(x1[0])
             result = 0
             self.cache = {} # DP
-            for pos1 in t1.treepositions():
+            for pos1 in t1.treepositions(order="postorder"):
                 node1 = t1[pos1]
-                for pos2 in t1.treepositions():
-                    node2 = t2[pos2]
+                for pos2 in t1.treepositions(order="postorder"):
+                    node2 = t1[pos2]
                     key = (pos1, pos2)
                     result += self.delta_cache(node1, node2, key)
             target[i] += result
@@ -160,13 +160,15 @@ class TreeKernel(Kernpart):
                 if i <= j:
                     t1 = nltk.Tree(x1[0])
                     t2 = nltk.Tree(x2[0])
-                    self.cache_decay = {}
-                    self.cache_branch = {}
-                    for pos1 in t1.treepositions():
+                    self.cache
+                    self.cache_ddecay = {}
+                    self.cache_dbranch = {}
+                    for pos1 in t1.treepositions(order="postorder"):
                         node1 = t1[pos1]
-                        for pos2 in t2.treepositions():
+                        for pos2 in t2.treepositions(order="postorder"):
                             node2 = t2[pos2]
-                            d, b = self.delta_params(node1, t2[pos2])
+                            key = (pos1, pos2)
+                            d, b = self.delta_params_cache(node1, node2, key)
                             dK_ddecay += d 
                             dK_dbranch += b 
                             if i < j:
@@ -245,4 +247,61 @@ class TreeKernel(Kernpart):
         h = (prod * self.decay) / float(sum_delta)
         ddecay = prod + (h * sum_decay)
         dbranch = h * sum_branch
+        return (ddecay, dbranch)
+
+    def delta_params_cache(self, node1, node2, key):
+        # zeroth case -> leaves
+        if type(node1) == str or type(node2) == str:
+            return (0, 0)
+        # first case
+        if node1.node != node2.node:
+            self.cache[key] = 0
+            self.cache_ddecay[key] = 0
+            self.cache_dbranch[key] = 0
+            return (0, 0)
+        if node1.productions()[0] != node2.productions()[0]:
+            self.cache[key] = 0
+            self.cache_ddecay[key] = 0
+            self.cache_dbranch[key] = 0
+            return (0, 0)
+        # second case -> preterms
+        if node1.height() == 2 and node2.height() == 2:
+            self.cache[key] = self.decay
+            self.cache_ddecay[key] = 1
+            self.cache_dbranch[key] = 0
+            return (1, 0)
+        # third case
+        prod = 1
+        sum_delta = 0
+        sum_decay = 0
+        sum_branch = 0
+        ###
+        # Now this is ugly: to cope with DP, we need to calculate delta again...
+        # There should be a better way to do this...
+        delta_result = self.decay
+        # End of uglyness =P
+        ###
+        for i, child in enumerate(node1): #node2 has the same children
+            child_key = (tuple(list(key[0]) + [i]),
+                         tuple(list(key[1]) + [i]))
+            #g = self.branch + self.delta(node1[i], node2[i])
+            g = self.branch + self.cache[child_key]
+            prod *= g
+            sum_delta += g
+            #d, b = self.delta_params(node1[i], node2[i])
+            d = self.cache_ddecay[child_key]
+            b = self.cache_dbranch[child_key]
+            sum_decay += d
+            sum_branch += (1 + b)
+            ###
+            # Uglyness begin
+            delta_result *= g
+            # Uglyness end
+            ###
+        h = (prod * self.decay) / float(sum_delta)
+        ddecay = prod + (h * sum_decay)
+        dbranch = h * sum_branch
+        self.cache[key] = delta_result
+        self.cache_ddecay[key] = ddecay
+        self.cache_dbranch[key] = dbranch
         return (ddecay, dbranch)
