@@ -33,6 +33,9 @@ class TreeKernel(Kernpart):
             self.K = self.K_cache
             self.Kdiag = self.Kdiag_cache
             self.dK_dtheta = self.dK_dtheta_cache
+        self.cache = {}
+        self.cache_ddecay = {}
+        self.cache_dbranch = {}
         
     def _get_params(self):
         return np.hstack((self.decay, self.branch))
@@ -43,6 +46,14 @@ class TreeKernel(Kernpart):
 
     def _get_param_names(self):
         return ['decay', 'branch']
+
+
+    ##############
+    # MOCK METHODS
+    #
+    # These were designed to mainly test how to couple
+    # TreeKernels to the GPy kernel API.
+    ##############
 
     def K_mock(self, X, X2, target):
         """
@@ -59,6 +70,29 @@ class TreeKernel(Kernpart):
                     result[i][j] = 0
         target += result.T.dot(result)
 
+    def Kdiag_mock(self, X, target):
+        result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X])
+        for i in range(result.shape[0]):
+            for j in range(result.shape[1]):
+                if i > j:
+                    result[i][j] = 0
+        target += np.diag(result.T.dot(result))
+
+    def dK_dtheta_mock(self, dL_dK, X, X2, target):
+        if X2 == None:
+            X2 = X
+        s = np.sum(dL_dK)
+        target += [s, s]
+
+    ###############
+    # NAIVE METHODS
+    #
+    # These are implemented by just plugging the kernel formulas
+    # into code. They have exponential complexity. They are still useful
+    # for testing and comparinng results with the other implementations
+    # using small toy data.
+    ###############
+
     def K_naive(self, X, X2, target):
         if X2 == None:
             X2 = X
@@ -70,8 +104,93 @@ class TreeKernel(Kernpart):
                 for pos1 in t1.treepositions():
                     node1 = t1[pos1]
                     for pos2 in t2.treepositions():
-                        result += self.delta(node1, t2[pos2])
+                        result += self.delta_naive(node1, t2[pos2])
                 target[i][j] += result
+
+    def Kdiag_naive(self, X, target):
+        for i, x1 in enumerate(X):
+            t1 = nltk.Tree(x1[0])
+            result = 0
+            for pos1 in t1.treepositions():
+                node1 = t1[pos1]
+                for pos2 in t1.treepositions():
+                    result += self.delta_naive(node1, t1[pos2])
+            target[i] += result
+
+    def dK_dtheta_naive(self, dL_dK, X, X2, target):
+        if X2 == None:
+            X2 = X
+        s = np.sum(dL_dK)
+        dK_ddecay = 0
+        dK_dbranch = 0
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                if i <= j:
+                    t1 = nltk.Tree(x1[0])
+                    t2 = nltk.Tree(x2[0])
+                    for pos1 in t1.treepositions():
+                        node1 = t1[pos1]
+                        for pos2 in t2.treepositions():
+                            d, b = self.delta_params_naive(node1, t2[pos2])
+                            dK_ddecay += d 
+                            dK_dbranch += b 
+                            if i < j:
+                                dK_ddecay += d
+                                dK_dbranch += b 
+        target += [dK_ddecay * s, dK_dbranch * s]
+
+    def delta_naive(self, node1, node2):
+        # zeroth case -> leaves
+        if type(node1) == str or type(node2) == str:
+            return 0
+        # first case
+        if node1.node != node2.node:
+            return 0
+        if node1.productions()[0] != node2.productions()[0]:
+            return 0
+        # second case -> preterms
+        if node1.height() == 2 and node2.height() == 2:
+            return self.decay
+        # third case
+        result = self.decay
+        for i, child in enumerate(node1): #node2 has the same children
+            result *= (self.branch + self.delta_naive(node1[i], node2[i]))
+        return result
+
+    def delta_params_naive(self, node1, node2):
+        # zeroth case -> leaves
+        if type(node1) == str or type(node2) == str:
+            return (0, 0)
+        # first case
+        if node1.node != node2.node:
+            return (0, 0)
+        if node1.productions()[0] != node2.productions()[0]:
+            return (0, 0)
+        # second case -> preterms
+        if node1.height() == 2 and node2.height() == 2:
+            return (1, 0)
+        # third case
+        prod = 1
+        sum_delta = 0
+        sum_decay = 0
+        sum_branch = 0
+        for i, child in enumerate(node1): #node2 has the same children
+            g = self.branch + self.delta_naive(node1[i], node2[i])
+            prod *= g
+            sum_delta += g
+            d, b = self.delta_params_naive(node1[i], node2[i])
+            sum_decay += d
+            sum_branch += (1 + b)
+        h = (prod * self.decay) / float(sum_delta)
+        ddecay = prod + (h * sum_decay)
+        dbranch = h * sum_branch
+        return (ddecay, dbranch)
+
+    ###############
+    # CACHE METHODS
+    #
+    # 
+    ###############
 
     def K_cache(self, X, X2, target):
         if X2 == None:
@@ -89,24 +208,6 @@ class TreeKernel(Kernpart):
                         key = (pos1, pos2)
                         result += self.delta_cache(node1, node2, key)
                 target[i][j] += result
-                    
-    def Kdiag_mock(self, X, target):
-        result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X])
-        for i in range(result.shape[0]):
-            for j in range(result.shape[1]):
-                if i > j:
-                    result[i][j] = 0
-        target += np.diag(result.T.dot(result))
-
-    def Kdiag_naive(self, X, target):
-        for i, x1 in enumerate(X):
-            t1 = nltk.Tree(x1[0])
-            result = 0
-            for pos1 in t1.treepositions():
-                node1 = t1[pos1]
-                for pos2 in t1.treepositions():
-                    result += self.delta(node1, t1[pos2])
-            target[i] += result
 
     def Kdiag_cache(self, X, target):
         for i, x1 in enumerate(X):
@@ -120,34 +221,6 @@ class TreeKernel(Kernpart):
                     key = (pos1, pos2)
                     result += self.delta_cache(node1, node2, key)
             target[i] += result
-                               
-    def dK_dtheta_mock(self, dL_dK, X, X2, target):
-        if X2 == None:
-            X2 = X
-        s = np.sum(dL_dK)
-        target += [s, s]
-
-    def dK_dtheta_naive(self, dL_dK, X, X2, target):
-        if X2 == None:
-            X2 = X
-        s = np.sum(dL_dK)
-        dK_ddecay = 0
-        dK_dbranch = 0
-        for i, x1 in enumerate(X):
-            for j, x2 in enumerate(X2):
-                if i <= j:
-                    t1 = nltk.Tree(x1[0])
-                    t2 = nltk.Tree(x2[0])
-                    for pos1 in t1.treepositions():
-                        node1 = t1[pos1]
-                        for pos2 in t2.treepositions():
-                            d, b = self.delta_params(node1, t2[pos2])
-                            dK_ddecay += d 
-                            dK_dbranch += b 
-                            if i < j:
-                                dK_ddecay += d
-                                dK_dbranch += b 
-        target += [dK_ddecay * s, dK_dbranch * s]
 
     def dK_dtheta_cache(self, dL_dK, X, X2, target):
         if X2 == None:
@@ -176,25 +249,6 @@ class TreeKernel(Kernpart):
                                 dK_dbranch += b 
         target += [dK_ddecay * s, dK_dbranch * s]
 
-
-    def delta(self, node1, node2):
-        # zeroth case -> leaves
-        if type(node1) == str or type(node2) == str:
-            return 0
-        # first case
-        if node1.node != node2.node:
-            return 0
-        if node1.productions()[0] != node2.productions()[0]:
-            return 0
-        # second case -> preterms
-        if node1.height() == 2 and node2.height() == 2:
-            return self.decay
-        # third case
-        result = self.decay
-        for i, child in enumerate(node1): #node2 has the same children
-            result *= (self.branch + self.delta(node1[i], node2[i]))
-        return result
-
     def delta_cache(self, node1, node2, key):
         # zeroth case -> leaves
         if type(node1) == str or type(node2) == str:
@@ -219,35 +273,6 @@ class TreeKernel(Kernpart):
             result *= (self.branch + self.cache[child_key])
         self.cache[key] = result
         return result
-
-    def delta_params(self, node1, node2):
-        # zeroth case -> leaves
-        if type(node1) == str or type(node2) == str:
-            return (0, 0)
-        # first case
-        if node1.node != node2.node:
-            return (0, 0)
-        if node1.productions()[0] != node2.productions()[0]:
-            return (0, 0)
-        # second case -> preterms
-        if node1.height() == 2 and node2.height() == 2:
-            return (1, 0)
-        # third case
-        prod = 1
-        sum_delta = 0
-        sum_decay = 0
-        sum_branch = 0
-        for i, child in enumerate(node1): #node2 has the same children
-            g = self.branch + self.delta(node1[i], node2[i])
-            prod *= g
-            sum_delta += g
-            d, b = self.delta_params(node1[i], node2[i])
-            sum_decay += d
-            sum_branch += (1 + b)
-        h = (prod * self.decay) / float(sum_delta)
-        ddecay = prod + (h * sum_decay)
-        dbranch = h * sum_branch
-        return (ddecay, dbranch)
 
     def delta_params_cache(self, node1, node2, key):
         # zeroth case -> leaves
