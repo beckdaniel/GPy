@@ -345,12 +345,17 @@ class TreeKernel(Kernpart):
     def K_fast(self, X, X2, target):
         if X2 == None:
             X2 = X
+            symmetrize = True
+        else:
+            symmetrize = False
         # hack: we are going to calculate the gradients too
         # and store them for later use
         self.ddecay_results = np.zeros(shape=(len(X), len(X2)))
         self.dbranch_results = np.zeros(shape=(len(X), len(X2)))
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
+                if symmetrize and i > j:
+                    continue
                 try:
                     t1 = self.tree_cache[x1[0]]
                 except KeyError:
@@ -373,6 +378,11 @@ class TreeKernel(Kernpart):
                 target[i][j] += self.delta_result
                 self.ddecay_results[i][j] = self.ddecay
                 self.dbranch_results[i][j] = self.dbranch
+                if symmetrize and i != j:
+                    target[j][i] += self.delta_result
+                    self.ddecay_results[j][i] = self.ddecay
+                    self.dbranch_results[j][i] = self.dbranch
+                
 
     def Kdiag_fast(self, X, target):
         pass
