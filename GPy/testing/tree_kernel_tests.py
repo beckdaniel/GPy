@@ -140,31 +140,31 @@ class BasicTreeKernelTests(unittest.TestCase):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
         tk = TreeKernel()
-        self.assertEqual(tk.delta_params_naive(node1,node2), (6,2))
+        self.assertEqual(tk.delta_params_naive(node1,node2), (8,4))
 
     def test_treekernel_deltaparams6(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
         tk = TreeKernel(branch=0.5)
-        self.assertEqual(tk.delta_params_naive(node1,node2), (3.75, 1.5))
+        self.assertEqual(tk.delta_params_naive(node1,node2), (5.25, 3))
     
     def test_treekernel_deltaparams7(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
         tk = TreeKernel(decay=0.5)
-        self.assertEqual(tk.delta_params_naive(node1,node2), (3, 0.75))
+        self.assertEqual(tk.delta_params_naive(node1,node2), (3.75, 1.5))
 
     def test_treekernel_deltaparams8(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
         tk = TreeKernel(decay=0.5, branch=0.5)
-        self.assertEqual(tk.delta_params_naive(node1,node2), (1.5, 0.5))
+        self.assertEqual(tk.delta_params_naive(node1,node2), (2, 1))
 
     def test_treekernel_deltaparams9(self):
         node1 = nltk.Tree('(S (NP NS) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
         tk = TreeKernel()
-        self.assertEqual(tk.delta_params_naive(node1,node2), (8/3. , 4/3.))
+        self.assertEqual(tk.delta_params_naive(node1,node2), (3, 3))
 
     def test_treekernel_kernel1(self):
         tk = GPy.kern.TreeKernel()
@@ -185,7 +185,7 @@ class BasicTreeKernelTests(unittest.TestCase):
         X = np.array([['(S (NP a) (VP v))']], dtype=object)
         X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
         k = tk.dK_dtheta(1, X, X2)
-        self.assertTrue((k == [2,1]).all())
+        self.assertTrue((k == [2,2]).all())
 
     def test_treekernel_kernel4(self):
         tk = GPy.kern.TreeKernel()
@@ -207,6 +207,48 @@ class BasicTreeKernelTests(unittest.TestCase):
                            [2,1,15,0],
                            [0,0,0,3]])
         self.assertTrue((k == result).all())
+
+
+class GradientTreeKernelTests(unittest.TestCase):
+    """
+    A set of tests that compare results of dK_dtheta with
+    numerical approximations.
+    """
+    def test_treekernel_grad1(self):
+        tk = GPy.kern.TreeKernel(mode="naive")
+        X = np.array([['(S (NP a) (VP v))']], dtype=object)
+        X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
+
+        h = 0.00001
+        #target = [0,0]
+        #print tk._get_params()
+        tk2 = TreeKernel(mode="naive")
+        #print tk2.delta_params_naive(nltk.Tree(X[0][0]), nltk.Tree(X2[0][0]))
+        dk_dt = tk.dK_dtheta(1, X, X2)
+
+        tk._set_params([1,1-h])
+        k_b1 = tk.K(X, X2)
+        tk._set_params([1,1+h])
+        k_b2 = tk.K(X, X2)
+
+        tk._set_params([1-h,1])
+        k_d1 = tk.K(X, X2)
+        tk._set_params([1+h,1])
+        k_d2 = tk.K(X, X2)
+
+        #print k_d1
+        #print k_d2
+        #print k_b1
+        #print k_b2
+
+        tk._set_params([1,1])
+        #print tk.K(X, X2)
+        
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        #print approx
+        #print dk_dt
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
 
 
 class CacheTreeKernelTests(unittest.TestCase):
@@ -248,14 +290,18 @@ class CacheTreeKernelTests(unittest.TestCase):
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
     def test_treekernel_deltaparams_cache3(self):
-        self.tk_n._set_params([1,0.])
-        self.tk_c._set_params([1,0.])
+        self.tk_n._set_params([1,0.1])
+        self.tk_c._set_params([1,0.1])
         self.tk_n.K(self.X, None, self.tgt_n)
         self.tk_c.K(self.X, None, self.tgt_c)
         self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
         self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
+        #print self.tgt_hyp_n
+        #print self.tgt_hyp_c
         self.assertTrue((self.tgt_n == self.tgt_c).all())
-        self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
+        self.assertAlmostEqual(self.tgt_hyp_n[0], self.tgt_hyp_c[0])
+        self.assertAlmostEqual(self.tgt_hyp_n[1], self.tgt_hyp_c[1])
+        #self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
     def test_treekernel_deltaparams_cache4(self):
         self.tk_n._set_params([0.3,1])
@@ -394,15 +440,35 @@ class ProfilingTreeKernelTests(unittest.TestCase):
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
         #X = X[:5]
-        Y = np.array([[(a+10)*5] for a in range(20)])
+        Y = np.array([[(a+10)*5] for a in range(40)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         import cProfile
         m.constrain_positive('')
-        cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
-                        globals(), {'m': m, 'X': X}, sort="cumulative")
+        #cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
+        #                globals(), {'m': m, 'X': X}, sort="cumulative")
         print m
         print m.predict(X)[0]
 
