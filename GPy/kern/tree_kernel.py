@@ -37,9 +37,6 @@ class TreeKernel(Kernpart):
             self.K = self.K_fast
             self.Kdiag = self.Kdiag_cache
             self.dK_dtheta = self.dK_dtheta_cache
-        self.cache = {}
-        self.cache_ddecay = {}
-        self.cache_dbranch = {}
         
     def _get_params(self):
         return np.hstack((self.decay, self.branch))
@@ -340,59 +337,85 @@ class TreeKernel(Kernpart):
     #
     # These methods also use DP but have an implementation
     # that rely less on NLTK methods (which are slow because
-    # they traverse the entire tree).
+    # they traverse the entire tree multiple times).
     ##############
 
     def K_fast(self, X, X2, target):
         if X2 == None:
             X2 = X
+        # hack: we are going to calculate the gradients too
+        self.ddecay_results = np.zeros(shape=(X.shape[0], X2.shape[0]))
+        self.dbranch_results = np.zeros(shape=(X.shape[0], X2.shape[0]))
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
                 t1 = nltk.Tree(x1[0])
                 t2 = nltk.Tree(x2[0])
-                print repr(t1)
-                print repr(t2)
+                #print repr(t1)
+                #print repr(t2)
                 self.delta_result = 0
+                self.ddecay = 0
+                self.dbranch = 0
                 self.cache = {} # DP
+                self.cache_ddecay = {}
+                self.cache_dbranch = {}
                 self.delta_fast(t1, t2, ((),()))
+                #print "DELTA RESULT: %f" % self.delta_result
+                #print self._get_params()
                 target[i][j] += self.delta_result
+                self.ddecay_results[i][j] = self.ddecay
+                self.dbranch_results[i][j] = self.dbranch
 
     def Kdiag_fast(self, X, target):
         pass
     
     def dK_dtheta_fast(self, dL_dK, X, X2, target):
-        pass
+        s_like = sum(dL_dK)
+        s_decay = sum(self.ddecay_results)
+        s_branch = sum(self.dbranch_results)
+        target += [s_like * s_decay, s_like * s_branch]
 
     def delta_fast(self, t1, t2, key):
         for i1, child1 in enumerate(t1):
             if type(child1) != str:
-                self.delta_fast(child1, t2, key)
+                child_key = (tuple(list(key[0]) + [i1]), key[1])
+                self.delta_fast(child1, t2, child_key)
         self.fill_cache(t1, t2, key)
             
     def fill_cache(self, t1, t2, key):
         for i2, child2 in enumerate(t2):
             if type(child2) != str:
-                self.fill_cache(t1, child2, key)
+                child_key = (key[0], tuple(list(key[1]) + [i2]))
+                self.fill_cache(t1, child2, child_key)
         # DO STUFF
-        print "T1: %s\tT2: %s" % (str(t1), str(t2))
-        
+        #print "T1: %s\tT2: %s\tKEY: %s" % (str(t1), str(t2), str(key))
+        # first case:
+        if t1.node != t2.node:
+            self.cache[key] = 0
+            self.cache_ddecay[key] = 0
+            self.cache_dbranch[key] = 0
+        elif t1.productions()[0] != t2.productions()[0]:
+            self.cache[key] = 0
+            self.cache_ddecay[key] = 0
+            self.cache_dbranch[key] = 0
+            
+        # second case:
+        elif type(t1[0]) == str:
+            self.cache[key] = self.decay
+            self.delta_result += self.decay
+            self.cache_ddecay[key] = 1
+            self.ddecay += 1
+            self.cache_dbranch[key] = 0
 
-    def delta_fast2(self, t1, t2, key):
-        if type(t1[0]) != str:
-            for i1, child1 in enumerate(t1):
-                self.delta_fast(child1, t2, key)
-                print "T1: %s\tT2: %s" % (str(child1), str(t2))
-            if type(t2[0]) != str:
-                for i2, child2 in enumerate(t2):
-                    self.delta_fast(t1, child2, key)
-                    print "T1: %s\tT2: %s" % (str(t1), str(child2))
+        # third case:
         else:
-            if type(t2[0]) != str:
-                for i2, child2 in enumerate(t2):
-                    self.delta_fast(t1, child2, key)
-                    print "T1: %s\tT2: %s" % (str(t1), str(child2))
-
-
+            result = self.decay
+            for i, child in enumerate(t1): #t2 has the same children
+                child_key = (tuple(list(key[0]) + [i]),
+                             tuple(list(key[1]) + [i]))
+                result *= (self.branch + self.cache[child_key])
+            self.cache[key] = result
+            self.delta_result += result
+        #print "RESULT: %f" % self.cache[key]
 
 
     def delta_params_fast(self, node1, node2, key):

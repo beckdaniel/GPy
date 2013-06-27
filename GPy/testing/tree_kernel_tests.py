@@ -329,14 +329,16 @@ class FastTreeKernelTests(unittest.TestCase):
         self.tgt_f = np.copy(self.tgt_n)
         self.tgt_hyp_n = np.array([0., 0])
         self.tgt_hyp_f = np.array([0., 0])
-        #self.X = [['(S NP)'], ['(S NP VP)'], ['(S (NP N) (VP V))'], ['(S (NP NS) (VP V))']]
-        self.X = [['(S (NP (DET a) (N b)) (VP (V c)))'], ['(S (NP (N b)) (VP (V d) (ADV e)))']]
+        self.X = [['(S NP)'], ['(S NP VP)'], ['(S (NP N) (VP V))'], ['(S (NP NS) (VP V))']]
+        #self.X = [['(S (NP (DET a) (N b)) (VP (V c)))'], ['(S (NP (N b)) (VP (V d) (ADV e)))']]
 
     def test_treekernel_deltaparams_fast1(self):
         self.tk_n.K(self.X, None, self.tgt_n)
         self.tk_f.K(self.X, None, self.tgt_f)
         self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
         self.tk_f.dK_dtheta(1, self.X, None, self.tgt_hyp_f)
+        print self.tgt_n
+        print self.tgt_f
         self.assertTrue((self.tgt_n == self.tgt_f).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_f).all())
 
@@ -346,7 +348,7 @@ class ProfilingTreeKernelTests(unittest.TestCase):
     A profiling test, to check for performance bottlenecks.
     """
     def test_treekernel_profiling1(self):
-        tk = GPy.kern.TreeKernel(mode="cache")
+        tk = GPy.kern.TreeKernel(mode="fast")
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
@@ -371,8 +373,8 @@ class ProfilingTreeKernelTests(unittest.TestCase):
         m = GPy.models.GPRegression(X, Y, kernel=k)
         import cProfile
         m.constrain_positive('')
-        #cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
-        #                globals(), {'m': m, 'X': X}, sort="cumulative")
+        cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
+                        globals(), {'m': m, 'X': X}, sort="cumulative")
 
 
 if __name__ == "__main__":
