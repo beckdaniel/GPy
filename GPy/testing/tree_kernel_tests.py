@@ -342,6 +342,29 @@ class FastTreeKernelTests(unittest.TestCase):
         self.assertTrue((self.tgt_n == self.tgt_f).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_f).all())
 
+    def test_treekernel_opt_fast1(self):
+        tk1 = GPy.kern.TreeKernel(mode="naive")
+        rbf1 = GPy.kern.rbf(2, ARD=True)
+        k1 = tk1.add(rbf1, tensor=True)
+        k1.input_slices = [slice(0,1),slice(1,3)]
+
+        tk2 = GPy.kern.TreeKernel(mode="fast")
+        rbf2 = GPy.kern.rbf(2, ARD=True)
+        k2 = tk2.add(rbf2, tensor=True)
+        k2.input_slices = [slice(0,1),slice(1,3)]
+
+        X = np.array([['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
+                     dtype=object)
+        Y = Y = np.array([[(a+10)*5] for a in range(5)])
+        m1 = GPy.models.GPRegression(X, Y, kernel=k1)
+        m2 = GPy.models.GPRegression(X, Y, kernel=k2)
+        m1.optimize(optimizer="tnc")
+        m2.optimize(optimizer="tnc")
+        self.assertTrue((m1._get_params() == m2._get_params()).all())
 
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
@@ -366,15 +389,22 @@ class ProfilingTreeKernelTests(unittest.TestCase):
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
+                      ['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
         #X = X[:5]
-        Y = np.array([[(a+10)*5] for a in range(15)])
+        Y = np.array([[(a+10)*5] for a in range(20)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         import cProfile
         m.constrain_positive('')
         cProfile.runctx("m.optimize(optimizer='tnc', max_f_eval=100, messages=True)", 
                         globals(), {'m': m, 'X': X}, sort="cumulative")
+        print m
+        print m.predict(X)[0]
 
 
 if __name__ == "__main__":

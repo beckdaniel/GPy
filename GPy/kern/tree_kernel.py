@@ -36,7 +36,7 @@ class TreeKernel(Kernpart):
         elif mode == "fast":
             self.K = self.K_fast
             self.Kdiag = self.Kdiag_cache
-            self.dK_dtheta = self.dK_dtheta_cache
+            self.dK_dtheta = self.dK_dtheta_fast
         
     def _get_params(self):
         return np.hstack((self.decay, self.branch))
@@ -344,8 +344,8 @@ class TreeKernel(Kernpart):
         if X2 == None:
             X2 = X
         # hack: we are going to calculate the gradients too
-        self.ddecay_results = np.zeros(shape=(X.shape[0], X2.shape[0]))
-        self.dbranch_results = np.zeros(shape=(X.shape[0], X2.shape[0]))
+        self.ddecay_results = np.zeros(shape=(len(X), len(X2)))
+        self.dbranch_results = np.zeros(shape=(len(X), len(X2)))
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
                 t1 = nltk.Tree(x1[0])
@@ -369,9 +369,9 @@ class TreeKernel(Kernpart):
         pass
     
     def dK_dtheta_fast(self, dL_dK, X, X2, target):
-        s_like = sum(dL_dK)
-        s_decay = sum(self.ddecay_results)
-        s_branch = sum(self.dbranch_results)
+        s_like = np.sum(dL_dK)
+        s_decay = np.sum(self.ddecay_results)
+        s_branch = np.sum(self.dbranch_results)
         target += [s_like * s_decay, s_like * s_branch]
 
     def delta_fast(self, t1, t2, key):
@@ -408,13 +408,37 @@ class TreeKernel(Kernpart):
 
         # third case:
         else:
-            result = self.decay
+            prod = 1
+            sum_delta = 0
+            sum_decay = 0
+            sum_branch = 0
+            d_result = self.decay
             for i, child in enumerate(t1): #t2 has the same children
                 child_key = (tuple(list(key[0]) + [i]),
                              tuple(list(key[1]) + [i]))
-                result *= (self.branch + self.cache[child_key])
-            self.cache[key] = result
-            self.delta_result += result
+                g = self.branch + self.cache[child_key]
+                prod *= g
+                sum_delta += g
+                d = self.cache_ddecay[child_key]
+                b = self.cache_dbranch[child_key]
+                sum_decay += d
+                sum_branch += (1 + b)
+                # update delta
+                d_result *= g
+                #result *= (self.branch + self.cache[child_key])
+            h = (prod * self.decay) / float(sum_delta)
+            # update delta
+            self.cache[key] = d_result
+            self.delta_result += d_result
+            # update ddecay
+            ddecay = prod + (h * sum_decay)
+            self.cache_ddecay[key] = ddecay
+            self.ddecay += ddecay
+            # update dbranch
+            dbranch = h * sum_branch
+            self.cache_dbranch[key] = dbranch
+            self.dbranch += dbranch
+
         #print "RESULT: %f" % self.cache[key]
 
 
