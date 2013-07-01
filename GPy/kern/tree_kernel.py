@@ -8,7 +8,7 @@ class TreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
     """
     
-    def __init__(self, decay=1, branch=1, mode="naive"):
+    def __init__(self, decay=1, branch=1, mode="naive", normalize=False):
         """blah
         """
         try:
@@ -21,6 +21,7 @@ class TreeKernel(Kernpart):
         self.name = 'tk'
         self.decay = decay
         self.branch = branch
+        self.normalize = normalize
         if mode == "mock":
             self.K = self.K_mock
             self.Kdiag = self.Kdiag_mock
@@ -343,15 +344,25 @@ class TreeKernel(Kernpart):
     ##############
 
     def K_fast(self, X, X2, target):
+        # If X == X2, K is symmetric
         if X2 == None:
             X2 = X
             symmetrize = True
         else:
+            #print X
+            #print X2
             symmetrize = False
+
+        # We are going to store everything first and in the end we
+        # normalize it before adding to target.
         # hack: we are going to calculate the gradients too
-        # and store them for later use
+        # and store them for later use.
+        self.K_results = np.zeros(shape=(len(X), len(X2)))
         self.ddecay_results = np.zeros(shape=(len(X), len(X2)))
         self.dbranch_results = np.zeros(shape=(len(X), len(X2)))
+        K_results = np.zeros(shape=(len(X), len(X2)))
+        ddecays = np.zeros(shape=(len(X), len(X2)))
+        dbranches = np.zeros(shape=(len(X), len(X2)))
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
                 if symmetrize and i > j:
@@ -366,8 +377,6 @@ class TreeKernel(Kernpart):
                 except KeyError:
                     t2 = nltk.Tree(x2[0])
                     self.tree_cache[x2[0]] = t2
-                #t1 = nltk.Tree(x1[0])
-                #t2 = nltk.Tree(x2[0])
                 self.delta_result = 0
                 self.ddecay = 0
                 self.dbranch = 0
@@ -375,13 +384,62 @@ class TreeKernel(Kernpart):
                 self.cache_ddecay = {}
                 self.cache_dbranch = {}
                 self.delta_fast(t1, t2, ((),()))
-                target[i][j] += self.delta_result
-                self.ddecay_results[i][j] = self.ddecay
-                self.dbranch_results[i][j] = self.dbranch
+                #target[i][j] += self.delta_result
+                K_results[i][j] = self.delta_result
+                ddecays[i][j] = self.ddecay
+                dbranches[i][j] = self.dbranch
                 if symmetrize and i != j:
-                    target[j][i] += self.delta_result
-                    self.ddecay_results[j][i] = self.ddecay
-                    self.dbranch_results[j][i] = self.dbranch
+                    K_results[j][i] = self.delta_result
+                    #target[j][i] += self.delta_result
+                    ddecays[j][i] = self.ddecay
+                    dbranches[j][i] = self.dbranch
+        #if not symmetrize:
+        #    print X
+        #    print X2
+        #    print K_results
+
+        # Now we normalize everything
+        if self.normalize:
+            for i, x1 in enumerate(X):
+                for j, x2 in enumerate(X2):
+                    # skip if symmetrical
+                    if symmetrize and i > j:
+                        continue
+
+                    # diagonals, gradients are zero
+                    if symmetrize and i == j:
+                        target[i][j] += 1
+                        continue
+
+                    # calculate some intermediate values
+                    fac = K_results[i][i] * K_results[j][j]
+                    root = np.sqrt(fac)
+                    denom = 2 * fac
+                    K_norm = K_results[i][j] / root
+
+                    # update K
+                    target[i][j] += K_norm
+
+                    # update ddecay
+                    self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
+                                                 ((K_norm / denom) *
+                                                  ((ddecays[i][i] * K_results[j][j]) +
+                                                   (K_results[i][i] * ddecays[j][j]))))
+                    self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
+                                                  ((K_norm / denom) *
+                                                   ((dbranches[i][i] * K_results[j][j]) +
+                                                    (K_results[i][i] * dbranches[j][j]))))
+                    if symmetrize:
+                        target[j][i] += K_norm
+                        self.ddecay_results[j][i] = self.ddecay_results[i][j]
+                        self.dbranch_results[j][i] = self.dbranch_results[i][j]
+            
+            #import ipdb
+            #ipdb.set_trace()
+        else:
+            target += K_results
+            self.ddecay_results = ddecays
+            self.dbranch_results = dbranches
                 
 
     def Kdiag_fast(self, X, target):
@@ -437,7 +495,6 @@ class TreeKernel(Kernpart):
 
         # fourth case, non-preterms with same children, we do the recursion
         prod = 1
-        #sum_delta = 0
         sum_decay = 0
         sum_branch = 0
         d_result = self.decay
@@ -446,14 +503,12 @@ class TreeKernel(Kernpart):
                          tuple(list(key[1]) + [i]))
             g = float(self.branch + self.cache[child_key])
             prod *= g
-            #sum_delta += g
             d = self.cache_ddecay[child_key]
             b = self.cache_dbranch[child_key]
             sum_decay += (d / g)
             sum_branch += ((1 + b) / g)
-            # update delta
             d_result *= g
-        h = (prod * self.decay)# / float(sum_delta)
+        h = (prod * self.decay)
         # update delta
         self.cache[key] = d_result
         self.delta_result += d_result
