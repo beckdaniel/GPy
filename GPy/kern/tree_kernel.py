@@ -402,37 +402,42 @@ class TreeKernel(Kernpart):
         if self.normalize:
             for i, x1 in enumerate(X):
                 for j, x2 in enumerate(X2):
-                    # skip if symmetrical
-                    if symmetrize and i > j:
-                        continue
+                    if symmetrize:
+                        if i > j:
+                            continue
 
                     # diagonals, gradients are zero
-                    if symmetrize and i == j:
-                        target[i][j] += 1
-                        continue
+                        if i == j:
+                            target[i][j] += 1
+                            continue
 
                     # calculate some intermediate values
-                    fac = K_results[i][i] * K_results[j][j]
-                    root = np.sqrt(fac)
-                    denom = 2 * fac
-                    K_norm = K_results[i][j] / root
+                        fac = K_results[i][i] * K_results[j][j]
+                        root = np.sqrt(fac)
+                        denom = 2 * fac
+                        K_norm = K_results[i][j] / root
 
                     # update K
-                    target[i][j] += K_norm
+                        target[i][j] += K_norm
 
                     # update ddecay
-                    self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
-                                                 ((K_norm / denom) *
-                                                  ((ddecays[i][i] * K_results[j][j]) +
-                                                   (K_results[i][i] * ddecays[j][j]))))
-                    self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
-                                                  ((K_norm / denom) *
-                                                   ((dbranches[i][i] * K_results[j][j]) +
-                                                    (K_results[i][i] * dbranches[j][j]))))
-                    if symmetrize:
+                        self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
+                                                     ((K_norm / denom) *
+                                                      ((ddecays[i][i] * K_results[j][j]) +
+                                                       (K_results[i][i] * ddecays[j][j]))))
+                        self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
+                                                      ((K_norm / denom) *
+                                                       ((dbranches[i][i] * K_results[j][j]) +
+                                                        (K_results[i][i] * dbranches[j][j]))))
                         target[j][i] += K_norm
                         self.ddecay_results[j][i] = self.ddecay_results[i][j]
                         self.dbranch_results[j][i] = self.dbranch_results[i][j]
+                    else:
+                        # we cannot use K_results, ddecays or dbranches here
+                        # because K is not symmetric. We need to calculate everything
+                        # from scratch.
+                        from exceptions import ValueError
+                        raise ValueError("PANIC: need to implement the non-symmetric case")
             
             #import ipdb
             #ipdb.set_trace()

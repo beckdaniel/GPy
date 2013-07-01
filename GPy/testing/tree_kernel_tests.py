@@ -477,17 +477,7 @@ class NormTreeKernelTests(unittest.TestCase):
         X = np.array([['(S (NP a) (VP v))'], ['(S (NP a) (VP c))']], dtype=object)
 
         h = 0.00001
-        #target = [0,0]
-        #print tk._get_params()
-        #tk2 = TreeKernel(mode="naive")
-        #print tk2.delta_params_naive(nltk.Tree(X[0][0]), nltk.Tree(X2[0][0]))
-        #t = [[0]]
-        #tk.parts[0].K(X, X2, t)
-        #print t
         k = tk.K(X)
-        print "K:",
-        print k
-
         dk_dt = tk.dK_dtheta(1, X)
 
         tk._set_params([1,1-h])
@@ -500,18 +490,39 @@ class NormTreeKernelTests(unittest.TestCase):
         tk._set_params([1+h,1])
         k_d2 = tk.K(X)
 
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
+
+    def test_treekernel_norm_grad3(self):
+        tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
+        X = np.array([['(S NP VP)'],
+                      ['(S (NP N) (VP V))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+
+        h = 0.00001
+        k = tk.K(X)
+        dk_dt = tk.dK_dtheta(1, X)
+
+        tk._set_params([1,1-h])
+        k_b1 = tk.K(X)
+        tk._set_params([1,1+h])
+        k_b2 = tk.K(X)
+
+        tk._set_params([1-h,1])
+        k_d1 = tk.K(X)
+        tk._set_params([1+h,1])
+        k_d2 = tk.K(X)
+    
+        print dk_dt
         print k_d1
         print k_d2
-        print k_b1
-        print k_b2
-        print dk_dt
+    
 
-        tk._set_params([1,1])
-        #print tk.K(X, X2)
-        
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
-        #print approx
-        #print dk_dt
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
