@@ -413,6 +413,16 @@ class FastTreeKernelTests(unittest.TestCase):
         m2.optimize(optimizer="tnc")
         self.assertTrue((m1._get_params() == m2._get_params()).all())
 
+    def test_treekernel_Kdiag_fast(self):
+        tk = GPy.kern.TreeKernel(mode="fast", normalize=False)
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        diag = tk.Kdiag(X)
+        self.assertTrue(([6,6,15,24,37] == diag).all())
 
 class NormTreeKernelTests(unittest.TestCase):
     """
@@ -525,6 +535,18 @@ class NormTreeKernelTests(unittest.TestCase):
         print approx
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
+
+    def test_treekernel_Kdiag_norm(self):
+        tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        diag = tk.Kdiag(X)
+        print diag
+        self.assertTrue(([1,1,1,1,1] == diag).all())
 
 
 class ProfilingTreeKernelTests(unittest.TestCase):

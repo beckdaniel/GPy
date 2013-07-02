@@ -36,7 +36,7 @@ class TreeKernel(Kernpart):
             self.dK_dtheta = self.dK_dtheta_cache
         elif mode == "fast":
             self.K = self.K_fast
-            self.Kdiag = self.Kdiag_cache
+            self.Kdiag = self.Kdiag_fast
             self.dK_dtheta = self.dK_dtheta_fast
             self.tree_cache = {}
         
@@ -384,7 +384,7 @@ class TreeKernel(Kernpart):
         self.dbranch_results = np.zeros(shape=(len(X), len(X2)))
         if self.normalize:
             if symmetrize:
-                self._normalize_K_sym(X, X2, K_results, ddecays, dbranches, target)
+                self._normalize_K_sym(X, K_results, ddecays, dbranches, target)
             else:
                 # we cannot use K_results, ddecays or dbranches here
                 # because K is not symmetric. We need to calculate everything
@@ -396,10 +396,40 @@ class TreeKernel(Kernpart):
             self.ddecay_results = ddecays
             self.dbranch_results = dbranches
                 
-
     def Kdiag_fast(self, X, target):
-        pass
+        # We are going to calculate gradients too and
+        # save them for later use
+
+        if self.normalize:
+            target += np.ones(shape=(len(X),))
+            #from exceptions import ValueError
+            #raise ValueError("PANIC: need to implement normalized Kdiag")
+        else:
+            K_vec, ddecay_vec, dbranch_vec = self._diag_calculations(X)
+            target += K_vec
+            self.ddecay_diag = ddecay_vec
+            self.dbranch_diag = dbranch_vec
     
+    def _diag_calculations(self, X):
+        K_vec = np.zeros(shape=(len(X),))
+        ddecay_vec = np.zeros(shape=(len(X),))
+        dbranch_vec = np.zeros(shape=(len(X),))
+        for i, x1 in enumerate(X):
+            t1, t2 = self._get_trees(x1, x1)
+            self.delta_result = 0
+            self.ddecay = 0
+            self.dbranch = 0
+            self.cache = {} # DP
+            self.cache_ddecay = {}
+            self.cache_dbranch = {}
+            # Recursive calculation happens here.
+            self.delta_fast(t1, t2, ((),()))
+            # End recursive calculation
+            K_vec[i] = self.delta_result
+            ddecay_vec[i] = self.ddecay
+            dbranch_vec[i] = self.dbranch
+        return (K_vec, ddecay_vec, dbranch_vec)
+
     def dK_dtheta_fast(self, dL_dK, X, X2, target):
         s_like = np.sum(dL_dK)
         s_decay = np.sum(self.ddecay_results)
@@ -494,24 +524,23 @@ class TreeKernel(Kernpart):
             self.tree_cache[x2[0]] = t2
         return (t1, t2)
 
-    def _normalize_K_sym(self, X, X2, K_results, ddecays, dbranches, target):
+    def _normalize_K_sym(self, X, K_results, ddecays, dbranches, target):
         for i, x1 in enumerate(X):
-            for j, x2 in enumerate(X2):
-                #if symmetrize:
+            for j, x2 in enumerate(X):
                 if i > j:
                     continue
-                    # diagonals, gradients are zero
+                # diagonals, gradients are zero
                 if i == j:
                     target[i][j] += 1
                     continue
-                    # calculate some intermediate values
+                # calculate some intermediate values
                 fac = K_results[i][i] * K_results[j][j]
                 root = np.sqrt(fac)
                 denom = 2 * fac
                 K_norm = K_results[i][j] / root
-                    # update K
+                # update K
                 target[i][j] += K_norm
-                    # update ddecay
+                # update ddecay
                 self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
                                              ((K_norm / denom) *
                                               ((ddecays[i][i] * K_results[j][j]) +
