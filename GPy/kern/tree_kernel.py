@@ -622,11 +622,8 @@ class FastTreeKernel(Kernpart):
             for j, x2 in enumerate(X2):
                 if symmetrize and i > j:
                     continue
-                #t1, t2 = self._get_trees(x1, x2)
                 node_list = self._get_node_list(x1, x2)
-                # Recursive calculation happens here.
                 self.delta_fast(node_list)
-                # End recursive calculation
                 K_results[i][j] = self.delta_result
                 ddecays[i][j] = self.ddecay
                 dbranches[i][j] = self.dbranch
@@ -691,6 +688,7 @@ class FastTreeKernel(Kernpart):
         self.cache = defaultdict(int) # DP
         self.cache_ddecay = defaultdict(int)
         self.cache_dbranch = defaultdict(int)
+        #print node_list
         for node_pair in node_list:
             node1 = node_pair[0]
             node2 = node_pair[1]
