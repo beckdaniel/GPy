@@ -361,6 +361,7 @@ class IntegrationTreeKernelTests(unittest.TestCase):
         m.constrain_positive('')
         m.optimize(max_f_eval=10)
 
+
 class FastTreeKernelTests(unittest.TestCase):
     """
     Tests for the fast kernel version
@@ -429,9 +430,9 @@ class NormTreeKernelTests(unittest.TestCase):
                            [3,6,1,0],
                            [2,1,15,0],
                            [0,0,0,3]])
-        print k
-        print tk.parts[0].ddecay_results
-        print tk.parts[0].dbranch_results
+        #print k
+        #print tk.parts[0].ddecay_results
+        #print tk.parts[0].dbranch_results
         self.assertTrue((k == result).all())
 
     def test_treekernel_norm_grad1(self):
@@ -496,8 +497,8 @@ class NormTreeKernelTests(unittest.TestCase):
 
     def test_treekernel_norm_grad3(self):
         tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
-        X = np.array([['(S NP VP)'],
-                      ['(S (NP N) (VP V))'],
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
@@ -520,9 +521,8 @@ class NormTreeKernelTests(unittest.TestCase):
         print dk_dt
         print k_d1
         print k_d2
-    
-
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        print approx
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 

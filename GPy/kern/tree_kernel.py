@@ -349,17 +349,10 @@ class TreeKernel(Kernpart):
             X2 = X
             symmetrize = True
         else:
-            #print X
-            #print X2
             symmetrize = False
 
         # We are going to store everything first and in the end we
         # normalize it before adding to target.
-        # hack: we are going to calculate the gradients too
-        # and store them for later use.
-        self.K_results = np.zeros(shape=(len(X), len(X2)))
-        self.ddecay_results = np.zeros(shape=(len(X), len(X2)))
-        self.dbranch_results = np.zeros(shape=(len(X), len(X2)))
         K_results = np.zeros(shape=(len(X), len(X2)))
         ddecays = np.zeros(shape=(len(X), len(X2)))
         dbranches = np.zeros(shape=(len(X), len(X2)))
@@ -367,80 +360,37 @@ class TreeKernel(Kernpart):
             for j, x2 in enumerate(X2):
                 if symmetrize and i > j:
                     continue
-                try:
-                    t1 = self.tree_cache[x1[0]]
-                except KeyError:
-                    t1 = nltk.Tree(x1[0])
-                    self.tree_cache[x1[0]] = t1
-                try:
-                    t2 = self.tree_cache[x2[0]]
-                except KeyError:
-                    t2 = nltk.Tree(x2[0])
-                    self.tree_cache[x2[0]] = t2
+                t1, t2 = self._get_trees(x1, x2)                
                 self.delta_result = 0
                 self.ddecay = 0
                 self.dbranch = 0
                 self.cache = {} # DP
                 self.cache_ddecay = {}
                 self.cache_dbranch = {}
+                # Recursive calculation happens here.
                 self.delta_fast(t1, t2, ((),()))
-                #target[i][j] += self.delta_result
+                # End recursive calculation
                 K_results[i][j] = self.delta_result
                 ddecays[i][j] = self.ddecay
                 dbranches[i][j] = self.dbranch
                 if symmetrize and i != j:
                     K_results[j][i] = self.delta_result
-                    #target[j][i] += self.delta_result
                     ddecays[j][i] = self.ddecay
                     dbranches[j][i] = self.dbranch
-        #if not symmetrize:
-        #    print X
-        #    print X2
-        #    print K_results
-
         # Now we normalize everything
+        # hack: we are going to calculate the gradients too
+        # and store them for later use.
+        self.ddecay_results = np.zeros(shape=(len(X), len(X2)))
+        self.dbranch_results = np.zeros(shape=(len(X), len(X2)))
         if self.normalize:
-            for i, x1 in enumerate(X):
-                for j, x2 in enumerate(X2):
-                    if symmetrize:
-                        if i > j:
-                            continue
-
-                    # diagonals, gradients are zero
-                        if i == j:
-                            target[i][j] += 1
-                            continue
-
-                    # calculate some intermediate values
-                        fac = K_results[i][i] * K_results[j][j]
-                        root = np.sqrt(fac)
-                        denom = 2 * fac
-                        K_norm = K_results[i][j] / root
-
-                    # update K
-                        target[i][j] += K_norm
-
-                    # update ddecay
-                        self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
-                                                     ((K_norm / denom) *
-                                                      ((ddecays[i][i] * K_results[j][j]) +
-                                                       (K_results[i][i] * ddecays[j][j]))))
-                        self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
-                                                      ((K_norm / denom) *
-                                                       ((dbranches[i][i] * K_results[j][j]) +
-                                                        (K_results[i][i] * dbranches[j][j]))))
-                        target[j][i] += K_norm
-                        self.ddecay_results[j][i] = self.ddecay_results[i][j]
-                        self.dbranch_results[j][i] = self.dbranch_results[i][j]
-                    else:
-                        # we cannot use K_results, ddecays or dbranches here
-                        # because K is not symmetric. We need to calculate everything
-                        # from scratch.
-                        from exceptions import ValueError
-                        raise ValueError("PANIC: need to implement the non-symmetric case")
-            
-            #import ipdb
-            #ipdb.set_trace()
+            if symmetrize:
+                self._normalize_K_sym(X, X2, K_results, ddecays, dbranches, target)
+            else:
+                # we cannot use K_results, ddecays or dbranches here
+                # because K is not symmetric. We need to calculate everything
+                # from scratch.
+                from exceptions import ValueError
+                raise ValueError("PANIC: need to implement the non-symmetric case")
         else:
             target += K_results
             self.ddecay_results = ddecays
@@ -525,3 +475,51 @@ class TreeKernel(Kernpart):
         dbranch = h * sum_branch
         self.cache_dbranch[key] = dbranch
         self.dbranch += dbranch
+
+    def _get_trees(self, x1, x2):
+        """
+        Return the trees corresponding to input strings
+        in the tree cache. If one do not exist, it builds
+        a new one and store it in the cache.
+        """
+        try:
+            t1 = self.tree_cache[x1[0]]
+        except KeyError:
+            t1 = nltk.Tree(x1[0])
+            self.tree_cache[x1[0]] = t1
+        try:
+            t2 = self.tree_cache[x2[0]]
+        except KeyError:
+            t2 = nltk.Tree(x2[0])
+            self.tree_cache[x2[0]] = t2
+        return (t1, t2)
+
+    def _normalize_K_sym(self, X, X2, K_results, ddecays, dbranches, target):
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                #if symmetrize:
+                if i > j:
+                    continue
+                    # diagonals, gradients are zero
+                if i == j:
+                    target[i][j] += 1
+                    continue
+                    # calculate some intermediate values
+                fac = K_results[i][i] * K_results[j][j]
+                root = np.sqrt(fac)
+                denom = 2 * fac
+                K_norm = K_results[i][j] / root
+                    # update K
+                target[i][j] += K_norm
+                    # update ddecay
+                self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
+                                             ((K_norm / denom) *
+                                              ((ddecays[i][i] * K_results[j][j]) +
+                                               (K_results[i][i] * ddecays[j][j]))))
+                self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
+                                              ((K_norm / denom) *
+                                               ((dbranches[i][i] * K_results[j][j]) +
+                                                (K_results[i][i] * dbranches[j][j]))))
+                target[j][i] += K_norm
+                self.ddecay_results[j][i] = self.ddecay_results[i][j]
+                self.dbranch_results[j][i] = self.dbranch_results[i][j]
