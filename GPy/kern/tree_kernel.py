@@ -572,7 +572,7 @@ class TreeKernel(Kernpart):
                                                 (X_K[i] * X2_dbranch[j]))))
 
 
-class FastTreeKernel(TreeKernel):
+class FastTreeKernel(Kernpart):
     """
     FTK kernel by Moschitti (2006)
     """
@@ -589,14 +589,24 @@ class FastTreeKernel(TreeKernel):
         self.decay = decay
         self.branch = branch
         self.normalize = normalize
-        self.K = self.K_fast
-        self.Kdiag = self.Kdiag_fast
-        self.dK_dtheta = self.dK_dtheta_fast
+        #self.K = self.K_fast
+        #self.Kdiag = self.Kdiag_fast
+        #self.dK_dtheta = self.dK_dtheta_fast
         self.tree_cache = {}
         # A production cache, where we are going to store the node pairs
         self.node_cache = {}
 
-    def K_fast(self, X, X2, target):
+    def _get_params(self):
+        return np.hstack((self.decay, self.branch))
+
+    def _set_params(self, x):
+        self.decay = x[0]
+        self.branch = x[1]
+
+    def _get_param_names(self):
+        return ['decay', 'branch']
+
+    def K(self, X, X2, target):
         # If X == X2, K is symmetric
         if X2 == None:
             X2 = X
@@ -638,6 +648,12 @@ class FastTreeKernel(TreeKernel):
             target += K_results
             self.ddecay_results = ddecays
             self.dbranch_results = dbranches
+
+    def dK_dtheta(self, dL_dK, X, X2, target):
+        s_like = np.sum(dL_dK)
+        s_decay = np.sum(self.ddecay_results)
+        s_branch = np.sum(self.dbranch_results)
+        target += [s_like * s_decay, s_like * s_branch]
 
     def _get_node_list(self, x1, x2):
         """
@@ -717,7 +733,7 @@ class FastTreeKernel(TreeKernel):
                 self.cache_dbranch[key] = dbranch
                 self.dbranch += dbranch
 
-    def Kdiag_fast(self, X, target):
+    def Kdiag(self, X, target):
         # We are going to calculate gradients too and
         # save them for later use
         if self.normalize:
@@ -749,3 +765,54 @@ class FastTreeKernel(TreeKernel):
             ddecay_vec[i] = self.ddecay
             dbranch_vec[i] = self.dbranch
         return (K_vec, ddecay_vec, dbranch_vec)
+
+    def _normalize_K_sym(self, X, K_results, ddecays, dbranches, target):
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X):
+                if i > j:
+                    continue
+                # diagonals, gradients are zero
+                if i == j:
+                    target[i][j] += 1
+                    continue
+                # calculate some intermediate values
+                fac = K_results[i][i] * K_results[j][j]
+                root = np.sqrt(fac)
+                denom = 2 * fac
+                K_norm = K_results[i][j] / root
+                # update K
+                target[i][j] += K_norm
+                # update ddecay
+                self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
+                                             ((K_norm / denom) *
+                                              ((ddecays[i][i] * K_results[j][j]) +
+                                               (K_results[i][i] * ddecays[j][j]))))
+                self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
+                                              ((K_norm / denom) *
+                                               ((dbranches[i][i] * K_results[j][j]) +
+                                                (K_results[i][i] * dbranches[j][j]))))
+                target[j][i] += K_norm
+                self.ddecay_results[j][i] = self.ddecay_results[i][j]
+                self.dbranch_results[j][i] = self.dbranch_results[i][j]
+
+    def _normalize_K(self, X, X2, K_results, ddecays, dbranches, target):
+        X_K, X_ddecay, X_dbranch = self._diag_calculations(X)
+        X2_K, X2_ddecay, X2_dbranch = self._diag_calculations(X2)
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                # calculate some intermediate values
+                fac = X_K[i] * X2_K[j]
+                root = np.sqrt(fac)
+                denom = 2 * fac
+                K_norm = K_results[i][j] / root
+                # update K
+                target[i][j] += K_norm
+                # update ddecay
+                self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
+                                             ((K_norm / denom) *
+                                              ((X_ddecay[i] * X2_K[j]) +
+                                               (X_K[i] * X2_ddecay[j]))))
+                self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
+                                              ((K_norm / denom) *
+                                               ((X_dbranch[i] * X2_K[j]) +
+                                                (X_K[i] * X2_dbranch[j]))))

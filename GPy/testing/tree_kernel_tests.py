@@ -635,6 +635,28 @@ class FastTreeKernelTests(unittest.TestCase):
         diag = tk.Kdiag(X)
         self.assertTrue(([1,1,1,1,1] == diag).all())
 
+    def test_ftk_Kdiag_optcompare(self):
+        tk = GPy.kern.FastTreeKernel()
+        tk2 = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        #Y = np.array([[(a)*5] for a in range(5)])
+        Y = np.array([[a] for a in range(5)])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        m.constrain_bounded('ftk',0.1,10)
+        m.constrain_positive('noise')
+        m.optimize(optimizer="tnc")
+        m2 = GPy.models.GPRegression(X, Y, kernel=tk2)
+        m2.constrain_bounded('tk',0.1,10)
+        m2.constrain_positive('noise')
+        m2.optimize(optimizer="tnc")
+        self.assertTrue((m._get_params() == m2._get_params()).all())
+        
+
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
     A profiling test, to check for performance bottlenecks.
