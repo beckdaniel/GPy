@@ -34,7 +34,7 @@ class TreeKernel(Kernpart):
             self.K = self.K_cache
             self.Kdiag = self.Kdiag_cache
             self.dK_dtheta = self.dK_dtheta_cache
-        elif mode == "fast":
+        elif mode == "opt":
             self.K = self.K_fast
             self.Kdiag = self.Kdiag_fast
             self.dK_dtheta = self.dK_dtheta_fast
@@ -549,8 +549,6 @@ class TreeKernel(Kernpart):
                 self.dbranch_results[j][i] = self.dbranch_results[i][j]
 
     def _normalize_K(self, X, X2, K_results, ddecays, dbranches, target):
-        #from exceptions import ValueError
-        #raise ValueError("PANIC: need to implement the non-symmetric case")
         X_K, X_ddecay, X_dbranch = self._diag_calculations(X)
         X2_K, X2_ddecay, X2_dbranch = self._diag_calculations(X2)
         for i, x1 in enumerate(X):
@@ -571,6 +569,26 @@ class TreeKernel(Kernpart):
                                               ((K_norm / denom) *
                                                ((X_dbranch[i] * X2_K[j]) +
                                                 (X_K[i] * X2_dbranch[j]))))
-                #target[j][i] += K_norm
-                #self.ddecay_results[j][i] = self.ddecay_results[i][j]
-                #self.dbranch_results[j][i] = self.dbranch_results[i][j]
+
+
+class FastTreeKernel(TreeKernel):
+    """
+    FTK kernel by Moschitti (2006)
+    """
+    
+    def __init__(self, decay=1, branch=1, normalize=True):
+        try:
+            import nltk
+        except ImportError:
+            sys.stderr.write("Tree Kernels need NLTK. Install it using \"pip install nltk\"")
+            raise
+        self.input_dim = 1 # A hack. Actually tree kernels have lots of dimensions.
+        self.num_params = 2
+        self.name = 'tk'
+        self.decay = decay
+        self.branch = branch
+        self.normalize = normalize
+        self.K = self.K_fast
+        self.Kdiag = self.Kdiag_fast
+        self.dK_dtheta = self.dK_dtheta_fast
+        self.tree_cache = {}

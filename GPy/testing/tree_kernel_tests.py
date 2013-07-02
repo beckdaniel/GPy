@@ -362,13 +362,13 @@ class IntegrationTreeKernelTests(unittest.TestCase):
         m.optimize(max_f_eval=10)
 
 
-class FastTreeKernelTests(unittest.TestCase):
+class OptTreeKernelTests(unittest.TestCase):
     """
-    Tests for the fast kernel version
+    Tests for the optimized kernel version
     """
     def setUp(self):
         self.tk_n = TreeKernel(mode="naive")
-        self.tk_f = TreeKernel(mode="fast")
+        self.tk_f = TreeKernel(mode="opt")
         self.tgt_n = np.array([[0.,0,0,0],
                                [0,0,0,0],
                                [0,0,0,0],
@@ -379,7 +379,7 @@ class FastTreeKernelTests(unittest.TestCase):
         self.X = [['(S NP)'], ['(S NP VP)'], ['(S (NP N) (VP V))'], ['(S (NP NS) (VP V))']]
         #self.X = [['(S (NP (DET a) (N b)) (VP (V c)))'], ['(S (NP (N b)) (VP (V d) (ADV e)))']]
 
-    def test_treekernel_deltaparams_fast1(self):
+    def test_treekernel_deltaparams_opt1(self):
         self.tk_n.K(self.X, None, self.tgt_n)
         self.tk_f.K(self.X, None, self.tgt_f)
         self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
@@ -389,13 +389,13 @@ class FastTreeKernelTests(unittest.TestCase):
         self.assertTrue((self.tgt_n == self.tgt_f).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_f).all())
 
-    def test_treekernel_opt_fast1(self):
+    def test_treekernel_opt_opt1(self):
         tk1 = GPy.kern.TreeKernel(mode="naive")
         rbf1 = GPy.kern.rbf(2, ARD=True)
         k1 = tk1.add(rbf1, tensor=True)
         k1.input_slices = [slice(0,1),slice(1,3)]
 
-        tk2 = GPy.kern.TreeKernel(mode="fast")
+        tk2 = GPy.kern.TreeKernel(mode="opt")
         rbf2 = GPy.kern.rbf(2, ARD=True)
         k2 = tk2.add(rbf2, tensor=True)
         k2.input_slices = [slice(0,1),slice(1,3)]
@@ -413,8 +413,8 @@ class FastTreeKernelTests(unittest.TestCase):
         m2.optimize(optimizer="tnc")
         self.assertTrue((m1._get_params() == m2._get_params()).all())
 
-    def test_treekernel_Kdiag_fast(self):
-        tk = GPy.kern.TreeKernel(mode="fast", normalize=False)
+    def test_treekernel_Kdiag_opt(self):
+        tk = GPy.kern.TreeKernel(mode="opt", normalize=False)
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -429,7 +429,7 @@ class NormTreeKernelTests(unittest.TestCase):
     Tests for the normalized kernel version.
     """
     def test_treekernel_norm1(self):
-        tk = GPy.kern.TreeKernel(mode="fast", normalize=False)
+        tk = GPy.kern.TreeKernel(mode="opt", normalize=False)
         X = np.array([['(S (NP a) (VP v))'],
                       ['(S (NP a1) (VP v))'],
                       ['(S (NP (NP a)) (VP (V c)))'],
@@ -440,13 +440,10 @@ class NormTreeKernelTests(unittest.TestCase):
                            [3,6,1,0],
                            [2,1,15,0],
                            [0,0,0,3]])
-        #print k
-        #print tk.parts[0].ddecay_results
-        #print tk.parts[0].dbranch_results
         self.assertTrue((k == result).all())
 
     def test_treekernel_norm_grad1(self):
-        tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
+        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
         X = np.array([['(S (NP a) (VP v))']], dtype=object)
         X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
 
@@ -464,19 +461,12 @@ class NormTreeKernelTests(unittest.TestCase):
         k_d1 = tk.K(X, X2)
         tk._set_params([1+h,1])
         k_d2 = tk.K(X, X2)
-
-        print k_d1
-        print k_d2
-        print k_b1
-        print k_b2
-        print dk_dt
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
-        print approx
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_treekernel_norm_grad2(self):
-        tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
+        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
         X = np.array([['(S (NP a) (VP v))'], ['(S (NP a) (VP c))']], dtype=object)
 
         h = 0.00001
@@ -498,7 +488,7 @@ class NormTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_treekernel_norm_grad3(self):
-        tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
+        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -516,16 +506,12 @@ class NormTreeKernelTests(unittest.TestCase):
         k_d1 = tk.K(X)
         tk._set_params([1+h,1])
         k_d2 = tk.K(X)
-        print dk_dt
-        print k_d1
-        print k_d2
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
-        print approx
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_treekernel_Kdiag_norm(self):
-        tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
+        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -536,12 +522,54 @@ class NormTreeKernelTests(unittest.TestCase):
         self.assertTrue(([1,1,1,1,1] == diag).all())
 
 
+class FastTreeKernelTests(unittest.TestCase):
+    """
+    Tests for FTK kernel (Moschitti, 2006)
+    """
+    def test_ftk1(self):
+        tk = GPy.kern.FastTreeKernel(normalize=False)
+        X = np.array([['(S (NP a) (VP v))'],
+                      ['(S (NP a1) (VP v))'],
+                      ['(S (NP (NP a)) (VP (V c)))'],
+                      ['(S (VP v2))']],
+                     dtype=object)
+        k = tk.K(X, X)
+        result = np.array([[6,3,2,0],
+                           [3,6,1,0],
+                           [2,1,15,0],
+                           [0,0,0,3]])
+        self.assertTrue((k == result).all())
+
+    def test_ftk_grad1(self):
+        tk = GPy.kern.FastTreeKernel()
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        h = 0.00001
+        k = tk.K(X)
+        dk_dt = tk.dK_dtheta(1, X)
+        tk._set_params([1,1-h])
+        k_b1 = tk.K(X)
+        tk._set_params([1,1+h])
+        k_b2 = tk.K(X)
+        tk._set_params([1-h,1])
+        k_d1 = tk.K(X)
+        tk._set_params([1+h,1])
+        k_d2 = tk.K(X)
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
+
+
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
     A profiling test, to check for performance bottlenecks.
     """
     def test_treekernel_profiling1(self):
-        tk = GPy.kern.TreeKernel(mode="fast", normalize=True)
+        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
