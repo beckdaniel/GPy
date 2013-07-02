@@ -528,20 +528,52 @@ class FastTreeKernelTests(unittest.TestCase):
     """
     def test_ftk1(self):
         tk = GPy.kern.FastTreeKernel(normalize=False)
+        tk2 = GPy.kern.TreeKernel(mode="naive")
         X = np.array([['(S (NP a) (VP v))'],
                       ['(S (NP a1) (VP v))'],
                       ['(S (NP (NP a)) (VP (V c)))'],
                       ['(S (VP v2))']],
                      dtype=object)
         k = tk.K(X, X)
+        k2 = tk2.K(X, X)
         result = np.array([[6,3,2,0],
                            [3,6,1,0],
                            [2,1,15,0],
                            [0,0,0,3]])
-        self.assertTrue((k == result).all())
+        self.assertTrue((k == k2).all())
+
+    def test_ftk2(self):
+        tk = GPy.kern.FastTreeKernel()
+        tk2 = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        X = np.array([['(S (NP a) (VP v))'],
+                      ['(S (NP a1) (VP v))'],
+                      ['(S (NP (NP a)) (VP (V c)))'],
+                      ['(S (VP v2))']],
+                     dtype=object)
+        k = tk.K(X)
+        k2 = tk2.K(X)
+        result = np.array([[6,3,2,0],
+                           [3,6,1,0],
+                           [2,1,15,0],
+                           [0,0,0,3]])
+        self.assertTrue((k == k2).all())
+
+    def test_ftk3(self):
+        tk = GPy.kern.FastTreeKernel()
+        tk2 = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        X = np.array([['(S (NP a) (VP v))'],
+                      ['(S (NP a1) (VP v))'],
+                      ['(S (NP (NP a)) (VP (V c)))'],
+                      ['(S (VP v2))']],
+                     dtype=object)
+        k = tk.K(X)
+        k2 = tk2.K(X)
+        dkdt = tk.dK_dtheta(1, X)
+        dkdt2 = tk2.dK_dtheta(1, X)
+        self.assertTrue((dkdt == dkdt2).all())
 
     def test_ftk_grad1(self):
-        tk = GPy.kern.FastTreeKernel()
+        tk = GPy.kern.FastTreeKernel(normalize=True)
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -563,6 +595,35 @@ class FastTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
+    def test_ftk_get_nodes(self):
+        tk = GPy.kern.FastTreeKernel()
+        prods = tk.parts[0]._get_nodes('(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))')
+        #print prods
+
+    def test_ftk_get_node_list1(self):
+        tk = GPy.kern.FastTreeKernel()
+        #node_list = tk.parts[0]._get_node_list(['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
+         #                                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'])
+        #print node_list
+
+    def test_ftk_get_node_list2(self):
+        tk = GPy.kern.FastTreeKernel()
+        node_list = tk.parts[0]._get_node_list(['(S (NP n1) (VP v))'],
+                                               ['(S (NP n2) (VP v))'])
+        #print node_list
+
+    def test_ftk_get_node_list3(self):
+        tk = GPy.kern.FastTreeKernel()
+        node_list = tk.parts[0]._get_node_list(['(S (S s) (S s))'],
+                                               ['(S (S s) (S s))'])
+        #print node_list
+
+    def test_ftk_get_node_list4(self):
+        tk = GPy.kern.FastTreeKernel()
+        node_list = tk.parts[0]._get_node_list(['(S (NP n) (VP v))'],
+                                               ['(S (NP (NP n)) (VP (VP v)))'])
+        #print node_list
+        
 
 class ProfilingTreeKernelTests(unittest.TestCase):
     """

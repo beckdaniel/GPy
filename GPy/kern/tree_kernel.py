@@ -1,6 +1,7 @@
 
 from kernpart import Kernpart
 import numpy as np
+from collections import defaultdict
 import sys
 import nltk
 
@@ -350,7 +351,6 @@ class TreeKernel(Kernpart):
             symmetrize = True
         else:
             symmetrize = False
-
         # We are going to store everything first and in the end we
         # normalize it before adding to target.
         K_results = np.zeros(shape=(len(X), len(X2)))
@@ -488,6 +488,7 @@ class TreeKernel(Kernpart):
             sum_decay += (d / g)
             sum_branch += ((1 + b) / g)
             d_result *= g
+        #print "TK PROD: %f" % prod
         h = (prod * self.decay)
         # update delta
         self.cache[key] = d_result
@@ -584,7 +585,7 @@ class FastTreeKernel(TreeKernel):
             raise
         self.input_dim = 1 # A hack. Actually tree kernels have lots of dimensions.
         self.num_params = 2
-        self.name = 'tk'
+        self.name = 'ftk'
         self.decay = decay
         self.branch = branch
         self.normalize = normalize
@@ -592,3 +593,127 @@ class FastTreeKernel(TreeKernel):
         self.Kdiag = self.Kdiag_fast
         self.dK_dtheta = self.dK_dtheta_fast
         self.tree_cache = {}
+        # A production cache, where we are going to store the node pairs
+        self.node_cache = {}
+
+    def K_fast(self, X, X2, target):
+        # If X == X2, K is symmetric
+        if X2 == None:
+            X2 = X
+            symmetrize = True
+        else:
+            symmetrize = False
+        # We are going to store everything first and in the end we
+        # normalize it before adding to target.
+        K_results = np.zeros(shape=(len(X), len(X2)))
+        ddecays = np.zeros(shape=(len(X), len(X2)))
+        dbranches = np.zeros(shape=(len(X), len(X2)))
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                if symmetrize and i > j:
+                    continue
+                #t1, t2 = self._get_trees(x1, x2)
+                node_list = self._get_node_list(x1, x2)
+                # Recursive calculation happens here.
+                self.delta_fast(node_list)
+                # End recursive calculation
+                K_results[i][j] = self.delta_result
+                ddecays[i][j] = self.ddecay
+                dbranches[i][j] = self.dbranch
+                if symmetrize and i != j:
+                    K_results[j][i] = self.delta_result
+                    ddecays[j][i] = self.ddecay
+                    dbranches[j][i] = self.dbranch
+        # Now we normalize everything
+        # hack: we are going to calculate the gradients too
+        # and store them for later use.
+        self.ddecay_results = np.zeros(shape=(len(X), len(X2)))
+        self.dbranch_results = np.zeros(shape=(len(X), len(X2)))
+        if self.normalize:
+            if symmetrize:
+                self._normalize_K_sym(X, K_results, ddecays, dbranches, target)
+            else:
+                self._normalize_K(X, X2, K_results, ddecays, dbranches, target)
+        else:
+            target += K_results
+            self.ddecay_results = ddecays
+            self.dbranch_results = dbranches
+
+    def _get_node_list(self, x1, x2):
+        """
+        Get two trees represented by strings and
+        return the node pair list
+        """
+        key = x1[0] + x2[0]
+        try:
+            return self.node_cache[key]
+        except KeyError:
+            nodes1 = self._get_nodes(x1[0])
+            nodes2 = self._get_nodes(x2[0])
+            node_list = []
+            for n1 in nodes1:
+                for n2 in nodes2:
+                    if n1[0] == n2[0]:
+                        node_list.append((n1,n2))
+            self.node_cache[key] = node_list
+            node_list.sort(key=lambda x: x[0][1], reverse=True)
+            return node_list
+            
+    def _get_nodes(self, x):
+        t = nltk.Tree(x)
+        pos = t.treepositions()
+        for l in t.treepositions(order="leaves"):
+            pos.remove(l)
+        z = zip(t.productions(), pos)
+        z.sort()
+        return z
+
+    def delta_fast(self, node_list):
+        self.delta_result = 0
+        self.ddecay = 0
+        self.dbranch = 0
+        self.cache = defaultdict(int) # DP
+        self.cache_ddecay = defaultdict(int)
+        self.cache_dbranch = defaultdict(int)
+        for node_pair in node_list:
+            node1 = node_pair[0]
+            node2 = node_pair[1]
+            index1 = node1[1]
+            index2 = node2[1]
+            key = (index1, index2)
+            #print key
+            if type(node1[0].rhs()[0]) == str:
+                self.cache[key] = self.decay
+                self.delta_result += self.decay
+                self.cache_ddecay[key] = 1
+                self.ddecay += 1
+            else:
+                prod = 1
+                sum_decay = 0
+                sum_branch = 0
+                d_result = self.decay
+                for i, child in enumerate(node1[0].rhs()):
+                    child_key = (tuple(list(index1) + [i]),
+                                 tuple(list(index2) + [i]))
+                    # get values
+                    g = float(self.branch + self.cache[child_key])
+                    d = self.cache_ddecay[child_key]
+                    b = self.cache_dbranch[child_key]
+                    prod *= g
+                    sum_decay += (d / g)
+                    sum_branch += ((1 + b) / g)
+                    d_result *= g
+                #print "FTK PROD: %f" % prod
+                h = (prod * self.decay)
+                # update delta
+                self.cache[key] = d_result
+                self.delta_result += d_result
+                # update ddecay
+                ddecay = prod + (h * sum_decay)
+                self.cache_ddecay[key] = ddecay
+                self.ddecay += ddecay
+                # update dbranch
+                dbranch = h * sum_branch
+                self.cache_dbranch[key] = dbranch
+                self.dbranch += dbranch
+
