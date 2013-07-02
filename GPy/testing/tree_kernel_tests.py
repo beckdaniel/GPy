@@ -451,10 +451,7 @@ class NormTreeKernelTests(unittest.TestCase):
         X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
 
         h = 0.00001
-        #target = [0,0]
-        #print tk._get_params()
         tk2 = TreeKernel(mode="naive")
-        #print tk2.delta_params_naive(nltk.Tree(X[0][0]), nltk.Tree(X2[0][0]))
         k = tk.K(X, X2)
         dk_dt = tk.dK_dtheta(1, X, X2)
 
@@ -473,13 +470,8 @@ class NormTreeKernelTests(unittest.TestCase):
         print k_b1
         print k_b2
         print dk_dt
-
-        tk._set_params([1,1])
-        #print tk.K(X, X2)
-        
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
-        #print approx
-        #print dk_dt
+        print approx
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
@@ -513,21 +505,17 @@ class NormTreeKernelTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
-
         h = 0.00001
         k = tk.K(X)
         dk_dt = tk.dK_dtheta(1, X)
-
         tk._set_params([1,1-h])
         k_b1 = tk.K(X)
         tk._set_params([1,1+h])
         k_b2 = tk.K(X)
-
         tk._set_params([1-h,1])
         k_d1 = tk.K(X)
         tk._set_params([1+h,1])
         k_d2 = tk.K(X)
-    
         print dk_dt
         print k_d1
         print k_d2
@@ -545,7 +533,6 @@ class NormTreeKernelTests(unittest.TestCase):
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
         diag = tk.Kdiag(X)
-        print diag
         self.assertTrue(([1,1,1,1,1] == diag).all())
 
 

@@ -386,11 +386,7 @@ class TreeKernel(Kernpart):
             if symmetrize:
                 self._normalize_K_sym(X, K_results, ddecays, dbranches, target)
             else:
-                # we cannot use K_results, ddecays or dbranches here
-                # because K is not symmetric. We need to calculate everything
-                # from scratch.
-                from exceptions import ValueError
-                raise ValueError("PANIC: need to implement the non-symmetric case")
+                self._normalize_K(X, X2, K_results, ddecays, dbranches, target)
         else:
             target += K_results
             self.ddecay_results = ddecays
@@ -399,11 +395,10 @@ class TreeKernel(Kernpart):
     def Kdiag_fast(self, X, target):
         # We are going to calculate gradients too and
         # save them for later use
-
         if self.normalize:
             target += np.ones(shape=(len(X),))
-            #from exceptions import ValueError
-            #raise ValueError("PANIC: need to implement normalized Kdiag")
+            self.ddecay_diag = np.zeros(shape=(len(X),))
+            self.dbranch_diag = np.zeros(shape=(len(X),))
         else:
             K_vec, ddecay_vec, dbranch_vec = self._diag_calculations(X)
             target += K_vec
@@ -552,3 +547,30 @@ class TreeKernel(Kernpart):
                 target[j][i] += K_norm
                 self.ddecay_results[j][i] = self.ddecay_results[i][j]
                 self.dbranch_results[j][i] = self.dbranch_results[i][j]
+
+    def _normalize_K(self, X, X2, K_results, ddecays, dbranches, target):
+        #from exceptions import ValueError
+        #raise ValueError("PANIC: need to implement the non-symmetric case")
+        X_K, X_ddecay, X_dbranch = self._diag_calculations(X)
+        X2_K, X2_ddecay, X2_dbranch = self._diag_calculations(X2)
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                # calculate some intermediate values
+                fac = X_K[i] * X2_K[j]
+                root = np.sqrt(fac)
+                denom = 2 * fac
+                K_norm = K_results[i][j] / root
+                # update K
+                target[i][j] += K_norm
+                # update ddecay
+                self.ddecay_results[i][j] = ((ddecays[i][j] / root) -
+                                             ((K_norm / denom) *
+                                              ((X_ddecay[i] * X2_K[j]) +
+                                               (X_K[i] * X2_ddecay[j]))))
+                self.dbranch_results[i][j] = ((dbranches[i][j] / root) -
+                                              ((K_norm / denom) *
+                                               ((X_dbranch[i] * X2_K[j]) +
+                                                (X_K[i] * X2_dbranch[j]))))
+                #target[j][i] += K_norm
+                #self.ddecay_results[j][i] = self.ddecay_results[i][j]
+                #self.dbranch_results[j][i] = self.dbranch_results[i][j]
