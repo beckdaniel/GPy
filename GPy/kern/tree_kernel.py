@@ -717,3 +717,35 @@ class FastTreeKernel(TreeKernel):
                 self.cache_dbranch[key] = dbranch
                 self.dbranch += dbranch
 
+    def Kdiag_fast(self, X, target):
+        # We are going to calculate gradients too and
+        # save them for later use
+        if self.normalize:
+            target += np.ones(shape=(len(X),))
+            self.ddecay_diag = np.zeros(shape=(len(X),))
+            self.dbranch_diag = np.zeros(shape=(len(X),))
+        else:
+            K_vec, ddecay_vec, dbranch_vec = self._diag_calculations(X)
+            target += K_vec
+            self.ddecay_diag = ddecay_vec
+            self.dbranch_diag = dbranch_vec
+    
+    def _diag_calculations(self, X):
+        K_vec = np.zeros(shape=(len(X),))
+        ddecay_vec = np.zeros(shape=(len(X),))
+        dbranch_vec = np.zeros(shape=(len(X),))
+        for i, x1 in enumerate(X):
+            node_list = self._get_node_list(x1, x1)
+            self.delta_result = 0
+            self.ddecay = 0
+            self.dbranch = 0
+            self.cache = {} # DP
+            self.cache_ddecay = {}
+            self.cache_dbranch = {}
+            # Recursive calculation happens here.
+            self.delta_fast(node_list)
+            # End recursive calculation
+            K_vec[i] = self.delta_result
+            ddecay_vec[i] = self.ddecay
+            dbranch_vec[i] = self.dbranch
+        return (K_vec, ddecay_vec, dbranch_vec)

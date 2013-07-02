@@ -624,6 +624,16 @@ class FastTreeKernelTests(unittest.TestCase):
                                                ['(S (NP (NP n)) (VP (VP v)))'])
         #print node_list
         
+    def test_ftk_Kdiag_norm(self):
+        tk = GPy.kern.FastTreeKernel()
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        diag = tk.Kdiag(X)
+        self.assertTrue(([1,1,1,1,1] == diag).all())
 
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
