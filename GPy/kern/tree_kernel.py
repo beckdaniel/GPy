@@ -717,7 +717,7 @@ class FastTreeKernel(Kernpart):
                 sum_branch = 0
                 d_result = self.decay
                 #for i, child in enumerate(node1[0]):
-                for i in range(node1[0]):
+                for i in xrange(node1[0]):
                     child_key = (tuple(list(index1) + [i]),
                                  tuple(list(index2) + [i]))
                     # get values

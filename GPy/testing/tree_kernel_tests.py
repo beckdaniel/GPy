@@ -662,7 +662,7 @@ class ProfilingTreeKernelTests(unittest.TestCase):
     A profiling test, to check for performance bottlenecks.
     """
     def test_treekernel_profiling1(self):
-        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        tk = GPy.kern.FastTreeKernel()#mode="opt", normalize=True)
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
@@ -713,12 +713,12 @@ class ProfilingTreeKernelTests(unittest.TestCase):
         import cProfile
         m.constrain_positive('rbf')
         m.constrain_positive('noise')
-        m.constrain_bounded('tk',0,10)
-        #print m
-        #cProfile.runctx("m.optimize(max_f_eval=100, messages=True)", 
-        #                globals(), {'m': m, 'X': X}, sort="cumulative")
-        #print m
-        #print m.predict(X)[0]
+        m.constrain_bounded('ftk',0.1,10)
+        print m
+        cProfile.runctx("m.optimize(max_f_eval=100, messages=True)", 
+                        globals(), {'m': m, 'X': X}, sort="cumulative")
+        print m
+        print m.predict(X)[0]
 
 
 if __name__ == "__main__":
