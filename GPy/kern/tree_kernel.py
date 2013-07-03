@@ -667,7 +667,16 @@ class FastTreeKernel(Kernpart):
             for n1 in nodes1:
                 for n2 in nodes2:
                     if n1[0] == n2[0]:
-                        node_list.append((n1,n2))
+                        if type(n1[0].rhs()[0]) == str:
+                            tup1 = (0, n1[1])
+                            tup2 = (0, n2[1])
+                        else:
+                            tup1 = (len(n1[0].rhs()), n1[1])
+                            tup2 = (len(n2[0].rhs()), n2[1])
+                        #tup1 = (n1[0].rhs(), n1[1])
+                        #tup2 = (n2[0].rhs(), n2[1])
+                        #node_list.append((n1,n2))
+                        node_list.append((tup1,tup2))
             self.node_cache[key] = node_list
             node_list.sort(key=lambda x: x[0][1], reverse=True)
             return node_list
@@ -696,7 +705,8 @@ class FastTreeKernel(Kernpart):
             index2 = node2[1]
             key = (index1, index2)
             #print key
-            if type(node1[0].rhs()[0]) == str:
+            #if type(node1[0][0]) == str:
+            if node1[0] == 0:
                 self.cache[key] = self.decay
                 self.delta_result += self.decay
                 self.cache_ddecay[key] = 1
@@ -706,7 +716,8 @@ class FastTreeKernel(Kernpart):
                 sum_decay = 0
                 sum_branch = 0
                 d_result = self.decay
-                for i, child in enumerate(node1[0].rhs()):
+                #for i, child in enumerate(node1[0]):
+                for i in range(node1[0]):
                     child_key = (tuple(list(index1) + [i]),
                                  tuple(list(index2) + [i]))
                     # get values

@@ -616,13 +616,13 @@ class FastTreeKernelTests(unittest.TestCase):
         tk = GPy.kern.FastTreeKernel()
         node_list = tk.parts[0]._get_node_list(['(S (S s) (S s))'],
                                                ['(S (S s) (S s))'])
-        #print node_list
+        print node_list
 
     def test_ftk_get_node_list4(self):
         tk = GPy.kern.FastTreeKernel()
         node_list = tk.parts[0]._get_node_list(['(S (NP n) (VP v))'],
                                                ['(S (NP (NP n)) (VP (VP v)))'])
-        #print node_list
+        print node_list
         
     def test_ftk_Kdiag_norm(self):
         tk = GPy.kern.FastTreeKernel()
