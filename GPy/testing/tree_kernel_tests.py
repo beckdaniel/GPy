@@ -707,15 +707,15 @@ class ProfilingTreeKernelTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
-        X = X[:5]
-        Y = np.array([[(a+10)*5] for a in range(5)])
+        X = X[:40]
+        Y = np.array([[(a+10)*5] for a in range(40)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         import cProfile
         m.constrain_positive('rbf')
         m.constrain_positive('noise')
         m.constrain_bounded('ftk',0.1,10)
         print m
-        cProfile.runctx("m.optimize(max_f_eval=100, messages=True)", 
+        cProfile.runctx("m.optimize(max_f_eval=200, messages=True)", 
                         globals(), {'m': m, 'X': X}, sort="cumulative")
         print m
         print m.predict(X)[0]

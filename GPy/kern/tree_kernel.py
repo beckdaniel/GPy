@@ -623,14 +623,15 @@ class FastTreeKernel(Kernpart):
                 if symmetrize and i > j:
                     continue
                 node_list = self._get_node_list(x1, x2)
-                self.delta_fast(node_list)
-                K_results[i][j] = self.delta_result
-                ddecays[i][j] = self.ddecay
-                dbranches[i][j] = self.dbranch
+                delta_result, ddecay, dbranch = self.delta_fast(node_list)
+                #print (delta_result, ddecay, dbranch)
+                K_results[i][j] = delta_result
+                ddecays[i][j] = ddecay
+                dbranches[i][j] = dbranch
                 if symmetrize and i != j:
-                    K_results[j][i] = self.delta_result
-                    ddecays[j][i] = self.ddecay
-                    dbranches[j][i] = self.dbranch
+                    K_results[j][i] = delta_result
+                    ddecays[j][i] = ddecay
+                    dbranches[j][i] = dbranch
         # Now we normalize everything
         # hack: we are going to calculate the gradients too
         # and store them for later use.
@@ -691,12 +692,12 @@ class FastTreeKernel(Kernpart):
         return z
 
     def delta_fast(self, node_list):
-        self.delta_result = 0
-        self.ddecay = 0
-        self.dbranch = 0
-        self.cache = defaultdict(int) # DP
-        self.cache_ddecay = defaultdict(int)
-        self.cache_dbranch = defaultdict(int)
+        delta_result = 0
+        ddecay = 0
+        dbranch = 0
+        cache = defaultdict(int) # DP
+        cache_ddecay = defaultdict(int)
+        cache_dbranch = defaultdict(int)
         #print node_list
         for node_pair in node_list:
             node1 = node_pair[0]
@@ -707,10 +708,10 @@ class FastTreeKernel(Kernpart):
             #print key
             #if type(node1[0][0]) == str:
             if node1[0] == 0:
-                self.cache[key] = self.decay
-                self.delta_result += self.decay
-                self.cache_ddecay[key] = 1
-                self.ddecay += 1
+                cache[key] = self.decay
+                delta_result += self.decay
+                cache_ddecay[key] = 1
+                ddecay += 1
             else:
                 prod = 1
                 sum_decay = 0
@@ -721,9 +722,9 @@ class FastTreeKernel(Kernpart):
                     child_key = (tuple(list(index1) + [i]),
                                  tuple(list(index2) + [i]))
                     # get values
-                    g = float(self.branch + self.cache[child_key])
-                    d = self.cache_ddecay[child_key]
-                    b = self.cache_dbranch[child_key]
+                    g = float(self.branch + cache[child_key])
+                    d = cache_ddecay[child_key]
+                    b = cache_dbranch[child_key]
                     prod *= g
                     sum_decay += (d / g)
                     sum_branch += ((1 + b) / g)
@@ -731,16 +732,17 @@ class FastTreeKernel(Kernpart):
                 #print "FTK PROD: %f" % prod
                 h = (prod * self.decay)
                 # update delta
-                self.cache[key] = d_result
-                self.delta_result += d_result
+                cache[key] = d_result
+                delta_result += d_result
                 # update ddecay
-                ddecay = prod + (h * sum_decay)
-                self.cache_ddecay[key] = ddecay
-                self.ddecay += ddecay
+                ddecay_result = prod + (h * sum_decay)
+                cache_ddecay[key] = ddecay_result
+                ddecay += ddecay_result
                 # update dbranch
-                dbranch = h * sum_branch
-                self.cache_dbranch[key] = dbranch
-                self.dbranch += dbranch
+                dbranch_result = h * sum_branch
+                cache_dbranch[key] = dbranch_result
+                dbranch += dbranch_result
+        return (delta_result, ddecay, dbranch)
 
     def Kdiag(self, X, target):
         # We are going to calculate gradients too and
@@ -761,18 +763,18 @@ class FastTreeKernel(Kernpart):
         dbranch_vec = np.zeros(shape=(len(X),))
         for i, x1 in enumerate(X):
             node_list = self._get_node_list(x1, x1)
-            self.delta_result = 0
-            self.ddecay = 0
-            self.dbranch = 0
-            self.cache = {} # DP
-            self.cache_ddecay = {}
-            self.cache_dbranch = {}
+            delta_result = 0
+            ddecay = 0
+            dbranch = 0
+            cache = {} # DP
+            cache_ddecay = {}
+            cache_dbranch = {}
             # Recursive calculation happens here.
-            self.delta_fast(node_list)
+            delta_result, ddecay, dbranch = self.delta_fast(node_list)
             # End recursive calculation
-            K_vec[i] = self.delta_result
-            ddecay_vec[i] = self.ddecay
-            dbranch_vec[i] = self.dbranch
+            K_vec[i] = delta_result
+            ddecay_vec[i] = ddecay
+            dbranch_vec[i] = dbranch
         return (K_vec, ddecay_vec, dbranch_vec)
 
     def _normalize_K_sym(self, X, K_results, ddecays, dbranches, target):
