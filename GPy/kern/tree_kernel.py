@@ -846,8 +846,29 @@ class UberFastTreeKernel(Kernpart):
         self.name = 'uftk'
         self._lambda = _lambda
         self._sigma = _sigma
-        self.normalize = normalize
+        #self.normalize = normalize
         self.cache = {}
+
+    def build_cache(self, X, X2=None):
+        if X2 == None:
+            self._build_cache_sym(X)
+        else:
+            self._build_cache_nsym(X, X2)
+
+    def _build_cache_sym(self, X):
+        tree_ids = {}
+        diag_K = {}
+        K_norm = {}
+        dlambda_norm = {}
+        dsigma_norm = {}
+        
+        for tree in X:
+            tree_id = len(tree_ids)
+            tree_ids.setdefault(tree, tree_id)
+            diag_K.setdefault((tree_id, tree_id), self._get_K_formula(tree, tree))
+            # STOPPPED HERE
+            
+        
 
     def _get_K_formula(self, x1, x2):
         """
@@ -910,6 +931,6 @@ class UberFastTreeKernel(Kernpart):
                             cache[key] = expression
                             result += expression
         
-        return (result, result.diff(l), result.diff(s))
+        return result
         
         
