@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 import GPy
 import nltk # Need to cope with this in a better way...
+import sympy as sp
 from GPy.kern.tree_kernel import TreeKernel
 import sys
 
@@ -616,13 +617,13 @@ class FastTreeKernelTests(unittest.TestCase):
         tk = GPy.kern.FastTreeKernel()
         node_list = tk.parts[0]._get_node_list(['(S (S s) (S s))'],
                                                ['(S (S s) (S s))'])
-        print node_list
+        #print node_list
 
     def test_ftk_get_node_list4(self):
         tk = GPy.kern.FastTreeKernel()
         node_list = tk.parts[0]._get_node_list(['(S (NP n) (VP v))'],
                                                ['(S (NP (NP n)) (VP (VP v)))'])
-        print node_list
+        #print node_list
         
     def test_ftk_Kdiag_norm(self):
         tk = GPy.kern.FastTreeKernel()
@@ -657,10 +658,37 @@ class FastTreeKernelTests(unittest.TestCase):
         self.assertTrue((m._get_params() == m2._get_params()).all())
         
 
+class UberFastTreeKernelTests(unittest.TestCase):
+    """
+    Tests for the kernel version that uses symbolic formulae.
+    """
+    def test_get_K_formula1(self):
+        t1 = '(S (NP n) (VP v))'
+        t2 = '(S (NP n) (VP v))'
+        tk = GPy.kern.UberFastTreeKernel()
+        import pprint
+        pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
+
+    def test_get_K_formula2(self):
+        t1 = '(S (NP n) (VP v))'
+        t2 = '(S (NP ns) (VP v))'
+        tk = GPy.kern.UberFastTreeKernel()
+        import pprint
+        pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
+
+    def test_get_K_formula3(self):
+        t1 = '(S (NP (Det a) (N b)) (VP (V c)))'
+        t2 = '(S (NP (N a)) (VP (V c)))'
+        tk = GPy.kern.UberFastTreeKernel()
+        import pprint
+        pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
+
+
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
     A profiling test, to check for performance bottlenecks.
     """
+    @unittest.skip("skipping profiling for now")
     def test_treekernel_profiling1(self):
         tk = GPy.kern.FastTreeKernel()#mode="opt", normalize=True)
         rbf = GPy.kern.rbf(2, ARD=True)

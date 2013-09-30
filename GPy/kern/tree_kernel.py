@@ -3,6 +3,7 @@ from kernpart import Kernpart
 import numpy as np
 from collections import defaultdict
 import sys
+import sympy as sp
 import nltk
 
 class TreeKernel(Kernpart):
@@ -827,3 +828,88 @@ class FastTreeKernel(Kernpart):
                                               ((K_norm / denom) *
                                                ((X_dbranch[i] * X2_K[j]) +
                                                 (X_K[i] * X2_dbranch[j]))))
+
+
+class UberFastTreeKernel(Kernpart):
+    """
+    A implementation that stores formulae instead of node_lists
+    """
+    
+    def __init__(self, _lambda=1, _sigma=1, normalize=True):
+        try:
+            import nltk
+        except ImportError:
+            sys.stderr.write("Tree Kernels need NLTK. Install it using \"pip install nltk\"")
+            raise
+        self.input_dim = 1 # A hack. Actually tree kernels have lots of dimensions.
+        self.num_params = 2
+        self.name = 'uftk'
+        self._lambda = _lambda
+        self._sigma = _sigma
+        self.normalize = normalize
+        self.cache = {}
+
+    def _get_K_formula(self, x1, x2):
+        """
+        Returns the TK formula for two string-represented trees.
+        It also return formulae for the derivatives wrt lambda and sigma
+        """
+        l, s = sp.symbols("l s")
+        t1 = nltk.Tree(x1)
+        t2 = nltk.Tree(x2)
+        cache = {}
+        result = 0
+        for pos1 in t1.treepositions(order="postorder"):
+            n1 = t1[pos1]
+            if type(n1) == str:
+                # We ignore leaves
+                continue
+            for pos2 in t2.treepositions(order="postorder"):
+                n2 = t2[pos2]
+                if type(n2) == str:
+                    # Again, we ignore leaves
+                    continue
+                key = (pos1, pos2)
+                if n1.node != n2.node:
+                    # Different nodes, different productions: delta is 0
+                    cache[key] = 0
+                elif len(n1) != len(n2):
+                    # Different lengths, different productions: delta is 0
+                    cache[key] = 0
+                else:
+                    match = True
+                    for tup in zip(n1, n2):
+                        # We need to do this to compare strings and nodes
+                        try:
+                            s1 = tup[0].node
+                        except AttributeError:
+                            s1 = tup[0]
+                        try:
+                            s2 = tup[1].node
+                        except AttributeError:
+                            s2 = tup[1]
+                        if s1 != s2:
+                            # Different child nodes, different productions: delta is 0
+                            cache[key] = 0
+                            match = False
+                            break                    
+                    if match:
+                        # If nodes are same, lengths are same and child nodes are same,
+                        # then we got the same production
+                        if type(n1[0]) == str:
+                            # We got a preterminal production, delta is lambda
+                            cache[key] = l
+                            result += l
+                        else:
+                            # We got a non-preterminal production, we apply the recursion
+                            expression = l
+                            for i, child in enumerate(n1):
+                                child_key = (tuple(list(pos1) + [i]),
+                                             tuple(list(pos2) + [i]))
+                                expression *= s + cache[child_key]
+                            cache[key] = expression
+                            result += expression
+        
+        return (result, result.diff(l), result.diff(s))
+        
+        
