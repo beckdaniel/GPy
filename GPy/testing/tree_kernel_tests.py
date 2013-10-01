@@ -667,22 +667,33 @@ class UberFastTreeKernelTests(unittest.TestCase):
         t2 = '(S (NP n) (VP v))'
         tk = GPy.kern.UberFastTreeKernel()
         import pprint
-        pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
+        #pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
 
     def test_get_K_formula2(self):
         t1 = '(S (NP n) (VP v))'
         t2 = '(S (NP ns) (VP v))'
         tk = GPy.kern.UberFastTreeKernel()
         import pprint
-        pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
+        #pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
 
     def test_get_K_formula3(self):
         t1 = '(S (NP (Det a) (N b)) (VP (V c)))'
         t2 = '(S (NP (N a)) (VP (V c)))'
         tk = GPy.kern.UberFastTreeKernel()
         import pprint
-        pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
+        #pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
 
+    def test_build_cache_sym1(self):
+        X = np.array([['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
+                      ])
+        tk = GPy.kern.UberFastTreeKernel()
+        tk.parts[0].build_cache(X)
+        import pprint
+        pprint.pprint(tk.parts[0].cache)
+        #pprint.pprint(np.sum(tk.parts[0].cache["K_norm"].values()).diff(sp.symbols('s')).diff(sp.symbols('s')).diff(sp.symbols('s')).evalf(subs={sp.symbols('l'):3,sp.symbols('s'):4}))
 
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
@@ -703,40 +714,10 @@ class ProfilingTreeKernelTests(unittest.TestCase):
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
                      dtype=object)
-        X = X[:40]
-        Y = np.array([[(a+10)*5] for a in range(40)])
+        X = X[:10]
+        Y = np.array([[(a+10)*5] for a in range(10)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
         import cProfile
         m.constrain_positive('rbf')

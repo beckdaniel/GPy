@@ -848,6 +848,42 @@ class UberFastTreeKernel(Kernpart):
         self._sigma = _sigma
         #self.normalize = normalize
         self.cache = {}
+        self._l, self._s = sp.symbols("l s")
+
+    def _get_params(self):
+        return np.hstack((self._lambda, self._sigma))
+
+    def _set_params(self, x):
+        self._lambda = x[0]
+        self._sigma = x[1]
+
+    def _get_param_names(self):
+        return ['lambda', 'sigma']
+
+    def K(self, X, X2, target):
+        if X2 == None:
+            X2 = X
+            if len(self.cache) == 0:
+                self._build_cache_sym(X)
+        else:
+            self._build_cache_nsym(X, X2)
+        #K_results = np.zeros(shape=(len(X), len(X2)))
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                id1 = self.cache["tree_ids"][x1[0]]
+                id2 = self.cache["tree_ids"][x2[0]]
+                expression = self.cache["K_norm"][(id1, id2)]
+                target[i][j] += expression.evalf(subs={self._l:self._lambda,
+                                                       self._s:self._sigma})
+
+    def dK_dtheta(self, dL_dK, X, X2, target):
+        s_like = np.sum(dL_dK)
+        expression = np.sum(self.cache["K_norm"].values())
+        s_lambda = expression.diff(self._l).evalf(subs={self._l:self._lambda,
+                                                       self._s:self._sigma})
+        s_sigma = expression.diff(self._s).evalf(subs={self._l:self._lambda,
+                                                       self._s:self._sigma})
+        target += [s_like * s_lambda, s_like * s_sigma]
 
     def build_cache(self, X, X2=None):
         if X2 == None:
@@ -859,16 +895,23 @@ class UberFastTreeKernel(Kernpart):
         tree_ids = {}
         diag_K = {}
         K_norm = {}
-        dlambda_norm = {}
-        dsigma_norm = {}
-        
         for tree in X:
             tree_id = len(tree_ids)
-            tree_ids.setdefault(tree, tree_id)
-            diag_K.setdefault((tree_id, tree_id), self._get_K_formula(tree, tree))
-            # STOPPPED HERE
-            
-        
+            tree_ids[tree[0]] = tree_id
+            diag_K[(tree_id, tree_id)] = self._get_K_formula(tree[0], tree[0])
+        for tree1 in X:
+            for tree2 in X:
+                id1 = tree_ids[tree1[0]]
+                id2 = tree_ids[tree2[0]]
+                if id1 == id2:
+                    k_norm = 1
+                else:
+                    k = self._get_K_formula(tree1[0], tree2[0])
+                    k_norm = k / sp.sqrt(diag_K[(id1, id1)] * diag_K[(id2, id2)])
+                K_norm[(id1, id2)] = k_norm
+        self.cache["tree_ids"] = tree_ids
+        self.cache["diag_K"] = diag_K
+        self.cache["K_norm"] = K_norm
 
     def _get_K_formula(self, x1, x2):
         """
