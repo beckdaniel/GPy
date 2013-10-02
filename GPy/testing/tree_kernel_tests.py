@@ -692,7 +692,7 @@ class UberFastTreeKernelTests(unittest.TestCase):
         tk = GPy.kern.UberFastTreeKernel()
         tk.parts[0].build_cache(X)
         import pprint
-        pprint.pprint(tk.parts[0].cache)
+        #pprint.pprint(tk.parts[0].cache)
         #pprint.pprint(np.sum(tk.parts[0].cache["K_norm"].values()).diff(sp.symbols('s')).diff(sp.symbols('s')).diff(sp.symbols('s')).evalf(subs={sp.symbols('l'):3,sp.symbols('s'):4}))
 
 class ProfilingTreeKernelTests(unittest.TestCase):
@@ -706,11 +706,6 @@ class ProfilingTreeKernelTests(unittest.TestCase):
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
         X = np.array([['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9],
-                      ['(S NP VP)', 0.1, 4],
                       ['(S (NP N) (VP V))', 0.3, 2],
                       ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
                       ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
@@ -728,6 +723,30 @@ class ProfilingTreeKernelTests(unittest.TestCase):
                         globals(), {'m': m, 'X': X}, sort="cumulative")
         print m
         print m.predict(X)[0]
+
+    def test_treekernel_profiling2(self):
+        tk = GPy.kern.UberFastTreeKernel()#mode="opt", normalize=True)
+        rbf = GPy.kern.rbf(2, ARD=True)
+        k = tk.add(rbf, tensor=True)
+        k.input_slices = [slice(0,1),slice(1,3)]
+        X = np.array([['(S (NP n) (VP v))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
+                     dtype=object)
+        X = X[:4]
+        Y = np.array([[(a+10)*5] for a in range(4)])
+        m = GPy.models.GPRegression(X, Y, kernel=k)
+        import cProfile
+        m.constrain_positive('rbf')
+        m.constrain_positive('noise')
+        m.constrain_bounded('uftk',0.1,10)
+        #print m
+        cProfile.runctx("m.optimize(optimizer='lbfgs', max_f_eval=200, messages=True)", 
+                        globals(), {'m': m, 'X': X}, sort="cumulative")
+        #m.optimize(optimizer="tnc", max_f_eval=200, messages=True)
+        print m
+        #print m.predict(X)[0]
 
 
 if __name__ == "__main__":
