@@ -700,17 +700,6 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
     """
     Tests for a simpler version of Moschitti FTK (only hyperparameter is decay)
     """
-    def test_build_cache_sym1(self):
-        X = np.array([['(S (NP n) (VP v))'],
-                      ['(S (NP (N a)) (VP (V c)))'],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
-                      ])
-        tk = GPy.kern.SimpleFastTreeKernel()
-        tk.parts[0].build_cache(X)
-        import pprint
-        pprint.pprint(tk.parts[0].cache)
-
     def test_build_cache_sym2(self):
         X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
                       ['(S (NP (N n2)) (VP (V v1) (N n1)))']
@@ -735,12 +724,18 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
                                                   ((0,), (0,), 1),
                                                   ((1,), (1,), 2),
                                                   ((), (), 2)]}
-        import pprint
-        pprint.pprint(tk.parts[0].cache)
+        #import pprint
+        #pprint.pprint(tk.parts[0].cache)
         self.assertEqual(tk.parts[0].cache["tree_ids"], test_cache["tree_ids"])
         self.assertEqual(tk.parts[0].cache["node_pair_lists"], test_cache["node_pair_lists"])
         
-
+    def test_delta_1(self):
+        X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
+                      ['(S (NP (N n2)) (VP (V v1) (N n1)))']
+                      ])
+        tk = GPy.kern.SimpleFastTreeKernel()
+        tk.parts[0].build_cache(X)
+        print tk.parts[0]._diag_calculations([X[0][0],X[1][0]])
 
 class ProfilingTreeKernelTests(unittest.TestCase):
     """

@@ -1125,3 +1125,65 @@ class SimpleFastTreeKernel(Kernpart):
         z = zip(t.productions(), pos)
         z.sort()
         return z
+
+    def Kdiag(self, X, target):
+        """
+        Since this is a normalized kernel, diag values are all equal to 1.
+        """
+        target += np.ones(shape=(len(X),))
+
+    def K(self, X, X2, target):
+        if X2 == None:
+            self.K_sym(X, target)
+        else:
+            self.K_nsym(X, X2, target)
+
+    def K_sym(self, X, target):
+        # First, we are going to calculate K for diagonal values
+        # because we will need them later to normalize.
+        diag_values = self._diag_calculations(X)
+
+        # Second, we are going to initialize the ddecay values
+        # because we are going to calculate them at the same time as K.
+
+    def _diag_calculations(self, X):
+        K_vec = np.zeros(shape=(len(X),))
+        ddecay_vec = np.zeros(shape=(len(X),))
+        for i, x in enumerate(X):
+            node_list = self._get_node_pairs(x, x)
+            delta_result = 0
+            ddecay = 0
+            cache = {} # DP
+            cache_ddecay = {}
+            # Calculation happens here.
+            #print node_list
+            delta_result, ddecay = self.delta(node_list)
+            K_vec[i] = delta_result
+            ddecay_vec[i] = ddecay
+        return (K_vec, ddecay_vec)
+
+    def delta(self, node_list):
+        cache_delta = defaultdict(int) # DP
+        cache_ddecay = defaultdict(int)
+        for node_pair in node_list:
+            #print node_pair
+            node1, node2, child_len = node_pair
+            key = (node1, node2)
+            if child_len == 0:
+                cache_delta[key] = self.decay
+                cache_ddecay[key] = 1
+            else:
+                prod = 1
+                sum_decay = 0
+                for i in xrange(child_len):
+                    child_key = (tuple(list(node1) + [i]),
+                                 tuple(list(node2) + [i]))
+                    ch_delta = cache_delta[child_key]
+                    ch_ddecay = cache_ddecay[child_key]
+                    prod *= ch_delta
+                    sum_decay += ch_ddecay / float(ch_delta)
+                delta_result = self.decay * prod
+                cache_delta[key] = delta_result
+                cache_ddecay[key] = prod + (delta_result * sum_decay)
+        return (sum(cache_delta.values()),
+                sum(cache_ddecay.values()))
