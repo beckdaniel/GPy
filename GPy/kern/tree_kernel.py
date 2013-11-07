@@ -874,7 +874,7 @@ class UberFastTreeKernel(Kernpart):
                 id1 = self.cache["tree_ids"][x1[0]]
                 id2 = self.cache["tree_ids"][x2[0]]
                 if id1 == id2:
-                    target[i][j] += 1
+                    target[i][j] += self.cache["K_norm"][(id1, id2)](self._lambda, self._sigma)
                 else:
                     if sym and (id2 > id1):
                         continue
@@ -886,7 +886,9 @@ class UberFastTreeKernel(Kernpart):
                         #                                       self._s:self._sigma})
                         result = expression(self._lambda, self._sigma)
                         #print result
-                        target[i][j] += result * 2
+                        target[i][j] += result
+                        if sym:
+                            target[j][i] += result
                         #print self._lambda
                         #print self._sigma
                     except TypeError:
@@ -941,12 +943,14 @@ class UberFastTreeKernel(Kernpart):
                 id1 = tree_ids[tree1[0]]
                 id2 = tree_ids[tree2[0]]
                 if id1 == id2:
-                    k_norm = sp.sympify(1)
+                    #k_norm = sp.sympify(1)
+                    k_norm = self._get_K_formula(tree1[0], tree2[0])
                 elif id2 > id1: #symmetry
                     continue 
                 else:
                     k = self._get_K_formula(tree1[0], tree2[0])
-                    k_norm = k / sp.sqrt(diag_K[(id1, id1)] * diag_K[(id2, id2)])
+                    k_norm = k #trying unnormalize
+                    #k_norm = k / sp.sqrt(diag_K[(id1, id1)] * diag_K[(id2, id2)])
                     #import ipdb; ipdb.set_trace()
                 K_norm[(id1, id2)] = sp.utilities.lambdify((self._l, self._s), k_norm)
                 #dlambda[(id1, id2)] = sp.utilities.lambdify((self._l, self._s), k_norm.diff(self._l))
@@ -1028,3 +1032,96 @@ class UberFastTreeKernel(Kernpart):
         return result
         
         
+class SimpleFastTreeKernel(Kernpart):
+    """
+    Moschitti's FTK but only with decay hyperparameter.
+    """
+    
+    def __init__(self, decay=1):
+        try:
+            import nltk
+        except ImportError:
+            sys.stderr.write("Tree Kernels need NLTK. Install it using \"pip install nltk\"")
+            raise
+        self.input_dim = 1 # A hack. Actually tree kernels have lots of dimensions.
+        self.num_params = 1
+        self.name = 'sftk'
+        self.decay = decay
+        self.cache = {}
+        
+    def _get_params(self):
+        return np.hstack((self.decay))
+
+    def _set_params(self, x):
+        self.decay = x[0]
+
+    def _get_param_names(self):
+        return ['decay']
+
+    def build_cache(self, X, X2=None):
+        if X2 == None:
+            self._build_cache_sym(X)
+        else:
+            self._build_cache_nsym(X, X2)
+
+    def _build_cache_sym(self, X):
+        self.cache["tree_ids"] = {}
+        self.cache["node_pair_lists"] = {}
+        # Store trees
+        for tree in X:
+            tree_id = len(self.cache["tree_ids"])
+            self.cache["tree_ids"].setdefault(tree[0], tree_id)
+        # Store node pairs
+        for tree1 in X:
+            id1 = self.cache["tree_ids"][tree1[0]]
+            for tree2 in X:
+                id2 = self.cache["tree_ids"][tree2[0]]
+                if id1 > id2: #symmetry
+                    continue
+                node_pairs = self._get_node_pairs(tree1[0], tree2[0])
+                self.cache["node_pair_lists"][(id1, id2)] = node_pairs
+        #self.cache["tree_ids"] = tree_ids
+        #self.cache["node_pair_lists"] = node_pairs
+
+    def _get_node_pairs(self, tree1, tree2):
+        """
+        Get two trees represented by strings and
+        return the node pair list
+        """
+        id1 = self.cache["tree_ids"][tree1]
+        id2 = self.cache["tree_ids"][tree2]
+        key = (id1, id2)
+        try:
+            return self.cache["node_pair_lists"][key]
+        except KeyError:
+            nodes1 = self._get_nodes(tree1)
+            nodes2 = self._get_nodes(tree2)
+            node_list = []
+            for n1 in nodes1:
+                for n2 in nodes2:
+                    if n1[0] == n2[0]:
+                        if type(n1[0].rhs()[0]) == str:
+                            # We consider preterms as leaves
+                            #tup1 = (0, n1[1])
+                            #tup2 = (0, n2[1])
+                            tup = (n1[1], n2[1], 0)
+                        else:
+                            #tup1 = (len(n1[0].rhs()), n1[1])
+                            #tup2 = (len(n2[0].rhs()), n2[1])
+                            tup = (n1[1], n2[1], len(n1[0].rhs()))
+                        #tup1 = (n1[0].rhs(), n1[1])
+                        #tup2 = (n2[0].rhs(), n2[1])
+                        #node_list.append((n1,n2))
+                        node_list.append(tup)
+            #self.cache["node_pair_lists"][key] = node_list
+            node_list.sort(key=lambda x: len(x[0]), reverse=True)
+            return node_list
+            
+    def _get_nodes(self, x):
+        t = nltk.Tree(x)
+        pos = t.treepositions()
+        for l in t.treepositions(order="leaves"):
+            pos.remove(l)
+        z = zip(t.productions(), pos)
+        z.sort()
+        return z

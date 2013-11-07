@@ -28,6 +28,7 @@ from independent_outputs import IndependentOutputs as independent_output_part
 from tree_kernel import TreeKernel as TreeKernelPart
 from tree_kernel import FastTreeKernel as FastTreeKernelPart
 from tree_kernel import UberFastTreeKernel as UberFastTreeKernelPart
+from tree_kernel import SimpleFastTreeKernel as SimpleFastTreeKernelPart
 #TODO these s=constructors are not as clean as we'd like. Tidy the code up
 #using meta-classes to make the objects construct properly wthout them.
 
@@ -340,9 +341,16 @@ def FastTreeKernel(normalize=True):
     part = FastTreeKernelPart(normalize=normalize)
     return kern(1, [part])
 
-def UberFastTreeKernel(normalize=True):
+def UberFastTreeKernel(_lambda=1, _sigma=1, normalize=True):
     """
     Tree kernel
     """
-    part = UberFastTreeKernelPart(normalize=normalize)
+    part = UberFastTreeKernelPart(_lambda=_lambda, _sigma=_sigma, normalize=normalize)
+    return kern(1, [part])
+
+def SimpleFastTreeKernel(decay=1):
+    """
+    Tree kernel
+    """
+    part = SimpleFastTreeKernelPart(decay=decay)
     return kern(1, [part])

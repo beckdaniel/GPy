@@ -695,6 +695,53 @@ class UberFastTreeKernelTests(unittest.TestCase):
         #pprint.pprint(tk.parts[0].cache)
         #pprint.pprint(np.sum(tk.parts[0].cache["K_norm"].values()).diff(sp.symbols('s')).diff(sp.symbols('s')).diff(sp.symbols('s')).evalf(subs={sp.symbols('l'):3,sp.symbols('s'):4}))
 
+
+class SimpleFastTreeKernelTests(unittest.TestCase):
+    """
+    Tests for a simpler version of Moschitti FTK (only hyperparameter is decay)
+    """
+    def test_build_cache_sym1(self):
+        X = np.array([['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
+                      ])
+        tk = GPy.kern.SimpleFastTreeKernel()
+        tk.parts[0].build_cache(X)
+        import pprint
+        pprint.pprint(tk.parts[0].cache)
+
+    def test_build_cache_sym2(self):
+        X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
+                      ['(S (NP (N n2)) (VP (V v1) (N n1)))']
+                      ])
+        tk = GPy.kern.SimpleFastTreeKernel()
+        tk.parts[0].build_cache(X)
+        test_cache = {}
+        test_cache["tree_ids"] = {'(S (NP (N n1)) (VP (V v1)))': 0,
+            '(S (NP (N n2)) (VP (V v1) (N n1)))': 1}
+        test_cache["node_pair_lists"] = {(0, 0): [((0, 0), (0, 0), 0),
+                                                  ((1, 0), (1, 0), 0),
+                                                  ((0,), (0,), 1),
+                                                  ((1,), (1,), 1),
+                                                  ((), (), 2)],
+                                         (0, 1): [((0, 0), (1, 1), 0),
+                                                  ((1, 0), (1, 0), 0),
+                                                  ((0,), (0,), 1),
+                                                  ((), (), 2)],
+                                         (1, 1): [((1, 1), (1, 1), 0),
+                                                  ((0, 0), (0, 0), 0),
+                                                  ((1, 0), (1, 0), 0),
+                                                  ((0,), (0,), 1),
+                                                  ((1,), (1,), 2),
+                                                  ((), (), 2)]}
+        import pprint
+        pprint.pprint(tk.parts[0].cache)
+        self.assertEqual(tk.parts[0].cache["tree_ids"], test_cache["tree_ids"])
+        self.assertEqual(tk.parts[0].cache["node_pair_lists"], test_cache["node_pair_lists"])
+        
+
+
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
     A profiling test, to check for performance bottlenecks.
@@ -724,6 +771,7 @@ class ProfilingTreeKernelTests(unittest.TestCase):
         print m
         print m.predict(X)[0]
 
+    @unittest.skip("skipping profiling for now")
     def test_treekernel_profiling2(self):
         tk = GPy.kern.UberFastTreeKernel()#mode="opt", normalize=True)
         rbf = GPy.kern.rbf(2, ARD=True)
