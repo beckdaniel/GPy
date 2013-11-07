@@ -735,7 +735,39 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
                       ])
         tk = GPy.kern.SimpleFastTreeKernel()
         tk.parts[0].build_cache(X)
-        print tk.parts[0]._diag_calculations([X[0][0],X[1][0]])
+        print tk.parts[0]._diag_calculations(X)
+
+    def test_K_1(self):
+        X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
+                      ['(S (NP (N n2)) (VP (V v1) (N n1)))']
+                      ])
+        tk = GPy.kern.SimpleFastTreeKernel()
+        tk.parts[0].build_cache(X)
+        target = np.zeros(shape=(len(X), len(X)))
+        tk.parts[0].K(X,None,target)
+        print target
+
+    def test_K_2(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        tk = GPy.kern.SimpleFastTreeKernel(decay=0.1)
+        tk.parts[0].build_cache(X)
+        target = np.zeros(shape=(len(X), len(X)))
+        tk.parts[0].K(X,None,target)
+
+        tk2 = GPy.kern.FastTreeKernel()
+        tk2.parts[0]._set_params([0.1,1])
+        target2 = np.zeros(shape=(len(X), len(X)))
+        tk2.parts[0].K(X,None,target2)
+
+        self.assertAlmostEqual(np.sum(target), np.sum(target2))
+        self.assertAlmostEqual(np.sum(tk.parts[0].ddecays),
+                               np.sum(tk2.parts[0].ddecay_results))
+
 
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
@@ -788,6 +820,30 @@ class ProfilingTreeKernelTests(unittest.TestCase):
         cProfile.runctx("m.optimize(optimizer='lbfgs', max_f_eval=200, messages=True)", 
                         globals(), {'m': m, 'X': X}, sort="cumulative")
         #m.optimize(optimizer="tnc", max_f_eval=200, messages=True)
+        print m
+        #print m.predict(X)[0]
+
+    def test_treekernel_profiling3(self):
+        tk = GPy.kern.SimpleFastTreeKernel()
+        rbf = GPy.kern.rbf(2, ARD=True)
+        k = tk.add(rbf, tensor=True)
+        k.input_slices = [slice(0,1),slice(1,3)]
+        X = np.array([['(S NP VP)', 0.1, 4],
+                      ['(S (NP N) (VP V))', 0.3, 2],
+                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
+                     dtype=object)
+        X = X[:5]
+        Y = np.array([[(a+10)*5] for a in range(5)])
+        m = GPy.models.GPRegression(X, Y, kernel=k)
+        import cProfile
+        m.constrain_positive('rbf')
+        m.constrain_positive('noise')
+        m.constrain_bounded('sftk',0.1,10)
+        print m
+        cProfile.runctx("m.optimize(max_f_eval=200, messages=True)", 
+                        globals(), {'m': m, 'X': X}, sort="cumulative")
         print m
         #print m.predict(X)[0]
 

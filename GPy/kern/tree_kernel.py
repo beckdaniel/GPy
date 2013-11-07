@@ -1048,9 +1048,12 @@ class SimpleFastTreeKernel(Kernpart):
         self.name = 'sftk'
         self.decay = decay
         self.cache = {}
+        #self.cache["tree_ids"] = {}
+        #self.cache["node_pair_lists"] = {}
         
     def _get_params(self):
-        return np.hstack((self.decay))
+        #return np.hstack((self.decay))
+        return self.decay
 
     def _set_params(self, x):
         self.decay = x[0]
@@ -1139,18 +1142,62 @@ class SimpleFastTreeKernel(Kernpart):
             self.K_nsym(X, X2, target)
 
     def K_sym(self, X, target):
+        if self.cache == {}:
+            self.build_cache(X)
+
         # First, we are going to calculate K for diagonal values
         # because we will need them later to normalize.
-        diag_values = self._diag_calculations(X)
+        diag_deltas, diag_ddecays = self._diag_calculations(X)
 
         # Second, we are going to initialize the ddecay values
         # because we are going to calculate them at the same time as K.
+        K_results = np.zeros(shape=(len(X), len(X)))
+        ddecays = np.zeros(shape=(len(X), len(X)))
+        
+        # Now we proceed for the actual calculation
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X):
+                if i > j:
+                    K_results[i][j] = K_results[j][i]
+                    ddecays[i][j] = ddecays[j][i]
+                    continue
+                if i == j:
+                    K_results[i][j] = 1
+                    continue
+                # It will always be a 1-element array
+                node_list = self._get_node_pairs(x1[0], x2[0])
+                try:
+                    K_result, ddecay_result = self.delta(node_list)
+                except:
+                    print node_list
+                    raise
+                norm = diag_deltas[i] * diag_deltas[j]
+                sqrt_norm = np.sqrt(norm)
+                K_norm = K_result / sqrt_norm
+                
+                diff_term = ((diag_ddecays[i] * diag_deltas[j]) +
+                             (diag_deltas[i] * diag_ddecays[j]))
+                diff_term /= float(2 * norm)
+                ddecay_norm = ((ddecay_result / sqrt_norm) -
+                               (K_norm * diff_term))
 
+                K_results[i][j] = K_norm
+                ddecays[i][j] = ddecay_norm
+        
+        target += K_results
+        self.ddecays = ddecays
+
+    def dK_dtheta(self, dL_dK, X, X2, target):
+        s_like = np.sum(dL_dK)
+        s_decay = np.sum(self.ddecays)
+        target += [s_like * s_decay]
+
+                
     def _diag_calculations(self, X):
         K_vec = np.zeros(shape=(len(X),))
         ddecay_vec = np.zeros(shape=(len(X),))
         for i, x in enumerate(X):
-            node_list = self._get_node_pairs(x, x)
+            node_list = self._get_node_pairs(x[0], x[0])
             delta_result = 0
             ddecay = 0
             cache = {} # DP
@@ -1180,8 +1227,8 @@ class SimpleFastTreeKernel(Kernpart):
                                  tuple(list(node2) + [i]))
                     ch_delta = cache_delta[child_key]
                     ch_ddecay = cache_ddecay[child_key]
-                    prod *= ch_delta
-                    sum_decay += ch_ddecay / float(ch_delta)
+                    prod *= 1 + ch_delta
+                    sum_decay += ch_ddecay / (1 + float(ch_delta))
                 delta_result = self.decay * prod
                 cache_delta[key] = delta_result
                 cache_ddecay[key] = prod + (delta_result * sum_decay)
