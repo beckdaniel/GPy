@@ -1070,10 +1070,13 @@ class SimpleFastTreeKernel(Kernpart):
     def _build_cache_sym(self, X):
         self.cache["tree_ids"] = {}
         self.cache["node_pair_lists"] = {}
+        # Temporary node cache
+        node_cache = {}
         # Store trees
         for tree in X:
             tree_id = len(self.cache["tree_ids"])
             self.cache["tree_ids"].setdefault(tree[0], tree_id)
+            node_cache[tree_id] = self._get_nodes(tree[0])
         # Store node pairs
         for tree1 in X:
             id1 = self.cache["tree_ids"][tree1[0]]
@@ -1081,10 +1084,63 @@ class SimpleFastTreeKernel(Kernpart):
                 id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
                     continue
-                node_pairs = self._get_node_pairs(tree1[0], tree2[0])
+                nodes1 = node_cache[id1]
+                nodes2 = node_cache[id2]
+                #node_pairs = self._get_node_pairs(tree1[0], tree2[0])
+                node_pairs = self._get_node_pair_list2(nodes1, nodes2)
                 self.cache["node_pair_lists"][(id1, id2)] = node_pairs
         #self.cache["tree_ids"] = tree_ids
         #self.cache["node_pair_lists"] = node_pairs
+
+    def _get_node_pair_list(self, nodes1, nodes2):
+        """
+        Get two trees represented by strings and
+        return the node pair list
+        """
+        node_list = []
+        for n1 in nodes1:
+            for n2 in nodes2:
+                if n1[0] == n2[0]:
+                    if type(n1[0].rhs()[0]) == str:
+                        # We consider preterms as leaves
+                        tup = (n1[1], n2[1], 0)
+                    else:
+                        tup = (n1[1], n2[1], len(n1[0].rhs()))
+                    node_list.append(tup)
+        node_list.sort(key=lambda x: len(x[0]), reverse=True)
+        return node_list
+
+    def _get_node_pair_list2(self, nodes1, nodes2):
+        """
+        Get two trees represented by strings and
+        return the node pair list
+        """
+        node_list = []
+        i1 = 0
+        i2 = 0
+        while True:
+            try:
+                if nodes1[i1][0] > nodes2[i2][0]:
+                    i2 += 1
+                elif nodes1[i1][0] < nodes2[i2][0]:
+                    i1 += 1
+                else:
+                    while nodes1[i1][0] == nodes2[i2][0]:
+                        reset2 = i2
+                        while nodes1[i1][0] == nodes2[i2][0]:
+                            if type(nodes1[i1][0].rhs()[0]) == str:
+                                # We consider preterms as leaves
+                                tup = (nodes1[i1][1], nodes2[i2][1], 0)
+                            else:
+                                tup = (nodes1[i1][1], nodes2[i2][1], len(nodes1[i1][0].rhs()))
+                            node_list.append(tup)
+                            i2 += 1
+                        i1 += 1
+                        i2 = reset2
+            except IndexError:
+                break
+        node_list.sort(key=lambda x: len(x[0]), reverse=True)
+        return node_list
 
     def _get_node_pairs(self, tree1, tree2):
         """
@@ -1126,6 +1182,8 @@ class SimpleFastTreeKernel(Kernpart):
         for l in t.treepositions(order="leaves"):
             pos.remove(l)
         z = zip(t.productions(), pos)
+        #import ipdb
+        #ipdb.set_trace()
         z.sort()
         return z
 
