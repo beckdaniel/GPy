@@ -727,6 +727,7 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
         #import pprint
         #pprint.pprint(tk.parts[0].cache)
         self.assertEqual(tk.parts[0].cache["tree_ids"], test_cache["tree_ids"])
+        self.maxDiff = None
         self.assertEqual(tk.parts[0].cache["node_pair_lists"], test_cache["node_pair_lists"])
         
     def test_delta_1(self):

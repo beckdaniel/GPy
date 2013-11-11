@@ -348,9 +348,9 @@ def UberFastTreeKernel(_lambda=1, _sigma=1, normalize=True):
     part = UberFastTreeKernelPart(_lambda=_lambda, _sigma=_sigma, normalize=normalize)
     return kern(1, [part])
 
-def SimpleFastTreeKernel(decay=1):
+def SimpleFastTreeKernel(decay=1, has_root=False):
     """
     Tree kernel
     """
-    part = SimpleFastTreeKernelPart(decay=decay)
+    part = SimpleFastTreeKernelPart(decay=decay, has_root=has_root)
     return kern(1, [part])

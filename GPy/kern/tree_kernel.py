@@ -1037,7 +1037,7 @@ class SimpleFastTreeKernel(Kernpart):
     Moschitti's FTK but only with decay hyperparameter.
     """
     
-    def __init__(self, decay=1):
+    def __init__(self, decay=1, has_root=False):
         try:
             import nltk
         except ImportError:
@@ -1048,6 +1048,7 @@ class SimpleFastTreeKernel(Kernpart):
         self.name = 'sftk'
         self.decay = decay
         self.cache = {}
+        self.has_root = has_root
         #self.cache["tree_ids"] = {}
         #self.cache["node_pair_lists"] = {}
         
@@ -1080,6 +1081,9 @@ class SimpleFastTreeKernel(Kernpart):
         # Store node pairs
         for tree1 in X:
             id1 = self.cache["tree_ids"][tree1[0]]
+            ############
+            self.cache["node_pair_lists"][id1] = {}
+            ###########
             for tree2 in X:
                 id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
@@ -1088,7 +1092,10 @@ class SimpleFastTreeKernel(Kernpart):
                 nodes2 = node_cache[id2]
                 #node_pairs = self._get_node_pairs(tree1[0], tree2[0])
                 node_pairs = self._get_node_pair_list(nodes1, nodes2)
-                self.cache["node_pair_lists"][(id1, id2)] = node_pairs
+                ############
+                #self.cache["node_pair_lists"][(id1, id2)] = node_pairs
+                self.cache["node_pair_lists"][id1][id2] = node_pairs
+                ############
         #self.cache["tree_ids"] = tree_ids
         #self.cache["node_pair_lists"] = node_pairs
 
@@ -1132,8 +1139,9 @@ class SimpleFastTreeKernel(Kernpart):
         try:
             id1 = self.cache["tree_ids"][tree1]
             id2 = self.cache["tree_ids"][tree2]
-            key = (id1, id2)
-            return self.cache["node_pair_lists"][key]
+            #key = (id1, id2)
+            #return self.cache["node_pair_lists"][key]
+            return self.cache["node_pair_lists"][id1][id2]
         except KeyError:
             nodes1 = self._get_nodes(tree1)
             nodes2 = self._get_nodes(tree2)
@@ -1141,6 +1149,8 @@ class SimpleFastTreeKernel(Kernpart):
             
     def _get_nodes(self, x):
         t = nltk.Tree(x)
+        if self.has_root:
+            t = t[0]
         pos = t.treepositions()
         for l in t.treepositions(order="leaves"):
             pos.remove(l)
