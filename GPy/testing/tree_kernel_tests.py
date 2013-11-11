@@ -768,6 +768,22 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(np.sum(tk.parts[0].ddecays),
                                np.sum(tk2.parts[0].ddecay_results))
 
+    def test_gp_regression_1(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        tk = GPy.kern.SimpleFastTreeKernel(decay=0.1)
+        Y = np.array([[(a+10)*5] for a in range(5)])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        pred = m.predict(np.array([['(S (NP (N b)) (VP (V c)))']]))
+        print pred
+        predX = m.predict(X)
+        print Y
+        print predX
+
 
 class ProfilingTreeKernelTests(unittest.TestCase):
     """

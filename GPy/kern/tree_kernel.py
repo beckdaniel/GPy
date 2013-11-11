@@ -1087,30 +1087,12 @@ class SimpleFastTreeKernel(Kernpart):
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
                 #node_pairs = self._get_node_pairs(tree1[0], tree2[0])
-                node_pairs = self._get_node_pair_list2(nodes1, nodes2)
+                node_pairs = self._get_node_pair_list(nodes1, nodes2)
                 self.cache["node_pair_lists"][(id1, id2)] = node_pairs
         #self.cache["tree_ids"] = tree_ids
         #self.cache["node_pair_lists"] = node_pairs
 
     def _get_node_pair_list(self, nodes1, nodes2):
-        """
-        Get two trees represented by strings and
-        return the node pair list
-        """
-        node_list = []
-        for n1 in nodes1:
-            for n2 in nodes2:
-                if n1[0] == n2[0]:
-                    if type(n1[0].rhs()[0]) == str:
-                        # We consider preterms as leaves
-                        tup = (n1[1], n2[1], 0)
-                    else:
-                        tup = (n1[1], n2[1], len(n1[0].rhs()))
-                    node_list.append(tup)
-        node_list.sort(key=lambda x: len(x[0]), reverse=True)
-        return node_list
-
-    def _get_node_pair_list2(self, nodes1, nodes2):
         """
         Get two trees represented by strings and
         return the node pair list
@@ -1147,34 +1129,15 @@ class SimpleFastTreeKernel(Kernpart):
         Get two trees represented by strings and
         return the node pair list
         """
-        id1 = self.cache["tree_ids"][tree1]
-        id2 = self.cache["tree_ids"][tree2]
-        key = (id1, id2)
         try:
+            id1 = self.cache["tree_ids"][tree1]
+            id2 = self.cache["tree_ids"][tree2]
+            key = (id1, id2)
             return self.cache["node_pair_lists"][key]
         except KeyError:
             nodes1 = self._get_nodes(tree1)
             nodes2 = self._get_nodes(tree2)
-            node_list = []
-            for n1 in nodes1:
-                for n2 in nodes2:
-                    if n1[0] == n2[0]:
-                        if type(n1[0].rhs()[0]) == str:
-                            # We consider preterms as leaves
-                            #tup1 = (0, n1[1])
-                            #tup2 = (0, n2[1])
-                            tup = (n1[1], n2[1], 0)
-                        else:
-                            #tup1 = (len(n1[0].rhs()), n1[1])
-                            #tup2 = (len(n2[0].rhs()), n2[1])
-                            tup = (n1[1], n2[1], len(n1[0].rhs()))
-                        #tup1 = (n1[0].rhs(), n1[1])
-                        #tup2 = (n2[0].rhs(), n2[1])
-                        #node_list.append((n1,n2))
-                        node_list.append(tup)
-            #self.cache["node_pair_lists"][key] = node_list
-            node_list.sort(key=lambda x: len(x[0]), reverse=True)
-            return node_list
+            return self._get_node_pair_list(nodes1, nodes2)
             
     def _get_nodes(self, x):
         t = nltk.Tree(x)
@@ -1194,6 +1157,8 @@ class SimpleFastTreeKernel(Kernpart):
         target += np.ones(shape=(len(X),))
 
     def K(self, X, X2, target):
+        # A check to ensure that ddecays cache will always change when K changes
+        self.ddecays = None
         if X2 == None:
             self.K_sym(X, target)
         else:
@@ -1245,9 +1210,48 @@ class SimpleFastTreeKernel(Kernpart):
         target += K_results
         self.ddecays = ddecays
 
+    def K_nsym(self, X, X2, target):
+        # First, we are going to calculate K for diagonal values
+        # because we will need them later to normalize.
+        diag_deltas_X, diag_ddecays_X = self._diag_calculations(X)
+        diag_deltas_X2, diag_ddecays_X2 = self._diag_calculations(X2)
+
+        # Second, we are going to initialize the ddecay values
+        # because we are going to calculate them at the same time as K.
+        K_results = np.zeros(shape=(len(X), len(X2)))
+        ddecays = np.zeros(shape=(len(X), len(X2)))
+        
+        # Now we proceed for the actual calculation
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                # It will always be a 1-element array
+                node_list = self._get_node_pairs(x1[0], x2[0])
+                try:
+                    K_result, ddecay_result = self.delta(node_list)
+                except:
+                    print node_list
+                    raise
+                norm = diag_deltas_X[i] * diag_deltas_X2[j]
+                sqrt_norm = np.sqrt(norm)
+                K_norm = K_result / sqrt_norm
+                
+                diff_term = ((diag_ddecays_X[i] * diag_deltas_X2[j]) +
+                             (diag_deltas_X[i] * diag_ddecays_X2[j]))
+                diff_term /= float(2 * norm)
+                ddecay_norm = ((ddecay_result / sqrt_norm) -
+                               (K_norm * diff_term))
+
+                K_results[i][j] = K_norm
+                ddecays[i][j] = ddecay_norm        
+        target += K_results
+        self.ddecays = ddecays
+
     def dK_dtheta(self, dL_dK, X, X2, target):
         s_like = np.sum(dL_dK)
-        s_decay = np.sum(self.ddecays)
+        if self.ddecays != None:
+            s_decay = np.sum(self.ddecays)
+        else:
+            raise IndexError("No ddecays cached")
         target += [s_like * s_decay]
 
                 
