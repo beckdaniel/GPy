@@ -618,11 +618,74 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
         print predX
 
 
+class SympySimpleFastTreeKernelTests(unittest.TestCase):
+    """
+    Tests for a simpler version of Moschitti FTK (only hyperparameter is decay)
+    """
+    def test_get_nodes1(self):
+        X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
+                      ['(S (NP (N n2)) (VP (V v1) (N n1)))']
+                      ])
+        tk = GPy.kern.SympySimpleFastTreeKernel()
+        result = tk.parts[0]._get_nodes(X[0][0])
+        expected = "[(N -> 'n1', (0, 0)), (V -> 'v1', (1, 0)), (NP -> N, (0,)), (VP -> V, (1,)), (S -> NP VP, ())]"
+        assert str(result) == expected
+
+    def test_formulate1(self):
+        X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
+                      ['(S (NP (N n2)) (VP (V v1) (N n1)))']
+                      ])
+        tk = GPy.kern.SympySimpleFastTreeKernel()
+        nodes1 = tk.parts[0]._get_nodes(X[0][0])
+        nodes2 = tk.parts[0]._get_nodes(X[1][0])
+        formula1 = tk.parts[0]._formulate(nodes1, nodes2)
+        formula2 = tk.parts[0]._formulate(nodes1, nodes1)
+        formula3 = tk.parts[0]._formulate(nodes2, nodes2)
+        print formula1.simplify()
+        print formula2.simplify()
+        print formula3.simplify()
+        print formula1.expand()
+        print formula2.expand()
+        print formula3.expand()        
+
+    def test_delta1(self):
+        X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
+                      ['(S (NP (N n2)) (VP (V v1) (N n1)))']
+                      ])
+        tk = GPy.kern.SympySimpleFastTreeKernel()
+        nodes1 = tk.parts[0]._get_nodes(X[0][0])
+        nodes2 = tk.parts[0]._get_nodes(X[1][0])
+        formula = tk.parts[0]._formulate(nodes1, nodes2)
+        print tk.parts[0].delta(formula)
+
+
+    def test_K_2(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        tk = GPy.kern.SympySimpleFastTreeKernel(decay=0.1)
+        tk.parts[0].build_cache(X)
+        target = np.zeros(shape=(len(X), len(X)))
+        tk.parts[0].K(X,None,target)
+
+        tk2 = GPy.kern.TreeKernel(normalize=True, mode="opt")
+        tk2.parts[0]._set_params([0.1,1])
+        target2 = np.zeros(shape=(len(X), len(X)))
+        tk2.parts[0].K(X,None,target2)
+
+        self.assertAlmostEqual(np.sum(target), np.sum(target2))
+        self.assertAlmostEqual(np.sum(tk.parts[0].ddecays),
+                               np.sum(tk2.parts[0].ddecay_results))
+
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
     A profiling test, to check for performance bottlenecks.
     """
 
+    @unittest.skip("Skipping profiling")
     def test_treekernel_profiling3(self):
         tk = GPy.kern.SimpleFastTreeKernel()
         rbf = GPy.kern.rbf(2, ARD=True)

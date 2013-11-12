@@ -27,6 +27,7 @@ from rbfcos import rbfcos as rbfcospart
 from independent_outputs import IndependentOutputs as independent_output_part
 from tree_kernel import TreeKernel as TreeKernelPart
 from tree_kernel import SimpleFastTreeKernel as SimpleFastTreeKernelPart
+from tree_kernel import SympySimpleFastTreeKernel as SympySimpleFastTreeKernelPart
 #TODO these s=constructors are not as clean as we'd like. Tidy the code up
 #using meta-classes to make the objects construct properly wthout them.
 
@@ -337,4 +338,11 @@ def SimpleFastTreeKernel(decay=1, has_root=False):
     Tree kernel
     """
     part = SimpleFastTreeKernelPart(decay=decay, has_root=has_root)
+    return kern(1, [part])
+
+def SympySimpleFastTreeKernel(decay=1, has_root=False):
+    """
+    Tree kernel
+    """
+    part = SympySimpleFastTreeKernelPart(decay=decay, has_root=has_root)
     return kern(1, [part])

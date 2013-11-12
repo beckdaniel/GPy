@@ -590,11 +590,8 @@ class SimpleFastTreeKernel(Kernpart):
         self.decay = decay
         self.cache = {}
         self.has_root = has_root
-        #self.cache["tree_ids"] = {}
-        #self.cache["node_pair_lists"] = {}
         
     def _get_params(self):
-        #return np.hstack((self.decay))
         return self.decay
 
     def _set_params(self, x):
@@ -622,23 +619,15 @@ class SimpleFastTreeKernel(Kernpart):
         # Store node pairs
         for tree1 in X:
             id1 = self.cache["tree_ids"][tree1[0]]
-            ############
             self.cache["node_pair_lists"][id1] = {}
-            ###########
             for tree2 in X:
                 id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
                     continue
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
-                #node_pairs = self._get_node_pairs(tree1[0], tree2[0])
                 node_pairs = self._get_node_pair_list(nodes1, nodes2)
-                ############
-                #self.cache["node_pair_lists"][(id1, id2)] = node_pairs
                 self.cache["node_pair_lists"][id1][id2] = node_pairs
-                ############
-        #self.cache["tree_ids"] = tree_ids
-        #self.cache["node_pair_lists"] = node_pairs
 
     def _get_node_pair_list(self, nodes1, nodes2):
         """
@@ -680,8 +669,6 @@ class SimpleFastTreeKernel(Kernpart):
         try:
             id1 = self.cache["tree_ids"][tree1]
             id2 = self.cache["tree_ids"][tree2]
-            #key = (id1, id2)
-            #return self.cache["node_pair_lists"][key]
             return self.cache["node_pair_lists"][id1][id2]
         except KeyError:
             nodes1 = self._get_nodes(tree1)
@@ -804,7 +791,6 @@ class SimpleFastTreeKernel(Kernpart):
         else:
             raise IndexError("No ddecays cached")
         target += [s_like * s_decay]
-
                 
     def _diag_calculations(self, X):
         K_vec = np.zeros(shape=(len(X),))
@@ -816,7 +802,6 @@ class SimpleFastTreeKernel(Kernpart):
             cache = {} # DP
             cache_ddecay = {}
             # Calculation happens here.
-            #print node_list
             delta_result, ddecay = self.delta(node_list)
             K_vec[i] = delta_result
             ddecay_vec[i] = ddecay
@@ -826,7 +811,6 @@ class SimpleFastTreeKernel(Kernpart):
         cache_delta = defaultdict(int) # DP
         cache_ddecay = defaultdict(int)
         for node_pair in node_list:
-            #print node_pair
             node1, node2, child_len = node_pair
             key = (node1, node2)
             if child_len == 0:
@@ -847,3 +831,231 @@ class SimpleFastTreeKernel(Kernpart):
                 cache_ddecay[key] = prod + (delta_result * sum_decay)
         return (sum(cache_delta.values()),
                 sum(cache_ddecay.values()))
+
+
+class SympySimpleFastTreeKernel(Kernpart):
+    """
+    Moschitti's FTK but only with decay hyperparameter. A sympy version.
+    """
+
+    def __init__(self, decay=1, has_root=False):
+        try:
+            import nltk
+        except ImportError:
+            sys.stderr.write("Tree Kernels need NLTK. Install it using \"pip install nltk\"")
+            raise
+        self.input_dim = 1 # A hack. Actually tree kernels have lots of dimensions.
+        self.num_params = 1
+        self.name = 'symftk'
+        self.decay = decay
+        self.cache = {}
+        self.has_root = has_root
+
+    def _get_params(self):
+        return self.decay
+
+    def _set_params(self, x):
+        self.decay = x[0]
+
+    def _get_param_names(self):
+        return ['decay']
+
+    def build_cache(self, X):
+        self.cache["tree_ids"] = {}
+        self.cache["tree_pair_formulas"] = {}
+        # Temporary node cache
+        node_cache = {}
+        # Store trees
+        for tree in X:
+            tree_id = len(self.cache["tree_ids"])
+            self.cache["tree_ids"].setdefault(tree[0], tree_id)
+            node_cache[tree_id] = self._get_nodes(tree[0])
+        # Store node pairs
+        for tree1 in X:
+            id1 = self.cache["tree_ids"][tree1[0]]
+            self.cache["tree_pair_formulas"][id1] = {}
+            for tree2 in X:
+                id2 = self.cache["tree_ids"][tree2[0]]
+                if id1 > id2: #symmetry
+                    continue
+                nodes1 = node_cache[id1]
+                nodes2 = node_cache[id2]
+                delta = self._formulate(nodes1, nodes2)
+                self.cache["tree_pair_formulas"][id1][id2] = delta
+                #self.cache["tree_pair_ddecays"][id1][id2] = ddecays
+
+    def _get_nodes(self, x):
+        t = nltk.Tree(x)
+        if self.has_root:
+            t = t[0]
+        pos = t.treepositions()
+        for l in t.treepositions(order="leaves"):
+            pos.remove(l)
+        z = zip(t.productions(), pos)
+        #import ipdb
+        #ipdb.set_trace()
+        z.sort(key=lambda x: len(x[1]), reverse=True)
+        return z
+
+    def _formulate(self, nodes1, nodes2):
+        """
+        Get two trees represented by strings and
+        return the node pair list as sympy formula
+        """
+        cache = defaultdict(int)
+        l = sp.Symbol("l")
+        #formula = 0
+        for n1 in nodes1:
+            for n2 in nodes2:
+                if n1[0] == n2[0]:
+                    key = (n1[1], n2[1])
+                    if type(n1[0].rhs()[0]) == str:
+                        #formula += l
+                        cache[key] = l
+                    else:
+                        prod = 1
+                        for i in xrange(len(n1[0].rhs())):
+                            child_key = (tuple(list(n1[1]) + [i]),
+                                         tuple(list(n2[1]) + [i]))
+                            ch_delta = cache[child_key]
+                            prod *= 1 + ch_delta
+                        cache[key] = prod * l
+        return sum(cache.values())
+
+    def _get_formula(self, tree1, tree2):
+        """
+        Get two trees represented by strings and
+        return the node pair list
+        """
+        try:
+            id1 = self.cache["tree_ids"][tree1]
+            id2 = self.cache["tree_ids"][tree2]
+            return self.cache["tree_pair_formulas"][id1][id2]
+        except KeyError:
+            nodes1 = self._get_nodes(tree1)
+            nodes2 = self._get_nodes(tree2)
+            return self._formulate(nodes1, nodes2)
+
+    def Kdiag(self, X, target):
+        """
+        Since this is a normalized kernel, diag values are all equal to 1.
+        """
+        target += np.ones(shape=(len(X),))
+
+    def K(self, X, X2, target):
+        if X2 == None:
+            self.K_sym(X, target)
+        else:
+            self.K_nsym(X, X2, target)
+
+    def K_sym(self, X, target):
+        if self.cache == {}:
+            self.build_cache(X)
+
+        # First, we are going to calculate K for diagonal values
+        # because we will need them later to normalize.
+        diag_deltas, diag_ddecays = self._diag_calculations(X)
+
+        # Second, we are going to initialize the ddecay values
+        # because we are going to calculate them at the same time as K.
+        K_results = np.zeros(shape=(len(X), len(X)))
+        ddecays = np.zeros(shape=(len(X), len(X)))
+        
+        # Now we proceed for the actual calculation
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X):
+                if i > j:
+                    K_results[i][j] = K_results[j][i]
+                    ddecays[i][j] = ddecays[j][i]
+                    continue
+                if i == j:
+                    K_results[i][j] = 1
+                    continue
+                # It will always be a 1-element array
+                formula = self._get_formula(x1[0], x2[0])
+                try:
+                    K_result, ddecay_result = self.delta(formula)
+                except:
+                    print formula
+                    raise
+                norm = diag_deltas[i] * diag_deltas[j]
+                sqrt_norm = np.sqrt(norm)
+                K_norm = K_result / sqrt_norm
+                
+                diff_term = ((diag_ddecays[i] * diag_deltas[j]) +
+                             (diag_deltas[i] * diag_ddecays[j]))
+                diff_term /= float(2 * norm)
+                ddecay_norm = ((ddecay_result / sqrt_norm) -
+                               (K_norm * diff_term))
+
+                K_results[i][j] = K_norm
+                ddecays[i][j] = ddecay_norm
+        
+        target += K_results
+        self.ddecays = ddecays
+
+    def K_nsym(self, X, X2, target):
+        # First, we are going to calculate K for diagonal values
+        # because we will need them later to normalize.
+        diag_deltas_X, diag_ddecays_X = self._diag_calculations(X)
+        diag_deltas_X2, diag_ddecays_X2 = self._diag_calculations(X2)
+
+        # Second, we are going to initialize the ddecay values
+        # because we are going to calculate them at the same time as K.
+        K_results = np.zeros(shape=(len(X), len(X2)))
+        ddecays = np.zeros(shape=(len(X), len(X2)))
+        
+        # Now we proceed for the actual calculation
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                # It will always be a 1-element array
+                node_list = self._get_node_pairs(x1[0], x2[0])
+                try:
+                    K_result, ddecay_result = self.delta(node_list)
+                except:
+                    print node_list
+                    raise
+                norm = diag_deltas_X[i] * diag_deltas_X2[j]
+                sqrt_norm = np.sqrt(norm)
+                K_norm = K_result / sqrt_norm
+                
+                diff_term = ((diag_ddecays_X[i] * diag_deltas_X2[j]) +
+                             (diag_deltas_X[i] * diag_ddecays_X2[j]))
+                diff_term /= float(2 * norm)
+                ddecay_norm = ((ddecay_result / sqrt_norm) -
+                               (K_norm * diff_term))
+
+                K_results[i][j] = K_norm
+                ddecays[i][j] = ddecay_norm        
+        target += K_results
+        self.ddecays = ddecays
+
+    def dK_dtheta(self, dL_dK, X, X2, target):
+        s_like = np.sum(dL_dK)
+        if self.ddecays != None:
+            s_decay = np.sum(self.ddecays)
+        else:
+            raise IndexError("No ddecays cached")
+        target += [s_like * s_decay]
+                
+    def _diag_calculations(self, X):
+        K_vec = np.zeros(shape=(len(X),))
+        ddecay_vec = np.zeros(shape=(len(X),))
+        for i, x in enumerate(X):
+            formula = self._get_formula(x[0], x[0])
+            delta_result = 0
+            ddecay = 0
+            cache = {} # DP
+            cache_ddecay = {}
+            # Calculation happens here.
+            delta_result, ddecay = self.delta(formula)
+            K_vec[i] = delta_result
+            ddecay_vec[i] = ddecay
+        return (K_vec, ddecay_vec)
+
+    def delta(self, formula):
+        l = sp.Symbol('l')
+        d = formula.evalf(subs={l: self.decay})
+        ddecay = formula.diff(l).evalf(subs={l: self.decay})
+        return (d, ddecay)
+        
