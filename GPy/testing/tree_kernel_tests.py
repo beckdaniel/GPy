@@ -641,9 +641,9 @@ class SympySimpleFastTreeKernelTests(unittest.TestCase):
         formula1 = tk.parts[0]._formulate(nodes1, nodes2)
         formula2 = tk.parts[0]._formulate(nodes1, nodes1)
         formula3 = tk.parts[0]._formulate(nodes2, nodes2)
-        print formula1.simplify()
-        print formula2.simplify()
-        print formula3.simplify()
+        print formula1
+        print formula2
+        print formula3
         print formula1.expand()
         print formula2.expand()
         print formula3.expand()        

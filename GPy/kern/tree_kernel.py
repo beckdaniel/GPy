@@ -4,6 +4,7 @@ import numpy as np
 from collections import defaultdict
 import sys
 import sympy as sp
+from sympy.utilities.lambdify import lambdastr
 import nltk
 
 class TreeKernel(Kernpart):
@@ -862,7 +863,8 @@ class SympySimpleFastTreeKernel(Kernpart):
 
     def build_cache(self, X):
         self.cache["tree_ids"] = {}
-        self.cache["tree_pair_formulas"] = {}
+        self.cache["tree_pair_ks"] = {}
+        self.cache["tree_pair_ddecays"] = {}
         # Temporary node cache
         node_cache = {}
         # Store trees
@@ -873,7 +875,8 @@ class SympySimpleFastTreeKernel(Kernpart):
         # Store node pairs
         for tree1 in X:
             id1 = self.cache["tree_ids"][tree1[0]]
-            self.cache["tree_pair_formulas"][id1] = {}
+            self.cache["tree_pair_ks"][id1] = {}
+            self.cache["tree_pair_ddecays"][id1] = {}
             for tree2 in X:
                 id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
@@ -881,8 +884,11 @@ class SympySimpleFastTreeKernel(Kernpart):
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
                 delta = self._formulate(nodes1, nodes2)
-                self.cache["tree_pair_formulas"][id1][id2] = delta
-                #self.cache["tree_pair_ddecays"][id1][id2] = ddecays
+                #self.cache["tree_pair_formulas"][id1][id2] = delta
+                #self.cache["tree_pair_formulas"][id1][id2] = sp.lambdify(sp.Symbol('l'), delta, modules="math")
+                l = sp.Symbol('l')
+                self.cache["tree_pair_ks"][id1][id2] = lambdastr(l, delta)
+                self.cache["tree_pair_ddecays"][id1][id2] = lambdastr(l, delta.diff(l))
 
     def _get_nodes(self, x):
         t = nltk.Tree(x)
@@ -904,13 +910,13 @@ class SympySimpleFastTreeKernel(Kernpart):
         """
         cache = defaultdict(int)
         l = sp.Symbol("l")
-        #formula = 0
+        formula = sp.sympify(0)
         for n1 in nodes1:
             for n2 in nodes2:
                 if n1[0] == n2[0]:
                     key = (n1[1], n2[1])
                     if type(n1[0].rhs()[0]) == str:
-                        #formula += l
+                        formula += l
                         cache[key] = l
                     else:
                         prod = 1
@@ -919,8 +925,12 @@ class SympySimpleFastTreeKernel(Kernpart):
                                          tuple(list(n2[1]) + [i]))
                             ch_delta = cache[child_key]
                             prod *= 1 + ch_delta
-                        cache[key] = prod * l
-        return sum(cache.values())
+                            #prod += prod * ch_delta
+                        res = (prod * l).expand()
+                        #res = prod * l
+                        formula += res
+                        cache[key] = res
+        return formula
 
     def _get_formula(self, tree1, tree2):
         """
@@ -930,7 +940,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         try:
             id1 = self.cache["tree_ids"][tree1]
             id2 = self.cache["tree_ids"][tree2]
-            return self.cache["tree_pair_formulas"][id1][id2]
+            return self.cache["tree_pair_ks"][id1][id2]
         except KeyError:
             nodes1 = self._get_nodes(tree1)
             nodes2 = self._get_nodes(tree2)
@@ -944,13 +954,13 @@ class SympySimpleFastTreeKernel(Kernpart):
 
     def K(self, X, X2, target):
         if X2 == None:
+            if self.cache == {}:
+                self.build_cache(X)
             self.K_sym(X, target)
         else:
             self.K_nsym(X, X2, target)
 
     def K_sym(self, X, target):
-        if self.cache == {}:
-            self.build_cache(X)
 
         # First, we are going to calculate K for diagonal values
         # because we will need them later to normalize.
@@ -1054,8 +1064,10 @@ class SympySimpleFastTreeKernel(Kernpart):
         return (K_vec, ddecay_vec)
 
     def delta(self, formula):
-        l = sp.Symbol('l')
-        d = formula.evalf(subs={l: self.decay})
-        ddecay = formula.diff(l).evalf(subs={l: self.decay})
+        #l = sp.Symbol('l')
+        #d = formula.evalf(subs={l: self.decay})
+        #ddecay = formula.diff(l).evalf(subs={l: self.decay})
+        d = eval(formula)(self.decay)
+        ddecay = 0
         return (d, ddecay)
         
