@@ -26,8 +26,6 @@ from rational_quadratic import rational_quadratic as rational_quadraticpart
 from rbfcos import rbfcos as rbfcospart
 from independent_outputs import IndependentOutputs as independent_output_part
 from tree_kernel import TreeKernel as TreeKernelPart
-from tree_kernel import FastTreeKernel as FastTreeKernelPart
-from tree_kernel import UberFastTreeKernel as UberFastTreeKernelPart
 from tree_kernel import SimpleFastTreeKernel as SimpleFastTreeKernelPart
 #TODO these s=constructors are not as clean as we'd like. Tidy the code up
 #using meta-classes to make the objects construct properly wthout them.
@@ -332,20 +330,6 @@ def TreeKernel(mode="naive", normalize=False):
     Tree kernel
     """
     part = TreeKernelPart(mode=mode, normalize=normalize)
-    return kern(1, [part])
-
-def FastTreeKernel(normalize=True):
-    """
-    Tree kernel
-    """
-    part = FastTreeKernelPart(normalize=normalize)
-    return kern(1, [part])
-
-def UberFastTreeKernel(_lambda=1, _sigma=1, normalize=True):
-    """
-    Tree kernel
-    """
-    part = UberFastTreeKernelPart(_lambda=_lambda, _sigma=_sigma, normalize=normalize)
     return kern(1, [part])
 
 def SimpleFastTreeKernel(decay=1, has_root=False):

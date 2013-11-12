@@ -523,177 +523,6 @@ class NormTreeKernelTests(unittest.TestCase):
         self.assertTrue(([1,1,1,1,1] == diag).all())
 
 
-class FastTreeKernelTests(unittest.TestCase):
-    """
-    Tests for FTK kernel (Moschitti, 2006)
-    """
-    def test_ftk1(self):
-        tk = GPy.kern.FastTreeKernel(normalize=False)
-        tk2 = GPy.kern.TreeKernel(mode="naive")
-        X = np.array([['(S (NP a) (VP v))'],
-                      ['(S (NP a1) (VP v))'],
-                      ['(S (NP (NP a)) (VP (V c)))'],
-                      ['(S (VP v2))']],
-                     dtype=object)
-        k = tk.K(X, X)
-        k2 = tk2.K(X, X)
-        result = np.array([[6,3,2,0],
-                           [3,6,1,0],
-                           [2,1,15,0],
-                           [0,0,0,3]])
-        self.assertTrue((k == k2).all())
-
-    def test_ftk2(self):
-        tk = GPy.kern.FastTreeKernel()
-        tk2 = GPy.kern.TreeKernel(mode="opt", normalize=True)
-        X = np.array([['(S (NP a) (VP v))'],
-                      ['(S (NP a1) (VP v))'],
-                      ['(S (NP (NP a)) (VP (V c)))'],
-                      ['(S (VP v2))']],
-                     dtype=object)
-        k = tk.K(X)
-        k2 = tk2.K(X)
-        result = np.array([[6,3,2,0],
-                           [3,6,1,0],
-                           [2,1,15,0],
-                           [0,0,0,3]])
-        self.assertTrue((k == k2).all())
-
-    def test_ftk3(self):
-        tk = GPy.kern.FastTreeKernel()
-        tk2 = GPy.kern.TreeKernel(mode="opt", normalize=True)
-        X = np.array([['(S (NP a) (VP v))'],
-                      ['(S (NP a1) (VP v))'],
-                      ['(S (NP (NP a)) (VP (V c)))'],
-                      ['(S (VP v2))']],
-                     dtype=object)
-        k = tk.K(X)
-        k2 = tk2.K(X)
-        dkdt = tk.dK_dtheta(1, X)
-        dkdt2 = tk2.dK_dtheta(1, X)
-        self.assertTrue((dkdt == dkdt2).all())
-
-    def test_ftk_grad1(self):
-        tk = GPy.kern.FastTreeKernel(normalize=True)
-        X = np.array([['(S (NP ns) (VP v))'],
-                      ['(S (NP n) (VP v))'],
-                      ['(S (NP (N a)) (VP (V c)))'],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
-                     dtype=object)
-        h = 0.00001
-        k = tk.K(X)
-        dk_dt = tk.dK_dtheta(1, X)
-        tk._set_params([1,1-h])
-        k_b1 = tk.K(X)
-        tk._set_params([1,1+h])
-        k_b2 = tk.K(X)
-        tk._set_params([1-h,1])
-        k_d1 = tk.K(X)
-        tk._set_params([1+h,1])
-        k_d2 = tk.K(X)
-        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
-        self.assertAlmostEqual(approx[0], dk_dt[0])
-        self.assertAlmostEqual(approx[1], dk_dt[1])
-
-    def test_ftk_get_nodes(self):
-        tk = GPy.kern.FastTreeKernel()
-        prods = tk.parts[0]._get_nodes('(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))')
-        #print prods
-
-    def test_ftk_get_node_list1(self):
-        tk = GPy.kern.FastTreeKernel()
-        #node_list = tk.parts[0]._get_node_list(['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
-         #                                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'])
-        #print node_list
-
-    def test_ftk_get_node_list2(self):
-        tk = GPy.kern.FastTreeKernel()
-        node_list = tk.parts[0]._get_node_list(['(S (NP n1) (VP v))'],
-                                               ['(S (NP n2) (VP v))'])
-        #print node_list
-
-    def test_ftk_get_node_list3(self):
-        tk = GPy.kern.FastTreeKernel()
-        node_list = tk.parts[0]._get_node_list(['(S (S s) (S s))'],
-                                               ['(S (S s) (S s))'])
-        #print node_list
-
-    def test_ftk_get_node_list4(self):
-        tk = GPy.kern.FastTreeKernel()
-        node_list = tk.parts[0]._get_node_list(['(S (NP n) (VP v))'],
-                                               ['(S (NP (NP n)) (VP (VP v)))'])
-        #print node_list
-        
-    def test_ftk_Kdiag_norm(self):
-        tk = GPy.kern.FastTreeKernel()
-        X = np.array([['(S (NP ns) (VP v))'],
-                      ['(S (NP n) (VP v))'],
-                      ['(S (NP (N a)) (VP (V c)))'],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
-                     dtype=object)
-        diag = tk.Kdiag(X)
-        self.assertTrue(([1,1,1,1,1] == diag).all())
-
-    def test_ftk_Kdiag_optcompare(self):
-        tk = GPy.kern.FastTreeKernel()
-        tk2 = GPy.kern.TreeKernel(mode="opt", normalize=True)
-        X = np.array([['(S (NP ns) (VP v))'],
-                      ['(S (NP n) (VP v))'],
-                      ['(S (NP (N a)) (VP (V c)))'],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
-                     dtype=object)
-        #Y = np.array([[(a)*5] for a in range(5)])
-        Y = np.array([[a] for a in range(5)])
-        m = GPy.models.GPRegression(X, Y, kernel=tk)
-        m.constrain_bounded('ftk',0.1,10)
-        m.constrain_positive('noise')
-        m.optimize(optimizer="tnc")
-        m2 = GPy.models.GPRegression(X, Y, kernel=tk2)
-        m2.constrain_bounded('tk',0.1,10)
-        m2.constrain_positive('noise')
-        m2.optimize(optimizer="tnc")
-        self.assertTrue((m._get_params() == m2._get_params()).all())
-        
-
-class UberFastTreeKernelTests(unittest.TestCase):
-    """
-    Tests for the kernel version that uses symbolic formulae.
-    """
-    def test_get_K_formula1(self):
-        t1 = '(S (NP n) (VP v))'
-        t2 = '(S (NP n) (VP v))'
-        tk = GPy.kern.UberFastTreeKernel()
-        import pprint
-        #pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
-
-    def test_get_K_formula2(self):
-        t1 = '(S (NP n) (VP v))'
-        t2 = '(S (NP ns) (VP v))'
-        tk = GPy.kern.UberFastTreeKernel()
-        import pprint
-        #pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
-
-    def test_get_K_formula3(self):
-        t1 = '(S (NP (Det a) (N b)) (VP (V c)))'
-        t2 = '(S (NP (N a)) (VP (V c)))'
-        tk = GPy.kern.UberFastTreeKernel()
-        import pprint
-        #pprint.pprint(tk.parts[0]._get_K_formula(t1, t2))
-
-    def test_build_cache_sym1(self):
-        X = np.array([['(S (NP n) (VP v))'],
-                      ['(S (NP (N a)) (VP (V c)))'],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
-                      ])
-        tk = GPy.kern.UberFastTreeKernel()
-        tk.parts[0].build_cache(X)
-        import pprint
-        #pprint.pprint(tk.parts[0].cache)
-        #pprint.pprint(np.sum(tk.parts[0].cache["K_norm"].values()).diff(sp.symbols('s')).diff(sp.symbols('s')).diff(sp.symbols('s')).evalf(subs={sp.symbols('l'):3,sp.symbols('s'):4}))
 
 
 class SimpleFastTreeKernelTests(unittest.TestCase):
@@ -709,21 +538,24 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
         test_cache = {}
         test_cache["tree_ids"] = {'(S (NP (N n1)) (VP (V v1)))': 0,
             '(S (NP (N n2)) (VP (V v1) (N n1)))': 1}
-        test_cache["node_pair_lists"] = {(0, 0): [((0, 0), (0, 0), 0),
-                                                  ((1, 0), (1, 0), 0),
-                                                  ((0,), (0,), 1),
-                                                  ((1,), (1,), 1),
-                                                  ((), (), 2)],
-                                         (0, 1): [((0, 0), (1, 1), 0),
-                                                  ((1, 0), (1, 0), 0),
-                                                  ((0,), (0,), 1),
-                                                  ((), (), 2)],
-                                         (1, 1): [((1, 1), (1, 1), 0),
-                                                  ((0, 0), (0, 0), 0),
-                                                  ((1, 0), (1, 0), 0),
-                                                  ((0,), (0,), 1),
-                                                  ((1,), (1,), 2),
-                                                  ((), (), 2)]}
+        test_cache["node_pair_lists"] = {0: {0: [((0, 0), (0, 0), 0),
+                                                 ((1, 0), (1, 0), 0),
+                                                 ((0,), (0,), 1),
+                                                 ((1,), (1,), 1),
+                                                 ((), (), 2)],
+                                             1: [((0, 0), (1, 1), 0),
+                                                 ((1, 0), (1, 0), 0),
+                                                 ((0,), (0,), 1),
+                                                 ((), (), 2)]
+                                             },
+                                         1: {1: [((1, 1), (1, 1), 0),
+                                                 ((0, 0), (0, 0), 0),
+                                                 ((1, 0), (1, 0), 0),
+                                                 ((0,), (0,), 1),
+                                                 ((1,), (1,), 2),
+                                                 ((), (), 2)]
+                                             }
+                                         }
         #import pprint
         #pprint.pprint(tk.parts[0].cache)
         self.assertEqual(tk.parts[0].cache["tree_ids"], test_cache["tree_ids"])
@@ -760,7 +592,7 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
         target = np.zeros(shape=(len(X), len(X)))
         tk.parts[0].K(X,None,target)
 
-        tk2 = GPy.kern.FastTreeKernel()
+        tk2 = GPy.kern.TreeKernel(normalize=True, mode="opt")
         tk2.parts[0]._set_params([0.1,1])
         target2 = np.zeros(shape=(len(X), len(X)))
         tk2.parts[0].K(X,None,target2)
@@ -790,55 +622,6 @@ class ProfilingTreeKernelTests(unittest.TestCase):
     """
     A profiling test, to check for performance bottlenecks.
     """
-    @unittest.skip("skipping profiling for now")
-    def test_treekernel_profiling1(self):
-        tk = GPy.kern.FastTreeKernel()#mode="opt", normalize=True)
-        rbf = GPy.kern.rbf(2, ARD=True)
-        k = tk.add(rbf, tensor=True)
-        k.input_slices = [slice(0,1),slice(1,3)]
-        X = np.array([['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
-                     dtype=object)
-        X = X[:10]
-        Y = np.array([[(a+10)*5] for a in range(10)])
-        m = GPy.models.GPRegression(X, Y, kernel=k)
-        import cProfile
-        m.constrain_positive('rbf')
-        m.constrain_positive('noise')
-        m.constrain_bounded('ftk',0.1,10)
-        print m
-        cProfile.runctx("m.optimize(max_f_eval=200, messages=True)", 
-                        globals(), {'m': m, 'X': X}, sort="cumulative")
-        print m
-        print m.predict(X)[0]
-
-    @unittest.skip("skipping profiling for now")
-    def test_treekernel_profiling2(self):
-        tk = GPy.kern.UberFastTreeKernel()#mode="opt", normalize=True)
-        rbf = GPy.kern.rbf(2, ARD=True)
-        k = tk.add(rbf, tensor=True)
-        k.input_slices = [slice(0,1),slice(1,3)]
-        X = np.array([['(S (NP n) (VP v))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
-                     dtype=object)
-        X = X[:4]
-        Y = np.array([[(a+10)*5] for a in range(4)])
-        m = GPy.models.GPRegression(X, Y, kernel=k)
-        import cProfile
-        m.constrain_positive('rbf')
-        m.constrain_positive('noise')
-        m.constrain_bounded('uftk',0.1,10)
-        #print m
-        cProfile.runctx("m.optimize(optimizer='lbfgs', max_f_eval=200, messages=True)", 
-                        globals(), {'m': m, 'X': X}, sort="cumulative")
-        #m.optimize(optimizer="tnc", max_f_eval=200, messages=True)
-        print m
-        #print m.predict(X)[0]
 
     def test_treekernel_profiling3(self):
         tk = GPy.kern.SimpleFastTreeKernel()
