@@ -6,6 +6,7 @@ import sys
 import sympy as sp
 from sympy.utilities.lambdify import lambdastr
 import nltk
+import marshal
 
 class TreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
@@ -883,12 +884,9 @@ class SympySimpleFastTreeKernel(Kernpart):
                     continue
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
-                delta = self._formulate(nodes1, nodes2)
-                #self.cache["tree_pair_formulas"][id1][id2] = delta
-                #self.cache["tree_pair_formulas"][id1][id2] = sp.lambdify(sp.Symbol('l'), delta, modules="math")
-                l = sp.Symbol('l')
-                self.cache["tree_pair_ks"][id1][id2] = lambdastr(l, delta)
-                self.cache["tree_pair_ddecays"][id1][id2] = lambdastr(l, delta.diff(l))
+                k, ddecay = self._formulate(nodes1, nodes2)
+                self.cache["tree_pair_ks"][id1][id2] = k
+                self.cache["tree_pair_ddecays"][id1][id2] = ddecay
 
     def _get_nodes(self, x):
         t = nltk.Tree(x)
@@ -898,8 +896,6 @@ class SympySimpleFastTreeKernel(Kernpart):
         for l in t.treepositions(order="leaves"):
             pos.remove(l)
         z = zip(t.productions(), pos)
-        #import ipdb
-        #ipdb.set_trace()
         z.sort(key=lambda x: len(x[1]), reverse=True)
         return z
 
@@ -925,14 +921,13 @@ class SympySimpleFastTreeKernel(Kernpart):
                                          tuple(list(n2[1]) + [i]))
                             ch_delta = cache[child_key]
                             prod *= 1 + ch_delta
-                            #prod += prod * ch_delta
                         res = (prod * l).expand()
-                        #res = prod * l
                         formula += res
                         cache[key] = res
-        return formula
+        return (lambdastr(l, formula),
+                lambdastr(l, formula.diff(l)))
 
-    def _get_formula(self, tree1, tree2):
+    def _get_formulas(self, tree1, tree2):
         """
         Get two trees represented by strings and
         return the node pair list
@@ -940,7 +935,8 @@ class SympySimpleFastTreeKernel(Kernpart):
         try:
             id1 = self.cache["tree_ids"][tree1]
             id2 = self.cache["tree_ids"][tree2]
-            return self.cache["tree_pair_ks"][id1][id2]
+            return (self.cache["tree_pair_ks"][id1][id2],
+                    self.cache["tree_pair_ddecays"][id1][id2])
         except KeyError:
             nodes1 = self._get_nodes(tree1)
             nodes2 = self._get_nodes(tree2)
@@ -982,9 +978,10 @@ class SympySimpleFastTreeKernel(Kernpart):
                     K_results[i][j] = 1
                     continue
                 # It will always be a 1-element array
-                formula = self._get_formula(x1[0], x2[0])
+                k, ddecay = self._get_formulas(x1[0], x2[0])
                 try:
-                    K_result, ddecay_result = self.delta(formula)
+                    K_result = eval(k)(self.decay)
+                    ddecay_result = eval(ddecay)(self.decay)
                 except:
                     print formula
                     raise
@@ -1052,15 +1049,9 @@ class SympySimpleFastTreeKernel(Kernpart):
         K_vec = np.zeros(shape=(len(X),))
         ddecay_vec = np.zeros(shape=(len(X),))
         for i, x in enumerate(X):
-            formula = self._get_formula(x[0], x[0])
-            delta_result = 0
-            ddecay = 0
-            cache = {} # DP
-            cache_ddecay = {}
-            # Calculation happens here.
-            delta_result, ddecay = self.delta(formula)
-            K_vec[i] = delta_result
-            ddecay_vec[i] = ddecay
+            k, ddecay = self._get_formulas(x[0], x[0])
+            K_vec[i] = eval(k)(self.decay)
+            ddecay_vec[i] = eval(ddecay)(self.decay)
         return (K_vec, ddecay_vec)
 
     def delta(self, formula):
@@ -1068,6 +1059,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         #d = formula.evalf(subs={l: self.decay})
         #ddecay = formula.diff(l).evalf(subs={l: self.decay})
         d = eval(formula)(self.decay)
+        #d = formula(self.decay)
         ddecay = 0
         return (d, ddecay)
         
