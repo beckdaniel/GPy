@@ -646,18 +646,7 @@ class SympySimpleFastTreeKernelTests(unittest.TestCase):
         print formula3
         print formula1.expand()
         print formula2.expand()
-        print formula3.expand()        
-
-    def test_delta1(self):
-        X = np.array([['(S (NP (N n1)) (VP (V v1)))'],
-                      ['(S (NP (N n2)) (VP (V v1) (N n1)))']
-                      ])
-        tk = GPy.kern.SympySimpleFastTreeKernel()
-        nodes1 = tk.parts[0]._get_nodes(X[0][0])
-        nodes2 = tk.parts[0]._get_nodes(X[1][0])
-        formula = tk.parts[0]._formulate(nodes1, nodes2)
-        print tk.parts[0].delta(formula)
-
+        print formula3.expand()
 
     def test_K_2(self):
         X = np.array([['(S (NP ns) (VP v))'],

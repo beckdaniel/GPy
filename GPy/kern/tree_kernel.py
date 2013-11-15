@@ -884,7 +884,8 @@ class SympySimpleFastTreeKernel(Kernpart):
                     continue
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
-                k, ddecay = self._formulate(nodes1, nodes2)
+                #k, ddecay = self._formulate(nodes1, nodes2)
+                k, ddecay = self._serialize(nodes1, nodes2)
                 self.cache["tree_pair_ks"][id1][id2] = k
                 self.cache["tree_pair_ddecays"][id1][id2] = ddecay
 
@@ -924,6 +925,13 @@ class SympySimpleFastTreeKernel(Kernpart):
                         res = (prod * l).expand()
                         formula += res
                         cache[key] = res
+        #return (lambdastr(l, formula),
+        #        lambdastr(l, formula.diff(l)))
+        return formula
+
+    def _serialize(self, nodes1, nodes2):
+        formula = self._formulate(nodes1, nodes2)
+        l = sp.Symbol("l")
         return (lambdastr(l, formula),
                 lambdastr(l, formula.diff(l)))
 
@@ -940,7 +948,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         except KeyError:
             nodes1 = self._get_nodes(tree1)
             nodes2 = self._get_nodes(tree2)
-            return self._formulate(nodes1, nodes2)
+            return self._serialize(nodes1, nodes2)
 
     def Kdiag(self, X, target):
         """
@@ -1054,12 +1062,5 @@ class SympySimpleFastTreeKernel(Kernpart):
             ddecay_vec[i] = eval(ddecay)(self.decay)
         return (K_vec, ddecay_vec)
 
-    def delta(self, formula):
-        #l = sp.Symbol('l')
-        #d = formula.evalf(subs={l: self.decay})
-        #ddecay = formula.diff(l).evalf(subs={l: self.decay})
-        d = eval(formula)(self.decay)
-        #d = formula(self.decay)
-        ddecay = 0
-        return (d, ddecay)
+
         
