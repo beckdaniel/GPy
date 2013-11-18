@@ -6,7 +6,7 @@ import sys
 import sympy as sp
 from sympy.utilities.lambdify import lambdastr
 import nltk
-import marshal
+import cPickle
 
 class TreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
@@ -178,17 +178,14 @@ class TreeKernel(Kernpart):
             return (1, 0)
         # third case
         prod = 1
-        #sum_delta = 0
         sum_decay = 0
         sum_branch = 0
         for i, child in enumerate(node1): #node2 has the same children
             g = float(self.branch + self.delta_naive(node1[i], node2[i]))
             prod *= g
-            #sum_delta += g
             d, b = self.delta_params_naive(node1[i], node2[i])
             sum_decay += (d / g)
             sum_branch += ((1 + b) / g)
-        #h = (prod * self.decay) / float(sum_delta)
         h = self.decay * prod
         ddecay = prod + (h * sum_decay)
         dbranch = h * sum_branch
@@ -275,7 +272,6 @@ class TreeKernel(Kernpart):
         # third case
         result = self.decay
         for i, child in enumerate(node1): #node2 has the same children
-            #result *= (self.branch + self.delta(node1[i], node2[i])) 
             child_key = (tuple(list(key[0]) + [i]),
                          tuple(list(key[1]) + [i]))
             result *= (self.branch + self.cache[child_key])
@@ -305,7 +301,6 @@ class TreeKernel(Kernpart):
             return (1, 0)
         # third case
         prod = 1
-        #sum_delta = 0
         sum_decay = 0
         sum_branch = 0
         ###
@@ -491,7 +486,6 @@ class TreeKernel(Kernpart):
             sum_decay += (d / g)
             sum_branch += ((1 + b) / g)
             d_result *= g
-        #print "TK PROD: %f" % prod
         h = (prod * self.decay)
         # update delta
         self.cache[key] = d_result
@@ -884,7 +878,6 @@ class SympySimpleFastTreeKernel(Kernpart):
                     continue
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
-                #k, ddecay = self._formulate(nodes1, nodes2)
                 k, ddecay = self._serialize(nodes1, nodes2)
                 self.cache["tree_pair_ks"][id1][id2] = k
                 self.cache["tree_pair_ddecays"][id1][id2] = ddecay
@@ -925,8 +918,6 @@ class SympySimpleFastTreeKernel(Kernpart):
                         res = (prod * l).expand()
                         formula += res
                         cache[key] = res
-        #return (lambdastr(l, formula),
-        #        lambdastr(l, formula.diff(l)))
         return formula
 
     def _serialize(self, nodes1, nodes2):
@@ -966,6 +957,9 @@ class SympySimpleFastTreeKernel(Kernpart):
 
     def K_sym(self, X, target):
 
+        #import ipdb
+        #ipdb.set_trace()
+
         # First, we are going to calculate K for diagonal values
         # because we will need them later to normalize.
         diag_deltas, diag_ddecays = self._diag_calculations(X)
@@ -987,12 +981,8 @@ class SympySimpleFastTreeKernel(Kernpart):
                     continue
                 # It will always be a 1-element array
                 k, ddecay = self._get_formulas(x1[0], x2[0])
-                try:
-                    K_result = eval(k)(self.decay)
-                    ddecay_result = eval(ddecay)(self.decay)
-                except:
-                    print formula
-                    raise
+                K_result = eval(k)(self.decay)
+                ddecay_result = eval(ddecay)(self.decay)
                 norm = diag_deltas[i] * diag_deltas[j]
                 sqrt_norm = np.sqrt(norm)
                 K_norm = K_result / sqrt_norm
@@ -1006,6 +996,7 @@ class SympySimpleFastTreeKernel(Kernpart):
                 K_results[i][j] = K_norm
                 ddecays[i][j] = ddecay_norm
         
+        #ipdb.set_trace()
         target += K_results
         self.ddecays = ddecays
 
@@ -1062,5 +1053,8 @@ class SympySimpleFastTreeKernel(Kernpart):
             ddecay_vec[i] = eval(ddecay)(self.decay)
         return (K_vec, ddecay_vec)
 
+    def dump_cache(self, f):
+        cPickle.dump(self.cache, f, -1)
 
-        
+    def load_cache(self, f):
+        self.cache = cPickle.load(f)

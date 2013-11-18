@@ -676,27 +676,36 @@ class ProfilingTreeKernelTests(unittest.TestCase):
 
     @unittest.skip("Skipping profiling")
     def test_treekernel_profiling3(self):
-        tk = GPy.kern.SimpleFastTreeKernel()
+        tk = GPy.kern.SympySimpleFastTreeKernel()
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
-        X = np.array([['(S NP VP)', 0.1, 4],
-                      ['(S (NP N) (VP V))', 0.3, 2],
-                      ['(S (NP (N a)) (VP (V c)))', 1.9, 12],
-                      ['(S (NP (Det a) (N b)) (VP (V c)))', -1.7, -5],
-                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 1.8, -9]],
+        X = np.array([['(S (NP ns) (VP v))', 1, 2],
+                      ['(S (NP n) (VP v))', 3, 4],
+                      ['(S (NP (N a)) (VP (V c)))', 5, 6],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', 7, 8],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 9, 10]],
                      dtype=object)
-        X = X[:5]
+        X = X
         Y = np.array([[(a+10)*5] for a in range(5)])
         m = GPy.models.GPRegression(X, Y, kernel=k)
-        import cProfile
+
+        import cProfile, StringIO, pstats
         m.constrain_positive('rbf')
         m.constrain_positive('noise')
         m.constrain_bounded('sftk',0.1,10)
-        print m
-        cProfile.runctx("m.optimize(max_f_eval=200, messages=True)", 
-                        globals(), {'m': m, 'X': X}, sort="cumulative")
-        print m
+        #print m
+        pr = cProfile.Profile()
+        pr.enable()
+        m.optimize(max_f_eval=200, messages=True)
+        pr.disable()
+        #print m
+        s = StringIO.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        ps.print_stats(20)
+        print s.getvalue()
+
         #print m.predict(X)[0]
 
 
