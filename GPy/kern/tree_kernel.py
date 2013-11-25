@@ -862,11 +862,13 @@ class SympySimpleFastTreeKernel(Kernpart):
     def build_cache(self, X, cache_file=None):
         if self.cache_file != None:
             if os.path.exists(self.cache_file):
-                self.load_cache(cache_file)
+                self.load_cache()
+                self._compile_cache()
+                return
         self.cache = {}
         self.cache["tree_ids"] = {}
         self.cache["tree_pair_ks"] = {}
-        self.cache["tree_pair_ddecays"] = {}
+        #self.cache["tree_pair_ddecays"] = {}
         # Temporary node cache
         node_cache = {}
         # Store trees
@@ -878,7 +880,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         for tree1 in X:
             id1 = self.cache["tree_ids"][tree1[0]]
             self.cache["tree_pair_ks"][id1] = {}
-            self.cache["tree_pair_ddecays"][id1] = {}
+            #self.cache["tree_pair_ddecays"][id1] = {}
             for tree2 in X:
                 id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
@@ -886,28 +888,34 @@ class SympySimpleFastTreeKernel(Kernpart):
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
                 formula = self._formulate(nodes1, nodes2)
-                #self.cache["tree_pair_ks"][id1][id2] = formula
-                k, ddecay = self._serialize(formula)
-                self.cache["tree_pair_ks"][id1][id2] = k
-                self.cache["tree_pair_ddecays"][id1][id2] = ddecay
+                self.cache["tree_pair_ks"][id1][id2] = formula
+                #k, ddecay = self._serialize(formula)
+                #self.cache["tree_pair_ks"][id1][id2] = k
+                #self.cache["tree_pair_ddecays"][id1][id2] = ddecay
+        ipdb.set_trace()
         if self.cache_file != None:
-            self.dump_cache(cache_file)
+            self.dump_cache()
         ipdb.set_trace()
         self._compile_cache()
         ipdb.set_trace()
 
-    def dump_cache(self, f):
-        cPickle.dump(self.cache, f, -1)
+    def dump_cache(self):
+        with open(self.cache_file, 'wb') as f:
+            cPickle.dump(self.cache, f, -1)
 
-    def load_cache(self, cache_file):
-        with open(cache_file, 'rb') as f:
+    def load_cache(self):
+        with open(self.cache_file, 'rb') as f:
             self.cache = cPickle.load(f)
 
     def _compile_cache(self):
+        self.cache["tree_pair_ddecays"] = {}
         for id1 in self.cache["tree_pair_ks"]:
+            self.cache["tree_pair_ddecays"][id1] = {}
             for id2 in self.cache["tree_pair_ks"][id1]:
-                self.cache["tree_pair_ks"][id1][id2] = compile(self.cache["tree_pair_ks"][id1][id2], '<string>', 'eval')
-                self.cache["tree_pair_ddecays"][id1][id2] = compile(self.cache["tree_pair_ddecays"][id1][id2], '<string>', 'eval')
+                formula = self.cache["tree_pair_ks"][id1][id2]
+                k, ddecay = self._serialize(formula)
+                self.cache["tree_pair_ks"][id1][id2] = compile(k, '<string>', 'eval')
+                self.cache["tree_pair_ddecays"][id1][id2] = compile(ddecay, '<string>', 'eval')
 
     def _get_nodes(self, x):
         t = nltk.Tree(x)
