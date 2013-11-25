@@ -866,7 +866,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         self.cache = {}
         self.cache["tree_ids"] = {}
         self.cache["tree_pair_ks"] = {}
-        #self.cache["tree_pair_ddecays"] = {}
+        self.cache["tree_pair_ddecays"] = {}
         # Temporary node cache
         node_cache = {}
         # Store trees
@@ -878,7 +878,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         for tree1 in X:
             id1 = self.cache["tree_ids"][tree1[0]]
             self.cache["tree_pair_ks"][id1] = {}
-            #cache["tree_pair_ddecays"][id1] = {}
+            self.cache["tree_pair_ddecays"][id1] = {}
             for tree2 in X:
                 id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
@@ -893,7 +893,8 @@ class SympySimpleFastTreeKernel(Kernpart):
         if self.cache_file != None:
             self.dump_cache(cache_file)
         ipdb.set_trace()
-        #self._lambdify_cache()
+        self._compile_cache()
+        ipdb.set_trace()
 
     def dump_cache(self, f):
         cPickle.dump(self.cache, f, -1)
@@ -901,19 +902,12 @@ class SympySimpleFastTreeKernel(Kernpart):
     def load_cache(self, cache_file):
         with open(cache_file, 'rb') as f:
             self.cache = cPickle.load(f)
-        #self._lambdify_cache()
 
-    def _lambdify_cache(self):
-        #self.cache["tree_ids"] = cache["tree_ids"]
-        #self.cache["tree_pair_ks"] = {}
-        self.cache["tree_pair_ddecays"] = {}
+    def _compile_cache(self):
         for id1 in self.cache["tree_pair_ks"]:
-            #self.cache["tree_pair_ks"][id1] = {}
-            self.cache["tree_pair_ddecays"][id1] = {}
             for id2 in self.cache["tree_pair_ks"][id1]:
-                k, ddecay = self._serialize(self.cache["tree_pair_ks"][id1][id2])
-                self.cache["tree_pair_ks"][id1][id2] = k
-                self.cache["tree_pair_ddecays"][id1][id2] = ddecay
+                self.cache["tree_pair_ks"][id1][id2] = compile(self.cache["tree_pair_ks"][id1][id2], '<string>', 'eval')
+                self.cache["tree_pair_ddecays"][id1][id2] = compile(self.cache["tree_pair_ddecays"][id1][id2], '<string>', 'eval')
 
     def _get_nodes(self, x):
         t = nltk.Tree(x)
