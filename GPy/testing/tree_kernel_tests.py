@@ -524,7 +524,7 @@ class NormTreeKernelTests(unittest.TestCase):
 
 
 
-
+@unittest.skip("Skipping non-sympy TK tests")
 class SimpleFastTreeKernelTests(unittest.TestCase):
     """
     Tests for a simpler version of Moschitti FTK (only hyperparameter is decay)
@@ -556,8 +556,6 @@ class SimpleFastTreeKernelTests(unittest.TestCase):
                                                  ((), (), 2)]
                                              }
                                          }
-        #import pprint
-        #pprint.pprint(tk.parts[0].cache)
         self.assertEqual(tk.parts[0].cache["tree_ids"], test_cache["tree_ids"])
         self.maxDiff = None
         self.assertEqual(tk.parts[0].cache["node_pair_lists"], test_cache["node_pair_lists"])
@@ -641,12 +639,13 @@ class SympySimpleFastTreeKernelTests(unittest.TestCase):
         formula1 = tk.parts[0]._formulate(nodes1, nodes2)
         formula2 = tk.parts[0]._formulate(nodes1, nodes1)
         formula3 = tk.parts[0]._formulate(nodes2, nodes2)
-        print formula1
-        print formula2
-        print formula3
-        print formula1.expand()
-        print formula2.expand()
-        print formula3.expand()
+        l = sp.Symbol("l")
+        expected1 = l**2 + 4*l
+        expected2 = l**5 + 2*l**4 + 3*l**3 + 4*l**2 + 5*l
+        expected3 = l**6 + 3*l**5 + 4*l**4 + 5*l**3 + 5*l**2 + 6*l
+        self.assertEqual(formula1, expected1)
+        self.assertEqual(formula2, expected2)
+        self.assertEqual(formula3, expected3)
 
     def test_K_2(self):
         X = np.array([['(S (NP ns) (VP v))'],

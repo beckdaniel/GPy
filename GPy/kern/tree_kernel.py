@@ -7,6 +7,7 @@ import sympy as sp
 from sympy.utilities.lambdify import lambdastr
 import nltk
 import cPickle
+import os
 
 class TreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
@@ -834,7 +835,7 @@ class SympySimpleFastTreeKernel(Kernpart):
     Moschitti's FTK but only with decay hyperparameter. A sympy version.
     """
 
-    def __init__(self, decay=1, has_root=False):
+    def __init__(self, decay=1, cache_file=None, has_root=False):
         try:
             import nltk
         except ImportError:
@@ -844,8 +845,14 @@ class SympySimpleFastTreeKernel(Kernpart):
         self.num_params = 1
         self.name = 'symftk'
         self.decay = decay
-        self.cache = {}
         self.has_root = has_root
+        self.cache = {}
+        self.cache_file = None
+        if cache_file != None:
+            if os.path.exists(cache_file):
+                self.load_cache(cache_file)
+            else:
+                self.cache_file = cache_file
 
     def _get_params(self):
         return self.decay
@@ -856,29 +863,52 @@ class SympySimpleFastTreeKernel(Kernpart):
     def _get_param_names(self):
         return ['decay']
 
-    def build_cache(self, X):
-        self.cache["tree_ids"] = {}
-        self.cache["tree_pair_ks"] = {}
-        self.cache["tree_pair_ddecays"] = {}
+    def build_cache(self, X, cache_file=None):
+        cache = {}
+        cache["tree_ids"] = {}
+        cache["tree_pair_ks"] = {}
+        #cache["tree_pair_ddecays"] = {}
         # Temporary node cache
         node_cache = {}
         # Store trees
         for tree in X:
             tree_id = len(self.cache["tree_ids"])
-            self.cache["tree_ids"].setdefault(tree[0], tree_id)
+            cache["tree_ids"].setdefault(tree[0], tree_id)
             node_cache[tree_id] = self._get_nodes(tree[0])
         # Store node pairs
         for tree1 in X:
             id1 = self.cache["tree_ids"][tree1[0]]
-            self.cache["tree_pair_ks"][id1] = {}
-            self.cache["tree_pair_ddecays"][id1] = {}
+            cache["tree_pair_ks"][id1] = {}
+            #cache["tree_pair_ddecays"][id1] = {}
             for tree2 in X:
                 id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
                     continue
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
-                k, ddecay = self._serialize(nodes1, nodes2)
+                k = self._formulate(nodes1, nodes2)
+                cache["tree_pair_ks"][id1][id2] = k
+                #k, ddecay = self._serialize(nodes1, nodes2)
+                #cache["tree_pair_ks"][id1][id2] = k
+                #cache["tree_pair_ddecays"][id1][id2] = ddecay
+        if cache_file != None:
+            self.dump_cache(cache, cache_file)
+        return cache
+
+    def dump_cache(self, cache, f):
+        cPickle.dump(cache, f, -1)
+
+    def load_cache(self, cache_file):
+        with open(cache_file, 'rb') as f:
+            cache = cPickle.load(f)
+        self.cache["tree_ids"] = cache["tree_ids"]
+        self.cache["tree_pair_ks"] = {}
+        self.cache["tree_pair_ddecays"] = {}
+        for id1 in cache:
+            self.cache["tree_pair_ks"][id1] = {}
+            self.cache["tree_pair_ddecays"][id1] = {}
+            for id2 in cache["tree_pair_ks"][id1]:
+                k, ddecay = self._serialize(cache["tree_pair_ks"][id1][id2])
                 self.cache["tree_pair_ks"][id1][id2] = k
                 self.cache["tree_pair_ddecays"][id1][id2] = ddecay
 
@@ -920,8 +950,7 @@ class SympySimpleFastTreeKernel(Kernpart):
                         cache[key] = res
         return formula
 
-    def _serialize(self, nodes1, nodes2):
-        formula = self._formulate(nodes1, nodes2)
+    def _serialize(self, formula):
         l = sp.Symbol("l")
         return (lambdastr(l, formula),
                 lambdastr(l, formula.diff(l)))
@@ -1053,8 +1082,3 @@ class SympySimpleFastTreeKernel(Kernpart):
             ddecay_vec[i] = eval(ddecay)(self.decay)
         return (K_vec, ddecay_vec)
 
-    def dump_cache(self, f):
-        cPickle.dump(self.cache, f, -1)
-
-    def load_cache(self, f):
-        self.cache = cPickle.load(f)
