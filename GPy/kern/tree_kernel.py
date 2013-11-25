@@ -872,16 +872,16 @@ class SympySimpleFastTreeKernel(Kernpart):
         node_cache = {}
         # Store trees
         for tree in X:
-            tree_id = len(self.cache["tree_ids"])
+            tree_id = len(cache["tree_ids"])
             cache["tree_ids"].setdefault(tree[0], tree_id)
             node_cache[tree_id] = self._get_nodes(tree[0])
         # Store node pairs
         for tree1 in X:
-            id1 = self.cache["tree_ids"][tree1[0]]
+            id1 = cache["tree_ids"][tree1[0]]
             cache["tree_pair_ks"][id1] = {}
             #cache["tree_pair_ddecays"][id1] = {}
             for tree2 in X:
-                id2 = self.cache["tree_ids"][tree2[0]]
+                id2 = cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
                     continue
                 nodes1 = node_cache[id1]
@@ -968,7 +968,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         except KeyError:
             nodes1 = self._get_nodes(tree1)
             nodes2 = self._get_nodes(tree2)
-            return self._serialize(nodes1, nodes2)
+            return self._serialize(self._formulate(nodes1, nodes2))
 
     def Kdiag(self, X, target):
         """
