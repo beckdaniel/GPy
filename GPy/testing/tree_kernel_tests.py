@@ -668,6 +668,22 @@ class SympySimpleFastTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(np.sum(tk.parts[0].ddecays),
                                np.sum(tk2.parts[0].ddecay_results))
 
+    def test_pred_1(self):
+        tk = GPy.kern.SympySimpleFastTreeKernel()
+        rbf = GPy.kern.rbf(2, ARD=True)
+        k = tk.add(rbf, tensor=True)
+        k.input_slices = [slice(0,1),slice(1,3)]
+        X = np.array([['(S (NP ns) (VP v))', 1, 2],
+                      ['(S (NP n) (VP v))', 3, 4],
+                      ['(S (NP (N a)) (VP (V c)))', 5, 6],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))', 7, 8],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))', 9, 10]],
+                     dtype=object)
+        X = X
+        Y = np.array([[(a+10)*5] for a in range(5)])
+        m = GPy.models.GPRegression(X, Y, kernel=k)
+        m.predict(X)
+
 class ProfilingTreeKernelTests(unittest.TestCase):
     """
     A profiling test, to check for performance bottlenecks.

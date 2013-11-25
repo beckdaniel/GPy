@@ -8,6 +8,7 @@ from sympy.utilities.lambdify import lambdastr
 import nltk
 import cPickle
 import os
+import ipdb
 
 class TreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
@@ -847,12 +848,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         self.decay = decay
         self.has_root = has_root
         self.cache = {}
-        self.cache_file = None
-        if cache_file != None:
-            if os.path.exists(cache_file):
-                self.load_cache(cache_file)
-            else:
-                self.cache_file = cache_file
+        self.cache_file = cache_file
 
     def _get_params(self):
         return self.decay
@@ -864,51 +860,58 @@ class SympySimpleFastTreeKernel(Kernpart):
         return ['decay']
 
     def build_cache(self, X, cache_file=None):
-        cache = {}
-        cache["tree_ids"] = {}
-        cache["tree_pair_ks"] = {}
-        #cache["tree_pair_ddecays"] = {}
+        if self.cache_file != None:
+            if os.path.exists(self.cache_file):
+                self.load_cache(cache_file)
+        self.cache = {}
+        self.cache["tree_ids"] = {}
+        self.cache["tree_pair_ks"] = {}
+        #self.cache["tree_pair_ddecays"] = {}
         # Temporary node cache
         node_cache = {}
         # Store trees
         for tree in X:
-            tree_id = len(cache["tree_ids"])
-            cache["tree_ids"].setdefault(tree[0], tree_id)
+            tree_id = len(self.cache["tree_ids"])
+            self.cache["tree_ids"].setdefault(tree[0], tree_id)
             node_cache[tree_id] = self._get_nodes(tree[0])
         # Store node pairs
         for tree1 in X:
-            id1 = cache["tree_ids"][tree1[0]]
-            cache["tree_pair_ks"][id1] = {}
+            id1 = self.cache["tree_ids"][tree1[0]]
+            self.cache["tree_pair_ks"][id1] = {}
             #cache["tree_pair_ddecays"][id1] = {}
             for tree2 in X:
-                id2 = cache["tree_ids"][tree2[0]]
+                id2 = self.cache["tree_ids"][tree2[0]]
                 if id1 > id2: #symmetry
                     continue
                 nodes1 = node_cache[id1]
                 nodes2 = node_cache[id2]
-                k = self._formulate(nodes1, nodes2)
-                cache["tree_pair_ks"][id1][id2] = k
-                #k, ddecay = self._serialize(nodes1, nodes2)
-                #cache["tree_pair_ks"][id1][id2] = k
-                #cache["tree_pair_ddecays"][id1][id2] = ddecay
-        if cache_file != None:
-            self.dump_cache(cache, cache_file)
-        return cache
+                formula = self._formulate(nodes1, nodes2)
+                #self.cache["tree_pair_ks"][id1][id2] = formula
+                k, ddecay = self._serialize(formula)
+                self.cache["tree_pair_ks"][id1][id2] = k
+                self.cache["tree_pair_ddecays"][id1][id2] = ddecay
+        if self.cache_file != None:
+            self.dump_cache(cache_file)
+        ipdb.set_trace()
+        #self._lambdify_cache()
 
-    def dump_cache(self, cache, f):
-        cPickle.dump(cache, f, -1)
+    def dump_cache(self, f):
+        cPickle.dump(self.cache, f, -1)
 
     def load_cache(self, cache_file):
         with open(cache_file, 'rb') as f:
-            cache = cPickle.load(f)
-        self.cache["tree_ids"] = cache["tree_ids"]
-        self.cache["tree_pair_ks"] = {}
+            self.cache = cPickle.load(f)
+        #self._lambdify_cache()
+
+    def _lambdify_cache(self):
+        #self.cache["tree_ids"] = cache["tree_ids"]
+        #self.cache["tree_pair_ks"] = {}
         self.cache["tree_pair_ddecays"] = {}
-        for id1 in cache:
-            self.cache["tree_pair_ks"][id1] = {}
+        for id1 in self.cache["tree_pair_ks"]:
+            #self.cache["tree_pair_ks"][id1] = {}
             self.cache["tree_pair_ddecays"][id1] = {}
-            for id2 in cache["tree_pair_ks"][id1]:
-                k, ddecay = self._serialize(cache["tree_pair_ks"][id1][id2])
+            for id2 in self.cache["tree_pair_ks"][id1]:
+                k, ddecay = self._serialize(self.cache["tree_pair_ks"][id1][id2])
                 self.cache["tree_pair_ks"][id1][id2] = k
                 self.cache["tree_pair_ddecays"][id1][id2] = ddecay
 
@@ -952,8 +955,11 @@ class SympySimpleFastTreeKernel(Kernpart):
 
     def _serialize(self, formula):
         l = sp.Symbol("l")
+        #return (sp.lambdify(l, formula),
+        #        sp.lambdify(l, formula.diff(l)))
         return (lambdastr(l, formula),
                 lambdastr(l, formula.diff(l)))
+
 
     def _get_formulas(self, tree1, tree2):
         """
@@ -986,7 +992,6 @@ class SympySimpleFastTreeKernel(Kernpart):
 
     def K_sym(self, X, target):
 
-        #import ipdb
         #ipdb.set_trace()
 
         # First, we are going to calculate K for diagonal values
@@ -1010,6 +1015,8 @@ class SympySimpleFastTreeKernel(Kernpart):
                     continue
                 # It will always be a 1-element array
                 k, ddecay = self._get_formulas(x1[0], x2[0])
+                #print k
+                #print ddecay
                 K_result = eval(k)(self.decay)
                 ddecay_result = eval(ddecay)(self.decay)
                 norm = diag_deltas[i] * diag_deltas[j]
@@ -1044,7 +1051,7 @@ class SympySimpleFastTreeKernel(Kernpart):
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
                 # It will always be a 1-element array
-                node_list = self._get_node_pairs(x1[0], x2[0])
+                #node_list = self._get_node_pairs(x1[0], x2[0])
                 try:
                     K_result, ddecay_result = self.delta(node_list)
                 except:
