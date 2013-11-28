@@ -689,7 +689,7 @@ class ProfilingTreeKernelTests(unittest.TestCase):
     A profiling test, to check for performance bottlenecks.
     """
 
-    @unittest.skip("Skipping profiling")
+    #@unittest.skip("Skipping profiling")
     def test_treekernel_profiling3(self):
         tk = GPy.kern.SympySimpleFastTreeKernel()
         rbf = GPy.kern.rbf(2, ARD=True)
@@ -721,8 +721,8 @@ class ProfilingTreeKernelTests(unittest.TestCase):
         ps.print_stats(20)
         print s.getvalue()
 
-        #print m.predict(X)[0]
-
+        print m.predict(X)[0]
+        print Y
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

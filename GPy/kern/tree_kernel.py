@@ -892,12 +892,9 @@ class SympySimpleFastTreeKernel(Kernpart):
                 #k, ddecay = self._serialize(formula)
                 #self.cache["tree_pair_ks"][id1][id2] = k
                 #self.cache["tree_pair_ddecays"][id1][id2] = ddecay
-        ipdb.set_trace()
         if self.cache_file != None:
             self.dump_cache()
-        ipdb.set_trace()
         self._compile_cache()
-        ipdb.set_trace()
 
     def dump_cache(self):
         with open(self.cache_file, 'wb') as f:
@@ -1053,12 +1050,11 @@ class SympySimpleFastTreeKernel(Kernpart):
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
                 # It will always be a 1-element array
-                #node_list = self._get_node_pairs(x1[0], x2[0])
-                try:
-                    K_result, ddecay_result = self.delta(node_list)
-                except:
-                    print node_list
-                    raise
+                k, ddecay = self._get_formulas(x1[0], x2[0])
+                #print k
+                #print ddecay
+                K_result = eval(k)(self.decay)
+                ddecay_result = eval(ddecay)(self.decay)
                 norm = diag_deltas_X[i] * diag_deltas_X2[j]
                 sqrt_norm = np.sqrt(norm)
                 K_norm = K_result / sqrt_norm
@@ -1070,7 +1066,7 @@ class SympySimpleFastTreeKernel(Kernpart):
                                (K_norm * diff_term))
 
                 K_results[i][j] = K_norm
-                ddecays[i][j] = ddecay_norm        
+                ddecays[i][j] = ddecay_norm     
         target += K_results
         self.ddecays = ddecays
 
