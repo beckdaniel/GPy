@@ -911,8 +911,11 @@ class SympySimpleFastTreeKernel(Kernpart):
             for id2 in self.cache["tree_pair_ks"][id1]:
                 formula = self.cache["tree_pair_ks"][id1][id2]
                 k, ddecay = self._serialize(formula)
-                self.cache["tree_pair_ks"][id1][id2] = compile(k, '<string>', 'eval')
-                self.cache["tree_pair_ddecays"][id1][id2] = compile(ddecay, '<string>', 'eval')
+                #self.cache["tree_pair_ks"][id1][id2] = compile(k, '<string>', 'eval')
+                #self.cache["tree_pair_ddecays"][id1][id2] = compile(ddecay, '<string>', 'eval')
+                self.cache["tree_pair_ks"][id1][id2] = k
+                self.cache["tree_pair_ddecays"][id1][id2] = ddecay
+
 
     def _get_nodes(self, x):
         t = nltk.Tree(x)
