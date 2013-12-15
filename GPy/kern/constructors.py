@@ -604,19 +604,19 @@ def TreeKernel(mode="naive", normalize=False):
     """
     Tree kernel
     """
-    part = TreeKernelPart(mode=mode, normalize=normalize)
+    part = parts.tree_kernel.TreeKernel(mode=mode, normalize=normalize)
     return kern(1, [part])
 
 def SimpleFastTreeKernel(decay=1, has_root=False):
     """
     Tree kernel
     """
-    part = SimpleFastTreeKernelPart(decay=decay, has_root=has_root)
+    part = parts.tree_kernel.SimpleFastTreeKernel(decay=decay, has_root=has_root)
     return kern(1, [part])
 
 def SympySimpleFastTreeKernel(decay=1, has_root=False, cache_file=None):
     """
     Tree kernel
     """
-    part = SympySimpleFastTreeKernelPart(decay=decay, has_root=has_root, cache_file=cache_file)
+    part = parts.tree_kernel.SympySimpleFastTreeKernel(decay=decay, has_root=has_root, cache_file=cache_file)
     return kern(1, [part])
