@@ -3,12 +3,23 @@
 
 import os
 from setuptools import setup
+from distutils.extension import Extension
+from Cython.Distutils import build_ext
+from Cython.Build import cythonize
+
 
 # Version number
 version = '0.4.6'
 
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
+ext_module = Extension(
+    "cy_sst",
+    ["GPy/kern/parts/cy_tree.pyx"],
+    extra_compile_args=['-fopenmp'],
+    extra_link_args=['-fopenmp'],
+)
 
 setup(name = 'GPy',
       version = version,
@@ -31,4 +42,5 @@ setup(name = 'GPy',
       "License :: OSI Approved :: BSD License"],
       #ext_modules =  [Extension(name = 'GPy.kern.lfmUpsilonf2py',
       #          sources = ['GPy/kern/src/lfmUpsilonf2py.f90'])],
+      ext_modules = cythonize("GPy/kern/parts/*.pyx"),
       )

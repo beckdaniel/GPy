@@ -620,3 +620,17 @@ def SympySimpleFastTreeKernel(decay=1, has_root=False, cache_file=None):
     """
     part = parts.tree_kernel.SympySimpleFastTreeKernel(decay=decay, has_root=has_root, cache_file=cache_file)
     return kern(1, [part])
+
+def SubsetTreeKernel(_lambda=0.1, _sigma=1):
+    """
+    Tree kernel
+    """
+    part = parts.tree.SubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
+    return kern(1, [part])
+
+def PySubsetTreeKernel(_lambda=0.1, _sigma=1):
+    """
+    Tree kernel
+    """
+    part = parts.tree.PySubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
+    return kern(1, [part])

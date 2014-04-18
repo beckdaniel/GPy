@@ -7,7 +7,10 @@ import GPy
 import nltk # Need to cope with this in a better way...
 import sympy as sp
 from GPy.kern.tree_kernel import TreeKernel
+from GPy.kern import SubsetTreeKernel as SST
+from GPy.kern import PySubsetTreeKernel as PySST
 import sys
+import datetime
 
 class BasicTreeKernelTests(unittest.TestCase):
     """
@@ -689,7 +692,7 @@ class ProfilingTreeKernelTests(unittest.TestCase):
     A profiling test, to check for performance bottlenecks.
     """
 
-    #@unittest.skip("Skipping profiling")
+    @unittest.skip("Skipping profiling")
     def test_treekernel_profiling3(self):
         tk = GPy.kern.SympySimpleFastTreeKernel()
         rbf = GPy.kern.rbf(2, ARD=True)
@@ -723,6 +726,273 @@ class ProfilingTreeKernelTests(unittest.TestCase):
 
         print m.predict(X)[0]
         print Y
+
+    @unittest.skip("Skipping profiling")
+    def test_K_2(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        tk = GPy.kern.SympySimpleFastTreeKernel(decay=1)
+        tk.parts[0].build_cache(X)
+        target = np.zeros(shape=(len(X), len(X)))
+
+        ITS = 3000
+        start_time = datetime.datetime.now()
+        for i in range(ITS):
+            tk.parts[0].K(X,None,target)
+        end_time = datetime.datetime.now()
+        print target/ITS
+        print end_time - start_time
+
+######################
+# CYTHON
+######################
+
+class SSTTests(unittest.TestCase):
+
+    def test_gen_node_list(self):
+        repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        k = PySST()
+        nodes1, dict1 = k.parts[0]._gen_node_list(repr1)
+        result = "[('ADJ colorless', 0, None), ('ADV furiously', 4, None), ('N ideas', 1, None), ('NP ADJ N', 2, [0, 1]), ('S NP VP', 6, [2, 5]), ('V sleep', 3, None), ('VP V ADV', 5, [3, 4])]"
+        print nodes1
+        self.assertEqual(str(nodes1), result)
+
+    def test_gen_node_list_cy(self):
+        repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        k = SST()
+        nodes1, dict1 = k.parts[0].kernel._gen_node_list(repr1)
+        result = "[('ADJ colorless', 0, None), ('ADV furiously', 4, None), ('N ideas', 1, None), ('NP ADJ N', 2, [0, 1]), ('S NP VP', 6, [2, 5]), ('V sleep', 3, None), ('VP V ADV', 5, [3, 4])]"
+        print nodes1
+        self.assertEqual(str(nodes1), result)
+
+    @unittest.skip("skip")
+    def test_get_node_pairs1(self):
+        repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        k = PySST()
+        nodes1, dict1 = k.parts[0]._gen_node_list(repr1)
+        nodes2, dict2 = k.parts[0]._gen_node_list(repr2)
+        node_list = k.parts[0]._get_node_pairs(nodes1, nodes2)
+        result = "[(('ADJ colorless', 0, None), ('ADJ colorless', 0, None)), (('N ideas', 1, None), ('N ideas', 1, None)), (('NP ADJ N', 2, [0, 1]), ('NP ADJ N', 2, [0, 1])), (('V sleep', 3, None), ('V sleep', 3, None)), (('VP V ADV', 5, [3, 4]), ('VP V ADV', 5, [3, 4]))]"
+        self.assertEqual(str(node_list), result)
+
+    @unittest.skip("cy")
+    def test_get_node_pair_list_cy(self):
+        repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        k = PySST()
+        nodes1 = k.parts[0]._gen_node_list(repr1)
+        nodes2 = k.parts[0]._gen_node_list(repr2)
+        node_list = k.parts[0]._get_node_pair_list_cy(nodes1, nodes2)
+        result = "[((0, 0), (0, 0), 0), ((1, 1), (1, 1), 0), ((0, 1), (0, 1), 0), ((1, 0), (1, 0), 0), ((0,), (0,), 2), ((1,), (1,), 2), ((), (), 2)]"
+        self.assertEqual(str(node_list), result)
+
+    def test_get_node_pairs2(self):
+        repr1 = '(S (NP ns) (VP v))'
+        repr2 = '(S (NP (N a)) (VP (V c)))'
+        k = PySST()
+        nodes1, dict1 = k.parts[0]._gen_node_list(repr1)
+        nodes2, dict2 = k.parts[0]._gen_node_list(repr2)
+        node_list = k.parts[0]._get_node_pairs(nodes1, nodes2)
+        print node_list
+        print dict1
+        print dict2
+
+    def test_K(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        k = PySST(_lambda=1)
+        target = np.zeros(shape=(len(X), len(X)))
+        k.parts[0].K(X, None, target)
+        result = [[ 1.,          0.5,         0.10540926,  0.08333333,  0.06711561],
+                  [ 0.5,         1.,          0.10540926,  0.08333333,  0.06711561],
+                  [ 0.10540926,  0.10540926,  1.,          0.31622777,  0.04244764],
+                  [ 0.08333333,  0.08333333,  0.31622777,  1.,          0.0335578 ],
+                  [ 0.06711561,  0.06711561,  0.04244764,  0.0335578,   1.        ]]
+        self.assertAlmostEqual(np.sum(result), np.sum(target))
+
+    def test_K2(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        k = SST(_lambda=1)
+        target = np.zeros(shape=(len(X), len(X)))
+        k.parts[0].K(X, None, target)
+        result = [[ 1.,          0.5,         0.10540926,  0.08333333,  0.06711561],
+                  [ 0.5,         1.,          0.10540926,  0.08333333,  0.06711561],
+                  [ 0.10540926,  0.10540926,  1.,          0.31622777,  0.04244764],
+                  [ 0.08333333,  0.08333333,  0.31622777,  1.,          0.0335578 ],
+                  [ 0.06711561,  0.06711561,  0.04244764,  0.0335578,   1.        ]]
+        self.assertAlmostEqual(np.sum(result), np.sum(target))
+
+
+
+class SSTProfilingTests(unittest.TestCase):
+
+    @unittest.skip("skip")
+    def test_prof_gen_node_pair_list(self):
+        repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        k = PySST()
+        nodes1 = k._gen_node_list(repr1)
+        nodes2 = k._gen_node_list(repr2)
+        start_time = datetime.datetime.now()
+        for i in range(20000):
+            node_list = k.parts[0]._get_node_pair_list(nodes1, nodes2)
+        end_time = datetime.datetime.now()
+        print end_time - start_time
+
+    @unittest.skip("skip")
+    def test_prof_gen_node_pair_list_cy(self):
+        repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
+        k = PySST()
+        nodes1 = k._gen_node_list(repr1)
+        nodes2 = k._gen_node_list(repr2)
+        start_time = datetime.datetime.now()
+        for i in range(20000):
+            node_list = k.parts[0]._get_node_pair_list_cy(nodes1, nodes2)
+        end_time = datetime.datetime.now()
+        print end_time - start_time
+
+    @unittest.skip("skip")
+    def test_prof_K(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        k = PySST()
+        target = np.zeros(shape=(len(X), len(X)))
+        ITS = 10
+        start_time = datetime.datetime.now()
+        for i in range(ITS):
+            k.parts[0].K(X, None, target)
+        end_time = datetime.datetime.now()
+        print target/ITS
+        print "PYTHON"
+        print end_time - start_time
+
+    def test_prof_K_cy(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        k = SST()
+        target = np.zeros(shape=(len(X), len(X)))
+        ITS = 10
+        start_time = datetime.datetime.now()
+        for i in range(ITS):
+            k.parts[0].K(X, None, target)
+        end_time = datetime.datetime.now()
+        print target/ITS
+        print k.parts[0].dlambda
+        print k.parts[0].dsigma
+        print "CYTHON"
+        print end_time - start_time
+
+    @unittest.skip("skip")
+    def test_prof_K_cy2(self):
+        #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
+        TREES_TRAIN = 'cython_kernels/test/qc_trees.txt'
+        TREES = 1000
+        with open(TREES_TRAIN) as f:
+            X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
+        k = SST()
+        target = np.zeros(shape=(len(X), len(X)))
+        ITS = 1
+        start_time = datetime.datetime.now()
+        for i in range(ITS):
+            k.parts[0].K(X, None, target)
+        end_time = datetime.datetime.now()
+        #print target/ITS
+        #print k.dlambdas
+        #print k.dsigmas
+        print "SSTW"
+        print end_time - start_time
+
+    @unittest.skip("skip")
+    def test_prof_K_cy5(self):
+        #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
+        TREES_TRAIN = 'GPy/testing/qc_trees.txt'
+        TREES = 1000
+        with open(TREES_TRAIN) as f:
+            X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
+        k = SST()
+        target = np.zeros(shape=(len(X), len(X)))
+        ITS = 1
+        start_time = datetime.datetime.now()
+        for i in range(ITS):
+            k.parts[0].K(X, None, target)
+        end_time = datetime.datetime.now()
+        #print target/ITS
+        #print k.dlambdas
+        #print k.dsigmas
+        print "SSTW2"
+        print end_time - start_time
+
+    @unittest.skip("skip")
+    def test_prof_K_cy3(self):
+        #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
+        TREES_TRAIN = 'GPy/testing/qc_trees.txt'
+        TREES = 700
+        with open(TREES_TRAIN) as f:
+            X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
+        k = SST()
+        target = np.zeros(shape=(len(X), len(X)))
+        ITS = 1
+
+        import cProfile, StringIO, pstats
+        pr = cProfile.Profile()
+        pr.enable()
+        for i in range(ITS):
+            k.parts[0].K(X, None, target)
+        pr.disable()
+        s = StringIO.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        ps.print_stats(20)
+        print s.getvalue()
+
+    @unittest.skip("skip")
+    def test_prof_K_cy4(self):
+        #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
+        TREES_TRAIN = 'GPy/testing/qc_trees.txt'
+        TREES = 2000
+        with open(TREES_TRAIN) as f:
+            X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
+        k = SST()
+        #k = GPy.kern.SubsetTreeKernel()
+        target = np.zeros(shape=(len(X), len(X)))
+        ITS = 1
+
+        import cProfile, StringIO, pstats
+        pr = cProfile.Profile()
+        pr.enable()
+        for i in range(ITS):
+            k.parts[0].K(X, None, target)
+        pr.disable()
+        s = StringIO.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        ps.print_stats(20)
+        print s.getvalue()
+
+
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
