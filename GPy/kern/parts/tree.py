@@ -134,8 +134,8 @@ class PySubsetTreeKernel(Kernpart):
                 break
         return node_pair_list
 
-    def _get_node_pair_list_cy(self, nodes1, nodes2):
-        return cy_sst.cy_get_node_pair_list(nodes1, nodes2)
+    #def _get_node_pair_list_cy(self, nodes1, nodes2):
+    #    return cy_sst.cy_get_node_pair_list(nodes1, nodes2)
 
     def _build_cache(self, X):
         #print X
