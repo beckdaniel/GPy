@@ -28,10 +28,6 @@ class TreeKernel(Kernpart):
         self.decay = decay
         self.branch = branch
         self.normalize = normalize
-        #if mode == "mock":
-        #    self.K = self.K_mock
-        #    self.Kdiag = self.Kdiag_mock
-        #    self.dK_dtheta = self.dK_dtheta_mock
         if mode == "naive":
             self.K = self.K_naive
             self.Kdiag = self.Kdiag_naive
