@@ -28,11 +28,11 @@ class TreeKernel(Kernpart):
         self.decay = decay
         self.branch = branch
         self.normalize = normalize
-        if mode == "mock":
-            self.K = self.K_mock
-            self.Kdiag = self.Kdiag_mock
-            self.dK_dtheta = self.dK_dtheta_mock
-        elif mode == "naive":
+        #if mode == "mock":
+        #    self.K = self.K_mock
+        #    self.Kdiag = self.Kdiag_mock
+        #    self.dK_dtheta = self.dK_dtheta_mock
+        if mode == "naive":
             self.K = self.K_naive
             self.Kdiag = self.Kdiag_naive
             self.dK_dtheta = self.dK_dtheta_naive
@@ -56,42 +56,6 @@ class TreeKernel(Kernpart):
     def _get_param_names(self):
         return ['decay', 'branch']
 
-
-    ##############
-    # MOCK METHODS
-    #
-    # These were designed to mainly test how to couple
-    # TreeKernels to the GPy kernel API.
-    ##############
-
-    def K_mock(self, X, X2, target):
-        """
-        The mock parameter is mainly for testing and debugging.
-        """
-        if X2 == None:
-            X2 = X
-        # we have to ensure positive semi-definiteness, so we build a triangular matrix
-        # and them multiply it by its transpose (like a "reverse" Cholesky)
-        result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X2])
-        for i in range(result.shape[0]):
-            for j in range(result.shape[1]):
-                if i > j:
-                    result[i][j] = 0
-        target += result.T.dot(result)
-
-    def Kdiag_mock(self, X, target):
-        result = np.array([[(self.decay + self.branch + len(x1) + len(x2)) for x1 in X] for x2 in X])
-        for i in range(result.shape[0]):
-            for j in range(result.shape[1]):
-                if i > j:
-                    result[i][j] = 0
-        target += np.diag(result.T.dot(result))
-
-    def dK_dtheta_mock(self, dL_dK, X, X2, target):
-        if X2 == None:
-            X2 = X
-        s = np.sum(dL_dK)
-        target += [s, s]
 
     ###############
     # NAIVE METHODS

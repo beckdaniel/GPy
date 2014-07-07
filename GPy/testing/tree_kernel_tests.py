@@ -31,20 +31,6 @@ class BasicTreeKernelTests(unittest.TestCase):
     def test_treekernel_params3(self):
         tk = GPy.kern.TreeKernel()
         self.assertTrue(tk._get_param_names() == ['tk_decay', 'tk_branch'])
-        
-    def test_treekernel_mock1(self):
-        tk = GPy.kern.TreeKernel(mode="mock")
-        X1 = np.array([[nltk.Tree("(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))")]],
-                      dtype=nltk.Tree)
-        target = tk.K(X1, X1)
-        self.assertEqual(target[0], [16])
-
-    def test_treekernel_mock2(self):
-        tk = GPy.kern.TreeKernel(mode="mock")
-        X = np.array([['a' * i] for i in range(10)], dtype=str)
-        Y = np.array([[a] for a in range(10)])
-        m = GPy.models.GPRegression(X,Y,kernel=tk)
-        m['noise'] = 1
 
     def test_treekernel_k1(self):
         tk = GPy.kern.TreeKernel()
