@@ -600,11 +600,11 @@ def ODE_UY(input_dim=2, varianceU=1.,  varianceY=1., lengthscaleU=None,  lengths
     part = parts.ODE_UY.ODE_UY(input_dim, varianceU, varianceY, lengthscaleU, lengthscaleY)
     return kern(input_dim, [part])
 
-def TreeKernel(mode="naive", normalize=False):
+def TreeKernel(decay=1, branch=1, mode="naive", normalize=False):
     """
     Tree kernel
     """
-    part = parts.tree_kernel.TreeKernel(mode=mode, normalize=normalize)
+    part = parts.tree_kernel.TreeKernel(decay=decay, branch=branch, mode=mode, normalize=normalize)
     return kern(1, [part])
 
 def SimpleFastTreeKernel(decay=1, has_root=False):

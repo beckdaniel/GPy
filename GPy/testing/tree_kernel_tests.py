@@ -6,7 +6,7 @@ import numpy as np
 import GPy
 import nltk # Need to cope with this in a better way...
 import sympy as sp
-from GPy.kern.tree_kernel import TreeKernel
+from GPy.kern import TreeKernel
 from GPy.kern import SubsetTreeKernel as SST
 from GPy.kern import PySubsetTreeKernel as PySST
 import sys
@@ -65,109 +65,109 @@ class BasicTreeKernelTests(unittest.TestCase):
     def test_treekernel_delta1(self):
         node1 = 'test'
         node2 = 'test'
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0)
 
     def test_treekernel_delta2(self):
         node1 = nltk.Tree('(S NP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0)
 
     def test_treekernel_delta3(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 1)
 
     def test_treekernel_delta4(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel(decay=0.5)
+        tk = TreeKernel(decay=0.5).parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0.5)
 
     def test_treekernel_delta5(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 4)
 
     def test_treekernel_delta6(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(branch=0.5)
+        tk = TreeKernel(branch=0.5).parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 2.25)
     
     def test_treekernel_delta7(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5)
+        tk = TreeKernel(decay=0.5).parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 1.125)
 
     def test_treekernel_delta8(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5, branch=0.5)
+        tk = TreeKernel(decay=0.5, branch=0.5).parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0.5)
 
     def test_treekernel_delta9(self):
         node1 = nltk.Tree('(S (NP NS) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 2)
 
     def test_treekernel_deltaparams1(self):
         node1 = 'test'
         node2 = 'test'
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (0,0))
 
     def test_treekernel_deltaparams2(self):
         node1 = nltk.Tree('(S NP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (0,0))
 
     def test_treekernel_deltaparams3(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (1,0))
 
     def test_treekernel_deltaparams4(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel(decay=0.5)
+        tk = TreeKernel(decay=0.5).parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (1,0))
 
     def test_treekernel_deltaparams5(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (8,4))
 
     def test_treekernel_deltaparams6(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(branch=0.5)
+        tk = TreeKernel(branch=0.5).parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (5.25, 3))
     
     def test_treekernel_deltaparams7(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5)
+        tk = TreeKernel(decay=0.5).parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (3.75, 1.5))
 
     def test_treekernel_deltaparams8(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5, branch=0.5)
+        tk = TreeKernel(decay=0.5, branch=0.5).parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (2, 1))
 
     def test_treekernel_deltaparams9(self):
         node1 = nltk.Tree('(S (NP NS) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel()
+        tk = TreeKernel().parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (3, 3))
 
     def test_treekernel_kernel1(self):
@@ -273,33 +273,41 @@ class CacheTreeKernelTests(unittest.TestCase):
         self.tgt_c = np.copy(self.tgt_n)
         self.tgt_hyp_n = np.array([0., 0])
         self.tgt_hyp_c = np.array([0., 0])
-        self.X = [['(S NP)'], ['(S NP VP)'], ['(S (NP N) (VP V))'], ['(S (NP NS) (VP V))']]
+        self.X = np.array([['(S NP)'], ['(S NP VP)'], ['(S (NP N) (VP V))'], ['(S (NP NS) (VP V))']],dtype=object)
 
     def test_treekernel_deltaparams_cache1(self):
-        self.tk_n.K(self.X, None, self.tgt_n)
-        self.tk_c.K(self.X, None, self.tgt_c)
-        self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
+        self.tgt_n = self.tk_n.K(self.X, None)#, self.tgt_n)
+        self.tgt_c = self.tk_c.K(self.X, None)#, self.tgt_c)
+        self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
+        self.tgt_hyp_c = self.tk_c.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
         self.assertTrue((self.tgt_n == self.tgt_c).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
     def test_treekernel_deltaparams_cache2(self):
         self.tk_n._set_params([1,0.3])
         self.tk_c._set_params([1,0.3])
-        self.tk_n.K(self.X, None, self.tgt_n)
-        self.tk_c.K(self.X, None, self.tgt_c)
-        self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
+        self.tgt_n = self.tk_n.K(self.X, None)#, self.tgt_n)
+        self.tgt_c = self.tk_c.K(self.X, None)#, self.tgt_c)
+        self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
+        self.tgt_hyp_c = self.tk_c.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
+        #self.tk_n.K(self.X, None, self.tgt_n)
+        #self.tk_c.K(self.X, None, self.tgt_c)
+        #self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
+        #self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
         self.assertTrue((self.tgt_n == self.tgt_c).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
     def test_treekernel_deltaparams_cache3(self):
         self.tk_n._set_params([1,0.1])
         self.tk_c._set_params([1,0.1])
-        self.tk_n.K(self.X, None, self.tgt_n)
-        self.tk_c.K(self.X, None, self.tgt_c)
-        self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
+        self.tgt_n = self.tk_n.K(self.X, None)#, self.tgt_n)
+        self.tgt_c = self.tk_c.K(self.X, None)#, self.tgt_c)
+        self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
+        self.tgt_hyp_c = self.tk_c.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
+        #self.tk_n.K(self.X, None, self.tgt_n)
+        #self.tk_c.K(self.X, None, self.tgt_c)
+        #self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
+        #self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
         #print self.tgt_hyp_n
         #print self.tgt_hyp_c
         self.assertTrue((self.tgt_n == self.tgt_c).all())
@@ -310,10 +318,14 @@ class CacheTreeKernelTests(unittest.TestCase):
     def test_treekernel_deltaparams_cache4(self):
         self.tk_n._set_params([0.3,1])
         self.tk_c._set_params([0.3,1])
-        self.tk_n.K(self.X, None, self.tgt_n)
-        self.tk_c.K(self.X, None, self.tgt_c)
-        self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
+        self.tgt_n = self.tk_n.K(self.X, None)#, self.tgt_n)
+        self.tgt_c = self.tk_c.K(self.X, None)#, self.tgt_c)
+        self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
+        self.tgt_hyp_c = self.tk_c.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
+        #self.tk_n.K(self.X, None, self.tgt_n)
+        #self.tk_c.K(self.X, None, self.tgt_c)
+        #self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
+        #self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
         self.assertTrue((self.tgt_n == self.tgt_c).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
@@ -380,14 +392,18 @@ class OptTreeKernelTests(unittest.TestCase):
         self.tgt_f = np.copy(self.tgt_n)
         self.tgt_hyp_n = np.array([0., 0])
         self.tgt_hyp_f = np.array([0., 0])
-        self.X = [['(S NP)'], ['(S NP VP)'], ['(S (NP N) (VP V))'], ['(S (NP NS) (VP V))']]
+        self.X = np.array([['(S NP)'], ['(S NP VP)'], ['(S (NP N) (VP V))'], ['(S (NP NS) (VP V))']], dtype=object)
         #self.X = [['(S (NP (DET a) (N b)) (VP (V c)))'], ['(S (NP (N b)) (VP (V d) (ADV e)))']]
 
     def test_treekernel_deltaparams_opt1(self):
-        self.tk_n.K(self.X, None, self.tgt_n)
-        self.tk_f.K(self.X, None, self.tgt_f)
-        self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        self.tk_f.dK_dtheta(1, self.X, None, self.tgt_hyp_f)
+        self.tgt_n = self.tk_n.K(self.X, None)#, self.tgt_n)
+        self.tgt_f = self.tk_f.K(self.X, None)#, self.tgt_c)
+        self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
+        self.tgt_hyp_f = self.tk_f.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
+        #self.tk_n.K(self.X, None, self.tgt_n)
+        #self.tk_f.K(self.X, None, self.tgt_f)
+        #self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
+        #self.tk_f.dK_dtheta(1, self.X, None, self.tgt_hyp_f)
         #print self.tgt_n
         #print self.tgt_f
         self.assertTrue((self.tgt_n == self.tgt_f).all())
