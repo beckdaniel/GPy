@@ -49,7 +49,7 @@ class SubsetTreeKernel(Kernpart):
         target += np.ones(shape=(len(X),))
 
     def dK_dtheta(self, dL_dK, X, X2, target):
-        s_like = np.sum(dL_dL)
+        s_like = np.sum(dL_dK)
         target += [s_like * self.dlambda,
                    s_like * self.dsigma]
 
