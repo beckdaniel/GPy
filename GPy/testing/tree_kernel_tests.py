@@ -614,8 +614,6 @@ class SSTKCheckingTests(unittest.TestCase):
         target2 = np.zeros(shape=(len(X), len(X)))
         k1.parts[0].K(X, None, target1)
         k2.parts[0].K(X, None, target2)
-        #print target1
-        #print target2
         self.assertAlmostEqual(np.sum(target2), np.sum(target1))
 
     def test_grad(self):
@@ -641,6 +639,29 @@ class SSTKCheckingTests(unittest.TestCase):
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
+
+    def test_integration(self):
+        tk = SST(_lambda=1)
+        X = np.array([['(S NP VP)'],
+                      ['(S (NP N) (VP V))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        Y = np.array([[(a+10)*5] for a in range(5)])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        m.constrain_positive('')
+        m.constrain_fixed('noise_variance')
+        #print m
+        m.optimize(messages=True, optimizer='lbfgs')
+        #m.optimize(messages=True)
+        #print m
+        #print tk.parts[0]._get_params()
+        #m.optimize(messages=True)
+        self.assertAlmostEqual(tk.parts[0]._get_params()[0], 0.00101246)
+        self.assertAlmostEqual(tk.parts[0]._get_params()[1], 0.08544515)
+        
+        
 
 
 class SSTProfilingTests(unittest.TestCase):

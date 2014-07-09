@@ -30,7 +30,7 @@ class SubsetTreeKernel(Kernpart):
         self.kernel = cy_tree.CySubsetTreeKernel(_lambda, _sigma)
         
     def _get_params(self):
-        return np.hstack((self._lambda, self._sigma))
+        return np.hstack((self.kernel._lambda, self.kernel._sigma))
 
     def _set_params(self, x):
         self.kernel._lambda = x[0]
