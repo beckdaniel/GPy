@@ -135,8 +135,9 @@ class CySubsetTreeKernel(object):
         """
         for tree_repr in X:
             t_repr = tree_repr[0]
-            node_list, node_dict = self._gen_node_list(t_repr)
-            self._tree_cache[t_repr] = (node_list, node_dict)
+            if t_repr not in self._tree_cache:
+                node_list, node_dict = self._gen_node_list(t_repr)
+                self._tree_cache[t_repr] = (node_list, node_dict)
         
     def K(self, X, X2):
         """
@@ -162,6 +163,7 @@ class CySubsetTreeKernel(object):
         # First, we are going to calculate K for diagonal values
         # because we will need them later to normalize.
         diag_Ks, diag_dlambdas, diag_dsigmas = self._diag_calculations(X)
+
 
         # Second, we are going to initialize the ddecay values
         # because we are going to calculate them at the same time as K.
@@ -194,6 +196,62 @@ class CySubsetTreeKernel(object):
                                                                    diag_Ks[i], diag_Ks[j],
                                                                    diag_dlambdas[i], diag_dlambdas[j],
                                                                    diag_dsigmas[i], diag_dsigmas[j])
+                # Normalization happens here
+                Ks[i][j] = K_norm
+                dlambdas[i][j] = dlambda_norm
+                dsigmas[i][j] = dsigma_norm
+
+        return (Ks, dlambdas, dsigmas)
+
+    def K_nsym(self, X, X2):
+        """
+        The non-symmetric version of the gram matrix method.
+        """
+        #if self._tree_cache == {}:
+        #    self._build_cache(X)
+        self._build_cache(X)
+        self._build_cache(X2)
+        for tree in self._tree_cache:
+            print tree
+            print self._tree_cache[tree]
+            
+
+        # First, we are going to calculate K for diagonal values
+        # because we will need them later to normalize.
+        X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
+        X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
+
+        # Second, we are going to initialize the ddecay values
+        # because we are going to calculate them at the same time as K.
+        Ks = np.zeros(shape=(len(X), len(X2)))
+        dlambdas = np.zeros(shape=(len(X), len(X2)))
+        dsigmas = np.zeros(shape=(len(X), len(X2)))
+        
+        # Now we proceed for the actual calculation
+
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                #if i > j:
+                #    Ks[i][j] = Ks[j][i]
+                #    dlambdas[i][j] = dlambdas[j][i]
+                #    dsigmas[i][j] = dsigmas[j][i]
+                #    continue
+                #if i == j:
+                #    Ks[i][j] = 1
+                #    continue
+                # It will always be a 1-element array so we just index by 0
+                nodes1, dict1 = self._tree_cache[x1[0]]
+                nodes2, dict2 = self._tree_cache[x2[0]]
+                node_pairs = self._get_node_pairs(nodes1, nodes2)
+                K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
+                #K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, self._lambda, self._sigma)
+                #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
+                #K_result, dlambda, dsigma = result.get()
+
+                K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
+                                                                   X_diag_Ks[i], X2_diag_Ks[j],
+                                                                   X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                                                   X_diag_dsigmas[i], X2_diag_dsigmas[j])
                 # Normalization happens here
                 Ks[i][j] = K_norm
                 dlambdas[i][j] = dlambda_norm
@@ -302,7 +360,16 @@ class CySubsetTreeKernel(object):
         #print node2
         for i in range(len(children1)):
             ch1 = children1[i]
-            ch2 = children2[i]
+            try:
+                ch2 = children2[i] #<----
+            except:
+                print children1
+                print children2
+                print node1
+                print node2
+                print dict1
+                print dict2
+                raise
             n1 = dict1[ch1]
             n2 = dict2[ch2]
             if n1.production == n2.production:

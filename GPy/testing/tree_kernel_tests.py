@@ -640,9 +640,9 @@ class SSTKCheckingTests(unittest.TestCase):
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
-    def test_integration(self):
+    def test_integration1(self):
         tk = SST(_lambda=1)
-        X = np.array([['(S NP VP)'],
+        X = np.array([['(S NP VP)'],   # THIS TREE GENERATES A BUG
                       ['(S (NP N) (VP V))'],
                       ['(S (NP (N a)) (VP (V c)))'],
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
@@ -653,13 +653,36 @@ class SSTKCheckingTests(unittest.TestCase):
         m.constrain_positive('')
         m.constrain_fixed('noise_variance')
         #print m
-        m.optimize(messages=True, optimizer='lbfgs')
+        m.optimize(messages=False, optimizer='lbfgs')
         #m.optimize(messages=True)
         #print m
         #print tk.parts[0]._get_params()
         #m.optimize(messages=True)
         self.assertAlmostEqual(tk.parts[0]._get_params()[0], 0.00101246)
         self.assertAlmostEqual(tk.parts[0]._get_params()[1], 0.08544515)
+
+    def test_integration2(self):
+        tk = SST(_lambda=1)
+        X = np.array([#['(S NP VP)'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        Y = np.array([[(a+10)*5] for a in range(4)])
+        m = GPy.models.GPRegression(X, Y, kernel=tk)
+        m.constrain_positive('')
+        m.constrain_fixed('noise_variance')
+        m.optimize(messages=False, optimizer='lbfgs')
+        #print m
+        X2 = np.array([#['(S NP VP)'],
+                       ['(S (NP n) (VP v))'],
+                       ['(S (NP (N a)) (VP (V c)))'],
+                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                      dtype=object)
+        print m.predict(X2)
+ 
         
         
 
