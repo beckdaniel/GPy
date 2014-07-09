@@ -8,6 +8,8 @@ import nltk
 
 MAX_NODES = 300
 
+####################################
+
 class SubsetTreeKernel(Kernpart):
     """
     The SST kernel by Moschitti(2006), with two hyperparameters.
@@ -51,6 +53,7 @@ class SubsetTreeKernel(Kernpart):
         target += [s_like * self.dlambda,
                    s_like * self.dsigma]
 
+####################################
 
 class Node(object):
     """
@@ -64,6 +67,7 @@ class Node(object):
     def __repr__(self):
         return str((self.production, self.node_id, self.children_ids))
 
+####################################
 
 class PySubsetTreeKernel(Kernpart):
     """
@@ -266,7 +270,7 @@ class PySubsetTreeKernel(Kernpart):
 #
 ##############################
 
-class TreeKernel(Kernpart):
+class OldSubsetTreeKernel(Kernpart):
     """A convolution kernel that compares two trees. See Moschitti(2006).
     """
     
@@ -292,7 +296,7 @@ class TreeKernel(Kernpart):
             self.K = self.K_cache
             self.Kdiag = self.Kdiag_cache
             self.dK_dtheta = self.dK_dtheta_cache
-        elif mode == "opt":
+        elif mode == "fast":
             self.K = self.K_fast
             self.Kdiag = self.Kdiag_fast
             self.dK_dtheta = self.dK_dtheta_fast

@@ -6,9 +6,7 @@ import numpy as np
 import GPy
 import nltk # Need to cope with this in a better way...
 import sympy as sp
-from GPy.kern import TreeKernel
 from GPy.kern import SubsetTreeKernel as SST
-from GPy.kern import PySubsetTreeKernel as PySST
 import sys
 import datetime
 
@@ -19,21 +17,21 @@ class BasicTreeKernelTests(unittest.TestCase):
     """
 
     def test_treekernel_params1(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         tk._set_params(np.array([1, 1]))
         self.assertTrue((tk.parts[0]._get_params() == np.array([1, 1])).all())
 
     def test_treekernel_params2(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         tk._set_params(np.array([1, 0]))
         self.assertTrue((tk._get_params() == np.array([1, 0])).all())
 
     def test_treekernel_params3(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         self.assertTrue(tk._get_param_names() == ['tk_decay', 'tk_branch'])
 
     def test_treekernel_k1(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         tk._set_params([1,0])
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         X1 = np.array([[t]], dtype=object)
@@ -41,7 +39,7 @@ class BasicTreeKernelTests(unittest.TestCase):
         self.assertEqual(target[0], [7])
 
     def test_treekernel_k2(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         tk._set_params([1,1])
         t = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         X1 = np.array([[t]], dtype=object)
@@ -51,113 +49,113 @@ class BasicTreeKernelTests(unittest.TestCase):
     def test_treekernel_delta1(self):
         node1 = 'test'
         node2 = 'test'
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0)
 
     def test_treekernel_delta2(self):
         node1 = nltk.Tree('(S NP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0)
 
     def test_treekernel_delta3(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 1)
 
     def test_treekernel_delta4(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel(decay=0.5).parts[0]
+        tk = SST(_lambda=0.5, mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0.5)
 
     def test_treekernel_delta5(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 4)
 
     def test_treekernel_delta6(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(branch=0.5).parts[0]
+        tk = SST(_sigma=0.5, mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 2.25)
     
     def test_treekernel_delta7(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5).parts[0]
+        tk = SST(_lambda=0.5, mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 1.125)
 
     def test_treekernel_delta8(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5, branch=0.5).parts[0]
+        tk = SST(_lambda=0.5, _sigma=0.5, mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 0.5)
 
     def test_treekernel_delta9(self):
         node1 = nltk.Tree('(S (NP NS) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertTrue(tk.delta_naive(node1,node2) == 2)
 
     def test_treekernel_deltaparams1(self):
         node1 = 'test'
         node2 = 'test'
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (0,0))
 
     def test_treekernel_deltaparams2(self):
         node1 = nltk.Tree('(S NP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (0,0))
 
     def test_treekernel_deltaparams3(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (1,0))
 
     def test_treekernel_deltaparams4(self):
         node1 = nltk.Tree('(S NP VP)')
         node2 = nltk.Tree('(S NP VP)')
-        tk = TreeKernel(decay=0.5).parts[0]
+        tk = SST(_lambda=0.5, mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (1,0))
 
     def test_treekernel_deltaparams5(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (8,4))
 
     def test_treekernel_deltaparams6(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(branch=0.5).parts[0]
+        tk = SST(_sigma=0.5, mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (5.25, 3))
     
     def test_treekernel_deltaparams7(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5).parts[0]
+        tk = SST(_lambda=0.5, mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (3.75, 1.5))
 
     def test_treekernel_deltaparams8(self):
         node1 = nltk.Tree('(S (NP N) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel(decay=0.5, branch=0.5).parts[0]
+        tk = SST(_lambda=0.5, _sigma=0.5, mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (2, 1))
 
     def test_treekernel_deltaparams9(self):
         node1 = nltk.Tree('(S (NP NS) (VP V))')
         node2 = nltk.Tree('(S (NP N) (VP V))')
-        tk = TreeKernel().parts[0]
+        tk = SST(mode="naive").parts[0]
         self.assertEqual(tk.delta_params_naive(node1,node2), (3, 3))
 
     def test_treekernel_kernel1(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         X = np.array([['(S (NP a) (VP v))'],
                       ['(S (NP a1) (VP v))'],
                       ['(S (NP (NP a)) (VP (V c)))'],
@@ -171,21 +169,21 @@ class BasicTreeKernelTests(unittest.TestCase):
         self.assertTrue((k == result).all())
 
     def test_treekernel_kernel3(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         X = np.array([['(S (NP a) (VP v))']], dtype=object)
         X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
         k = tk.dK_dtheta(1, X, X2)
         self.assertTrue((k == [2,2]).all())
 
     def test_treekernel_kernel4(self):
-        tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         X = np.array([['(S (NP a) (VP v))']], dtype=object)
         X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
         k = tk.K(X, X2)
         self.assertTrue((k == 2))
 
     def test_treekernel_kernel6(self):
-        tk = GPy.kern.TreeKernel(mode="cache")
+        tk = SST(mode="cache")
         X = np.array([['(S (NP a) (VP v))'],
                       ['(S (NP a1) (VP v))'],
                       ['(S (NP (NP a)) (VP (V c)))'],
@@ -205,15 +203,12 @@ class GradientTreeKernelTests(unittest.TestCase):
     numerical approximations.
     """
     def test_treekernel_grad1(self):
-        tk = GPy.kern.TreeKernel(mode="naive")
+        tk = SST(mode="naive")
         X = np.array([['(S (NP a) (VP v))']], dtype=object)
         X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
 
         h = 0.00001
-        #target = [0,0]
-        #print tk._get_params()
-        tk2 = TreeKernel(mode="naive")
-        #print tk2.delta_params_naive(nltk.Tree(X[0][0]), nltk.Tree(X2[0][0]))
+        tk2 = SST(mode="naive")
         dk_dt = tk.dK_dtheta(1, X, X2)
 
         tk._set_params([1,1-h])
@@ -226,17 +221,9 @@ class GradientTreeKernelTests(unittest.TestCase):
         tk._set_params([1+h,1])
         k_d2 = tk.K(X, X2)
 
-        #print k_d1
-        #print k_d2
-        #print k_b1
-        #print k_b2
-
         tk._set_params([1,1])
-        #print tk.K(X, X2)
         
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
-        #print approx
-        #print dk_dt
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
@@ -250,8 +237,8 @@ class CacheTreeKernelTests(unittest.TestCase):
     """
 
     def setUp(self):
-        self.tk_n = TreeKernel(mode="naive")
-        self.tk_c = TreeKernel(mode="cache")
+        self.tk_n = SST(mode="naive")
+        self.tk_c = SST(mode="cache")
         self.tgt_n = np.array([[0.,0,0,0],
                                [0,0,0,0],
                                [0,0,0,0],
@@ -276,10 +263,6 @@ class CacheTreeKernelTests(unittest.TestCase):
         self.tgt_c = self.tk_c.K(self.X, None)#, self.tgt_c)
         self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
         self.tgt_hyp_c = self.tk_c.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
-        #self.tk_n.K(self.X, None, self.tgt_n)
-        #self.tk_c.K(self.X, None, self.tgt_c)
-        #self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        #self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
         self.assertTrue((self.tgt_n == self.tgt_c).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
@@ -290,16 +273,9 @@ class CacheTreeKernelTests(unittest.TestCase):
         self.tgt_c = self.tk_c.K(self.X, None)#, self.tgt_c)
         self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
         self.tgt_hyp_c = self.tk_c.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
-        #self.tk_n.K(self.X, None, self.tgt_n)
-        #self.tk_c.K(self.X, None, self.tgt_c)
-        #self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        #self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
-        #print self.tgt_hyp_n
-        #print self.tgt_hyp_c
         self.assertTrue((self.tgt_n == self.tgt_c).all())
         self.assertAlmostEqual(self.tgt_hyp_n[0], self.tgt_hyp_c[0])
         self.assertAlmostEqual(self.tgt_hyp_n[1], self.tgt_hyp_c[1])
-        #self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
     def test_treekernel_deltaparams_cache4(self):
         self.tk_n._set_params([0.3,1])
@@ -308,10 +284,6 @@ class CacheTreeKernelTests(unittest.TestCase):
         self.tgt_c = self.tk_c.K(self.X, None)#, self.tgt_c)
         self.tgt_hyp_n = self.tk_n.dK_dtheta(1, self.X, None)#, self.tgt_hyp_n)
         self.tgt_hyp_c = self.tk_c.dK_dtheta(1, self.X, None)#, self.tgt_hyp_c)
-        #self.tk_n.K(self.X, None, self.tgt_n)
-        #self.tk_c.K(self.X, None, self.tgt_c)
-        #self.tk_n.dK_dtheta(1, self.X, None, self.tgt_hyp_n)
-        #self.tk_c.dK_dtheta(1, self.X, None, self.tgt_hyp_c)
         self.assertTrue((self.tgt_n == self.tgt_c).all())
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_c).all())
 
@@ -324,13 +296,15 @@ class IntegrationTreeKernelTests(unittest.TestCase):
     """
 
     def test_treekernel_real1(self):
-        tk = GPy.kern.TreeKernel()
+        #tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         X = np.array([['(S NP VP)'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
 
     def test_treekernel_real2(self):
-        tk = GPy.kern.TreeKernel()
+        #tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         X = np.array([['(S (NP N) (VP V))'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
         Y = np.array([[1],[2],[30]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
@@ -338,7 +312,8 @@ class IntegrationTreeKernelTests(unittest.TestCase):
         m.optimize(max_f_eval=50)
     
     def test_treekernel_real3(self):
-        tk = GPy.kern.TreeKernel()
+        #tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         rbf = GPy.kern.rbf(2, ARD=True)
         k = tk.add(rbf, tensor=True)
         k.input_slices = [slice(0,1),slice(1,3)]
@@ -351,7 +326,8 @@ class IntegrationTreeKernelTests(unittest.TestCase):
         m.optimize(max_f_eval=100)
 
     def test_treekernel_real4(self):
-        tk = GPy.kern.TreeKernel()
+        #tk = GPy.kern.TreeKernel()
+        tk = SST(mode="naive")
         X = np.array([['(S NP VP)'],
                       ['(S (NP N) (VP V))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -364,13 +340,15 @@ class IntegrationTreeKernelTests(unittest.TestCase):
         m.optimize(max_f_eval=10)
 
 
-class OptTreeKernelTests(unittest.TestCase):
+class FastTreeKernelTests(unittest.TestCase):
     """
     Tests for the optimized kernel version
     """
     def setUp(self):
-        self.tk_n = TreeKernel(mode="naive")
-        self.tk_f = TreeKernel(mode="opt")
+        #self.tk_n = TreeKernel(mode="naive")
+        #self.tk_f = TreeKernel(mode="opt")
+        self.tk_n = SST(mode="naive")
+        self.tk_f = SST(mode="fast")
         self.tgt_n = np.array([[0.,0,0,0],
                                [0,0,0,0],
                                [0,0,0,0],
@@ -396,12 +374,14 @@ class OptTreeKernelTests(unittest.TestCase):
         self.assertTrue((self.tgt_hyp_n == self.tgt_hyp_f).all())
 
     def test_treekernel_opt_opt1(self):
-        tk1 = GPy.kern.TreeKernel(mode="naive")
+        #tk1 = GPy.kern.TreeKernel(mode="naive")
+        tk1 = SST(mode="naive")
         rbf1 = GPy.kern.rbf(2, ARD=True)
         k1 = tk1.add(rbf1, tensor=True)
         k1.input_slices = [slice(0,1),slice(1,3)]
 
-        tk2 = GPy.kern.TreeKernel(mode="opt")
+        #tk2 = GPy.kern.TreeKernel(mode="opt")
+        tk2 = SST(mode="fast")
         rbf2 = GPy.kern.rbf(2, ARD=True)
         k2 = tk2.add(rbf2, tensor=True)
         k2.input_slices = [slice(0,1),slice(1,3)]
@@ -420,7 +400,8 @@ class OptTreeKernelTests(unittest.TestCase):
         self.assertTrue((m1._get_params() == m2._get_params()).all())
 
     def test_treekernel_Kdiag_opt(self):
-        tk = GPy.kern.TreeKernel(mode="opt", normalize=False)
+        #tk = GPy.kern.TreeKernel(mode="opt", normalize=False)
+        tk = SST(mode="fast")
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -435,7 +416,8 @@ class NormTreeKernelTests(unittest.TestCase):
     Tests for the normalized kernel version.
     """
     def test_treekernel_norm1(self):
-        tk = GPy.kern.TreeKernel(mode="opt", normalize=False)
+        tk = SST(mode="fast")
+        #tk = GPy.kern.TreeKernel(mode="opt", normalize=False)
         X = np.array([['(S (NP a) (VP v))'],
                       ['(S (NP a1) (VP v))'],
                       ['(S (NP (NP a)) (VP (V c)))'],
@@ -449,12 +431,14 @@ class NormTreeKernelTests(unittest.TestCase):
         self.assertTrue((k == result).all())
 
     def test_treekernel_norm_grad1(self):
-        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        tk = SST(mode="fast_norm")
+        #tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
         X = np.array([['(S (NP a) (VP v))']], dtype=object)
         X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
 
         h = 0.00001
-        tk2 = TreeKernel(mode="naive")
+        tk2 = SST(mode="naive")
+        #tk2 = TreeKernel(mode="naive")
         k = tk.K(X, X2)
         dk_dt = tk.dK_dtheta(1, X, X2)
 
@@ -472,7 +456,8 @@ class NormTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_treekernel_norm_grad2(self):
-        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        #tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        tk = SST(mode="fast_norm")
         X = np.array([['(S (NP a) (VP v))'], ['(S (NP a) (VP c))']], dtype=object)
 
         h = 0.00001
@@ -494,7 +479,8 @@ class NormTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_treekernel_norm_grad3(self):
-        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        #tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        tk = SST(mode="fast_norm")
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -517,7 +503,8 @@ class NormTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_treekernel_Kdiag_norm(self):
-        tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        #tk = GPy.kern.TreeKernel(mode="opt", normalize=True)
+        tk = SST(mode="fast_norm")
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -539,7 +526,7 @@ class SSTTests(unittest.TestCase):
 
     def test_gen_node_list(self):
         repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        k = PySST()
+        k = SST(mode="python")
         nodes1, dict1 = k.parts[0]._gen_node_list(repr1)
         result = "[('ADJ colorless', 0, None), ('ADV furiously', 4, None), ('N ideas', 1, None), ('NP ADJ N', 2, [0, 1]), ('S NP VP', 6, [2, 5]), ('V sleep', 3, None), ('VP V ADV', 5, [3, 4])]"
         print nodes1
@@ -547,7 +534,7 @@ class SSTTests(unittest.TestCase):
 
     def test_gen_node_list_cy(self):
         repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        k = SST()
+        k = SST(mode="cython")
         nodes1, dict1 = k.parts[0].kernel._gen_node_list(repr1)
         result = "[('ADJ colorless', 0, None), ('ADV furiously', 4, None), ('N ideas', 1, None), ('NP ADJ N', 2, [0, 1]), ('S NP VP', 6, [2, 5]), ('V sleep', 3, None), ('VP V ADV', 5, [3, 4])]"
         print nodes1
@@ -557,7 +544,7 @@ class SSTTests(unittest.TestCase):
     def test_get_node_pairs1(self):
         repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        k = PySST()
+        k = SST(mode="python")
         nodes1, dict1 = k.parts[0]._gen_node_list(repr1)
         nodes2, dict2 = k.parts[0]._gen_node_list(repr2)
         node_list = k.parts[0]._get_node_pairs(nodes1, nodes2)
@@ -568,7 +555,7 @@ class SSTTests(unittest.TestCase):
     def test_get_node_pair_list_cy(self):
         repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        k = PySST()
+        k = SST(mode="python")
         nodes1 = k.parts[0]._gen_node_list(repr1)
         nodes2 = k.parts[0]._gen_node_list(repr2)
         node_list = k.parts[0]._get_node_pair_list_cy(nodes1, nodes2)
@@ -578,7 +565,7 @@ class SSTTests(unittest.TestCase):
     def test_get_node_pairs2(self):
         repr1 = '(S (NP ns) (VP v))'
         repr2 = '(S (NP (N a)) (VP (V c)))'
-        k = PySST()
+        k = SST(mode="python")
         nodes1, dict1 = k.parts[0]._gen_node_list(repr1)
         nodes2, dict2 = k.parts[0]._gen_node_list(repr2)
         node_list = k.parts[0]._get_node_pairs(nodes1, nodes2)
@@ -593,7 +580,7 @@ class SSTTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
-        k = PySST(_lambda=1)
+        k = SST(_lambda=1, mode="python")
         target = np.zeros(shape=(len(X), len(X)))
         k.parts[0].K(X, None, target)
         result = [[ 1.,          0.5,         0.10540926,  0.08333333,  0.06711561],
@@ -628,7 +615,7 @@ class SSTProfilingTests(unittest.TestCase):
     def test_prof_gen_node_pair_list(self):
         repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        k = PySST()
+        k = SST(mode="python")
         nodes1 = k._gen_node_list(repr1)
         nodes2 = k._gen_node_list(repr2)
         start_time = datetime.datetime.now()
@@ -641,7 +628,7 @@ class SSTProfilingTests(unittest.TestCase):
     def test_prof_gen_node_pair_list_cy(self):
         repr1 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
         repr2 = "(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))"
-        k = PySST()
+        k = SST(mode="python")
         nodes1 = k._gen_node_list(repr1)
         nodes2 = k._gen_node_list(repr2)
         start_time = datetime.datetime.now()
@@ -658,7 +645,7 @@ class SSTProfilingTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
-        k = PySST()
+        k = SST(mode="python")
         target = np.zeros(shape=(len(X), len(X)))
         ITS = 10
         start_time = datetime.datetime.now()

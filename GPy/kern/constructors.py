@@ -600,23 +600,21 @@ def ODE_UY(input_dim=2, varianceU=1.,  varianceY=1., lengthscaleU=None,  lengths
     part = parts.ODE_UY.ODE_UY(input_dim, varianceU, varianceY, lengthscaleU, lengthscaleY)
     return kern(input_dim, [part])
 
-def TreeKernel(decay=1, branch=1, mode="naive", normalize=False):
+def SubsetTreeKernel(_lambda=1, _sigma=1, mode="cython"):
     """
     Tree kernel
     """
-    part = parts.tree.TreeKernel(decay=decay, branch=branch, mode=mode, normalize=normalize)
+    if mode == "cython":
+        part = parts.tree.SubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
+    elif mode == "python":
+        part = parts.tree.PySubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
+    elif mode == "naive":
+        part = parts.tree.OldSubsetTreeKernel(decay=_lambda, branch=_sigma, mode=mode, normalize=False)
+    elif mode == "cache":
+        part = parts.tree.OldSubsetTreeKernel(decay=_lambda, branch=_sigma, mode=mode, normalize=False)
+    elif mode == "fast":
+        part = parts.tree.OldSubsetTreeKernel(decay=_lambda, branch=_sigma, mode=mode, normalize=False)
+    elif mode == "fast_norm":
+        part = parts.tree.OldSubsetTreeKernel(decay=_lambda, branch=_sigma, mode="fast", normalize=True)
     return kern(1, [part])
 
-def SubsetTreeKernel(_lambda=0.1, _sigma=1):
-    """
-    Tree kernel
-    """
-    part = parts.tree.SubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
-    return kern(1, [part])
-
-def PySubsetTreeKernel(_lambda=0.1, _sigma=1):
-    """
-    Tree kernel
-    """
-    part = parts.tree.PySubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
-    return kern(1, [part])
