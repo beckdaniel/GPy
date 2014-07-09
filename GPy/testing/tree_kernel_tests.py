@@ -302,6 +302,7 @@ class IntegrationNaiveTreeKernelTests(unittest.TestCase):
         Y = np.array([[1],[2],[3]])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
 
+    @unittest.skip("skip")
     def test_treekernel_real2(self):
         tk = SST(mode="naive")
         X = np.array([['(S (NP N) (VP V))'], ['(S NP ADJ)'], ['(S NP)']], dtype=object)
@@ -310,6 +311,7 @@ class IntegrationNaiveTreeKernelTests(unittest.TestCase):
         m.constrain_positive('')
         m.optimize(max_f_eval=50)
     
+    @unittest.skip("skip")
     def test_treekernel_real3(self):
         tk = SST(mode="naive")
         rbf = GPy.kern.rbf(2, ARD=True)
@@ -323,6 +325,7 @@ class IntegrationNaiveTreeKernelTests(unittest.TestCase):
         m.constrain_positive('')
         m.optimize(max_f_eval=100)
 
+    @unittest.skip("skip")
     def test_treekernel_real4(self):
         tk = SST(mode="naive")
         X = np.array([['(S NP VP)'],
@@ -513,7 +516,7 @@ class SSTKTests(unittest.TestCase):
         k = SST(mode="python")
         nodes1, dict1 = k.parts[0]._gen_node_list(repr1)
         result = "[('ADJ colorless', 0, None), ('ADV furiously', 4, None), ('N ideas', 1, None), ('NP ADJ N', 2, [0, 1]), ('S NP VP', 6, [2, 5]), ('V sleep', 3, None), ('VP V ADV', 5, [3, 4])]"
-        print nodes1
+        #print nodes1
         self.assertEqual(str(nodes1), result)
 
     def test_gen_node_list_cy(self):
@@ -521,7 +524,7 @@ class SSTKTests(unittest.TestCase):
         k = SST(mode="cython")
         nodes1, dict1 = k.parts[0].kernel._gen_node_list(repr1)
         result = "[('ADJ colorless', 0, None), ('ADV furiously', 4, None), ('N ideas', 1, None), ('NP ADJ N', 2, [0, 1]), ('S NP VP', 6, [2, 5]), ('V sleep', 3, None), ('VP V ADV', 5, [3, 4])]"
-        print nodes1
+        #print nodes1
         self.assertEqual(str(nodes1), result)
 
     @unittest.skip("skip")
@@ -546,6 +549,7 @@ class SSTKTests(unittest.TestCase):
         result = "[((0, 0), (0, 0), 0), ((1, 1), (1, 1), 0), ((0, 1), (0, 1), 0), ((1, 0), (1, 0), 0), ((0,), (0,), 2), ((1,), (1,), 2), ((), (), 2)]"
         self.assertEqual(str(node_list), result)
 
+    @unittest.skip("skip")
     def test_get_node_pairs2(self):
         repr1 = '(S (NP ns) (VP v))'
         repr2 = '(S (NP (N a)) (VP (V c)))'
@@ -610,8 +614,8 @@ class SSTKCheckingTests(unittest.TestCase):
         target2 = np.zeros(shape=(len(X), len(X)))
         k1.parts[0].K(X, None, target1)
         k2.parts[0].K(X, None, target2)
-        print target1
-        print target2
+        #print target1
+        #print target2
         self.assertAlmostEqual(np.sum(target2), np.sum(target1))
 
     def test_grad(self):
@@ -633,6 +637,7 @@ class SSTKCheckingTests(unittest.TestCase):
         k_d1 = tk.K(X)
         tk._set_params([1+h,1])
         k_d2 = tk.K(X)
+
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
@@ -685,6 +690,7 @@ class SSTProfilingTests(unittest.TestCase):
         print "PYTHON"
         print end_time - start_time
 
+    @unittest.skip("skip")
     def test_prof_K_cy(self):
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],

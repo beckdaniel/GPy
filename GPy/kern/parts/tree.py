@@ -33,8 +33,8 @@ class SubsetTreeKernel(Kernpart):
         return np.hstack((self._lambda, self._sigma))
 
     def _set_params(self, x):
-        self._lambda = x[0]
-        self._sigma = x[1]
+        self.kernel._lambda = x[0]
+        self.kernel._sigma = x[1]
 
     def _get_param_names(self):
         return ['lambda', 'sigma']
