@@ -43,16 +43,28 @@ class SubsetTreeKernel(Kernpart):
     def K(self, X, X2, target):
         result, dl, ds = self.kernel.K(X, X2)
         target += result
-        self.dlambda = np.sum(dl)
-        self.dsigma = np.sum(ds)
+        self.dlambda = dl
+        self.dsigma = ds
 
     def Kdiag(self, X, target):
         target += np.ones(shape=(len(X),))
 
     def dK_dtheta(self, dL_dK, X, X2, target):
-        s_like = np.sum(dL_dK)
-        target += [s_like * self.dlambda,
-                   s_like * self.dsigma]
+        #################
+        #result, dl, ds = self.kernel.K(X, X2)
+        #self.dlambda = dl * dL_dK
+        #self.dsigma = ds * dL_dK
+        #print target
+        target += [np.sum(self.dlambda * dL_dK),
+                   np.sum(self.dsigma * dL_dK)]
+        
+        #target += result
+        #self.dlambda = np.sum(dl)
+        #self.dsigma = np.sum(ds)
+        ################
+        #s_like = np.sum(dL_dK)
+        #target += [s_like * self.dlambda,
+        #           s_like * self.dsigma]
 
 ####################################
 
