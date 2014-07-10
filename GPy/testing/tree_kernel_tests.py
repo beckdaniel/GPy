@@ -616,7 +616,7 @@ class SSTKCheckingTests(unittest.TestCase):
         k2.parts[0].K(X, None, target2)
         self.assertAlmostEqual(np.sum(target2), np.sum(target1))
 
-    def test_grad(self):
+    def test_grad1(self):
         tk = SST()
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
@@ -637,6 +637,60 @@ class SSTKCheckingTests(unittest.TestCase):
         k_d2 = tk.K(X)
 
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        print approx
+        print dk_dt
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
+
+    def test_grad2(self):
+        tk = SST(_lambda=0.5, _sigma=0.5)
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        h = 0.00001
+        k = tk.K(X)
+        dk_dt = tk.dK_dtheta(1, X)
+        tk._set_params([0.5,0.5-h])
+        k_b1 = tk.K(X)
+        tk._set_params([0.5,0.5+h])
+        k_b2 = tk.K(X)
+        tk._set_params([0.5-h,0.5])
+        k_d1 = tk.K(X)
+        tk._set_params([0.5+h,0.5])
+        k_d2 = tk.K(X)
+
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        print approx
+        print dk_dt
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
+
+    def test_grad3(self):
+        tk = SST(_lambda=0.05, _sigma=0.05)
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        h = 0.00001
+        k = tk.K(X)
+        dk_dt = tk.dK_dtheta(1, X)
+        tk._set_params([0.05,0.05-h])
+        k_b1 = tk.K(X)
+        tk._set_params([0.05,0.05+h])
+        k_b2 = tk.K(X)
+        tk._set_params([0.05-h,0.05])
+        k_d1 = tk.K(X)
+        tk._set_params([0.05+h,0.05])
+        k_d2 = tk.K(X)
+
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        print approx
+        print dk_dt
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
