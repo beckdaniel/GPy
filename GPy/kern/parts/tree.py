@@ -14,6 +14,7 @@ class SubsetTreeKernel(Kernpart):
     """
     The SST kernel by Moschitti(2006), with two hyperparameters.
     This is mainly a wrapper for a Cython implementation (see cy_tree.pyx).
+    The Cython kernel is stored on the "kernel" attribute.
     """
 
     def __init__(self, _lambda=0.1, _sigma=1):
@@ -57,7 +58,7 @@ class SubsetTreeKernel(Kernpart):
 
 class Node(object):
     """
-    A node object.
+    A node object, used by the Python implementation.
     """
     def __init__(self, production, node_id, children_ids):
         self.production = production
@@ -72,7 +73,9 @@ class Node(object):
 class PySubsetTreeKernel(Kernpart):
     """
     An SST Kernel, as defined by Moschitti, with
-    two hyperparameters.
+    two hyperparameters. A pure python version of the cython SSTK. This
+    is mainly for profiling purposes and check how much performance we gain by
+    using Cython.
     """
     
     def __init__(self, _lambda=0.1, _sigma=1):

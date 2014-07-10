@@ -17,7 +17,9 @@ cdef unsigned int MAX_NODES = 300
 
 cdef class Node(object):
     """
-    A node object.
+    A node object, containing a grammar production, an id and the children ids.
+    These are the nodes stored in the node lists implementation of the SSTK
+    (the "Fast Tree Kernel" of Moschitti (2006))
     """
 
     cdef string production
@@ -61,7 +63,6 @@ class CySubsetTreeKernel(object):
         node_list.sort(key=lambda Node x: x.production)
         cdef Node node
         node_dict = dict([(node.node_id, node) for node in node_list])
-        #print node_list
         return node_list, node_dict
 
     def _get_node(self, tree, node_list):
@@ -79,16 +80,12 @@ class CySubsetTreeKernel(object):
             node_id = len(node_list)
             prod = ' '.join(prod_list)
             cprod = prod
-            #print prod
-            #print cprod
             node = Node(cprod, node_id, children)
             node_list.append(node)
             return node_id
         else:
             prod = ' '.join([tree.node, tree[0]])
             cprod = prod
-            #print prod
-            #print cprod
             node_id = len(node_list)
             node = Node(cprod, node_id, None)
             node_list.append(node)
@@ -96,7 +93,7 @@ class CySubsetTreeKernel(object):
 
     def _get_node_pairs(self, nodes1, nodes2):
         """
-        The node pair detection method devised by Moschitti.
+        The node pair detection method devised by Moschitti (2006).
         """
         node_pairs = []
         i1 = 0
@@ -130,8 +127,9 @@ class CySubsetTreeKernel(object):
 
     def _build_cache(self, X):
         """
-        Caches the node lists, usually at the first time
-        K_sym is called.
+        Caches the node lists, for each tree that it is not
+        in the cache. If all trees in X are already cached, this
+        method does nothing.
         """
         for tree_repr in X:
             t_repr = tree_repr[0]
@@ -148,10 +146,77 @@ class CySubsetTreeKernel(object):
         #self.dlambdas = None
         #self.dsigmas = None
         #print "YAY"
+        return self.K_sym_new(X, X2)
         if X2 == None:
             return self.K_sym(X)
         else:
             return self.K_nsym(X, X2)
+
+    def K_sym_new(self, X, X2):
+        """
+        BLAH, a test
+        """
+        self._build_cache(X)
+        if X2 == None:
+            symmetric = True
+            X2 = X
+        else:
+            symmetric = False
+            self._build_cache(X2)
+            
+        # First, we are going to calculate K for diagonal values
+        # because we will need them later to normalize.
+        X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
+        if not symmetric:
+            X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
+            
+
+        # Second, we are going to initialize the ddecay values
+        # because we are going to calculate them at the same time as K.
+        Ks = np.zeros(shape=(len(X), len(X)))
+        dlambdas = np.zeros(shape=(len(X), len(X)))
+        dsigmas = np.zeros(shape=(len(X), len(X)))
+        
+        # Now we proceed for the actual calculation
+
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                if symmetric:
+                    if i > j:
+                        Ks[i][j] = Ks[j][i]
+                        dlambdas[i][j] = dlambdas[j][i]
+                        dsigmas[i][j] = dsigmas[j][i]
+                        continue
+                    if i == j:
+                        Ks[i][j] = 1
+                        continue
+                
+                # It will always be a 1-element array so we just index by 0
+                nodes1, dict1 = self._tree_cache[x1[0]]
+                nodes2, dict2 = self._tree_cache[x2[0]]
+                node_pairs = self._get_node_pairs(nodes1, nodes2)
+                #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
+                K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, self._lambda, self._sigma)
+                #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
+                #K_result, dlambda, dsigma = result.get()
+
+                if symmetric:
+                    K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
+                                                                        X_diag_Ks[i], X_diag_Ks[j],
+                                                                        X_diag_dlambdas[i], X_diag_dlambdas[j],
+                                                                        X_diag_dsigmas[i], X_diag_dsigmas[j])
+                else:
+                    K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
+                                                                        X_diag_Ks[i], X2_diag_Ks[j],
+                                                                        X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                                                        X_diag_dsigmas[i], X2_diag_dsigmas[j])
+
+                # Normalization happens here
+                Ks[i][j] = K_norm
+                dlambdas[i][j] = dlambda_norm
+                dsigmas[i][j] = dsigma_norm
+
+        return (Ks, dlambdas, dsigmas)
 
     def K_sym(self, X):
         """
