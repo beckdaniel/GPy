@@ -139,23 +139,17 @@ class CySubsetTreeKernel(object):
         
     def K(self, X, X2):
         """
-        A wrapper around K, resetting the derivatives cache and choosing
-        between symmetric gram matrix and non-symmetric.
+        The method that calls the SSTK for each tree pair. Some shortcuts are used
+        when X2 == None (when calculating the Gram matrix for X).
+        IMPORTANT: this is the normalized version.
         """
         # A check to ensure that derivatives cache will always change when K changes
         #self.dlambdas = None
         #self.dsigmas = None
         #print "YAY"
-        return self.K_sym_new(X, X2)
-        if X2 == None:
-            return self.K_sym(X)
-        else:
-            return self.K_nsym(X, X2)
 
-    def K_sym_new(self, X, X2):
-        """
-        BLAH, a test
-        """
+        # Put any new trees in the cache. If the trees are already cached, this code
+        # won't do anything.
         self._build_cache(X)
         if X2 == None:
             symmetric = True
@@ -164,29 +158,33 @@ class CySubsetTreeKernel(object):
             symmetric = False
             self._build_cache(X2)
             
-        # First, we are going to calculate K for diagonal values
+        # Calculate K for diagonal values
         # because we will need them later to normalize.
         X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
         if not symmetric:
             X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
             
-
-        # Second, we are going to initialize the ddecay values
+        # Initialize the derivatives here 
         # because we are going to calculate them at the same time as K.
-        Ks = np.zeros(shape=(len(X), len(X)))
-        dlambdas = np.zeros(shape=(len(X), len(X)))
-        dsigmas = np.zeros(shape=(len(X), len(X)))
+        # It is a bit ugly but way more efficient. We store the derivatives
+        # and just return the stored values when dK_dtheta is called.
+        Ks = np.zeros(shape=(len(X), len(X2)))
+        dlambdas = np.zeros(shape=(len(X), len(X2)))
+        dsigmas = np.zeros(shape=(len(X), len(X2)))
         
-        # Now we proceed for the actual calculation
-
+        # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
+                # Shortcut: no calculation is needed for the upper
+                # part of the Gram matrix because it is symmetric
                 if symmetric:
                     if i > j:
                         Ks[i][j] = Ks[j][i]
                         dlambdas[i][j] = dlambdas[j][i]
                         dsigmas[i][j] = dsigmas[j][i]
                         continue
+                    # Another shortcut: because this is the normalized SSTK
+                    # diagonal values will always be equal to 1.
                     if i == j:
                         Ks[i][j] = 1
                         continue
@@ -200,6 +198,7 @@ class CySubsetTreeKernel(object):
                 #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
                 #K_result, dlambda, dsigma = result.get()
 
+                # Normalization happens here.
                 if symmetric:
                     K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
                                                                         X_diag_Ks[i], X_diag_Ks[j],
@@ -211,113 +210,7 @@ class CySubsetTreeKernel(object):
                                                                         X_diag_dlambdas[i], X2_diag_dlambdas[j],
                                                                         X_diag_dsigmas[i], X2_diag_dsigmas[j])
 
-                # Normalization happens here
-                Ks[i][j] = K_norm
-                dlambdas[i][j] = dlambda_norm
-                dsigmas[i][j] = dsigma_norm
-
-        return (Ks, dlambdas, dsigmas)
-
-    def K_sym(self, X):
-        """
-        The symmetric version of the gram matrix method.
-        """
-        if self._tree_cache == {}:
-            self._build_cache(X)
-
-        # First, we are going to calculate K for diagonal values
-        # because we will need them later to normalize.
-        diag_Ks, diag_dlambdas, diag_dsigmas = self._diag_calculations(X)
-
-
-        # Second, we are going to initialize the ddecay values
-        # because we are going to calculate them at the same time as K.
-        Ks = np.zeros(shape=(len(X), len(X)))
-        dlambdas = np.zeros(shape=(len(X), len(X)))
-        dsigmas = np.zeros(shape=(len(X), len(X)))
-        
-        # Now we proceed for the actual calculation
-
-        for i, x1 in enumerate(X):
-            for j, x2 in enumerate(X):
-                if i > j:
-                    Ks[i][j] = Ks[j][i]
-                    dlambdas[i][j] = dlambdas[j][i]
-                    dsigmas[i][j] = dsigmas[j][i]
-                    continue
-                if i == j:
-                    Ks[i][j] = 1
-                    continue
-                # It will always be a 1-element array so we just index by 0
-                nodes1, dict1 = self._tree_cache[x1[0]]
-                nodes2, dict2 = self._tree_cache[x2[0]]
-                node_pairs = self._get_node_pairs(nodes1, nodes2)
-                #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
-                K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, self._lambda, self._sigma)
-                #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
-                #K_result, dlambda, dsigma = result.get()
-
-                K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                                                                   diag_Ks[i], diag_Ks[j],
-                                                                   diag_dlambdas[i], diag_dlambdas[j],
-                                                                   diag_dsigmas[i], diag_dsigmas[j])
-                # Normalization happens here
-                Ks[i][j] = K_norm
-                dlambdas[i][j] = dlambda_norm
-                dsigmas[i][j] = dsigma_norm
-
-        return (Ks, dlambdas, dsigmas)
-
-    def K_nsym(self, X, X2):
-        """
-        The non-symmetric version of the gram matrix method.
-        """
-        #if self._tree_cache == {}:
-        #    self._build_cache(X)
-        self._build_cache(X)
-        self._build_cache(X2)
-        for tree in self._tree_cache:
-            print tree
-            print self._tree_cache[tree]
-            
-
-        # First, we are going to calculate K for diagonal values
-        # because we will need them later to normalize.
-        X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
-        X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
-
-        # Second, we are going to initialize the ddecay values
-        # because we are going to calculate them at the same time as K.
-        Ks = np.zeros(shape=(len(X), len(X2)))
-        dlambdas = np.zeros(shape=(len(X), len(X2)))
-        dsigmas = np.zeros(shape=(len(X), len(X2)))
-        
-        # Now we proceed for the actual calculation
-
-        for i, x1 in enumerate(X):
-            for j, x2 in enumerate(X2):
-                #if i > j:
-                #    Ks[i][j] = Ks[j][i]
-                #    dlambdas[i][j] = dlambdas[j][i]
-                #    dsigmas[i][j] = dsigmas[j][i]
-                #    continue
-                #if i == j:
-                #    Ks[i][j] = 1
-                #    continue
-                # It will always be a 1-element array so we just index by 0
-                nodes1, dict1 = self._tree_cache[x1[0]]
-                nodes2, dict2 = self._tree_cache[x2[0]]
-                node_pairs = self._get_node_pairs(nodes1, nodes2)
-                K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
-                #K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, self._lambda, self._sigma)
-                #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
-                #K_result, dlambda, dsigma = result.get()
-
-                K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                                                                   X_diag_Ks[i], X2_diag_Ks[j],
-                                                                   X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                                                                   X_diag_dsigmas[i], X2_diag_dsigmas[j])
-                # Normalization happens here
+                # Store everything, including derivatives.
                 Ks[i][j] = K_norm
                 dlambdas[i][j] = dlambda_norm
                 dsigmas[i][j] = dsigma_norm
@@ -327,6 +220,9 @@ class CySubsetTreeKernel(object):
     def _normalize(self, double K_result, double dlambda, double dsigma, double diag_Ks_i, 
                    double diag_Ks_j, double diag_dlambdas_i, double diag_dlambdas_j, 
                    double diag_dsigmas_i, double diag_dsigmas_j):
+        """
+        Normalize the result from SSTK, including derivatives.
+        """
         cdef double norm, sqrt_nrorm, K_norm, diff_lambda, dlambda_norm, diff_sigma, dsigma_norm
 
         norm = diag_Ks_i * diag_Ks_j
@@ -348,8 +244,8 @@ class CySubsetTreeKernel(object):
         
     def _diag_calculations(self, X):
         """
-        Calculate the gram matrix diagonal first because
-        it is used in normalization.
+        Calculate the K(x,x) values first because
+        they are used in normalization.
         """
         K_vec = np.zeros(shape=(len(X),))
         dlambda_vec = np.zeros(shape=(len(X),))
@@ -357,10 +253,6 @@ class CySubsetTreeKernel(object):
         for i, x in enumerate(X):
             nodes, dicts = self._tree_cache[x[0]]
             node_pairs = self._get_node_pairs(nodes, nodes)
-            #K_result = 0
-            #dlambda = 0
-            #dsigma = 0
-            # Calculation happens here.
             K_result, dlambda, dsigma = self.calc_K(node_pairs, dicts, dicts)
             K_vec[i] = K_result
             dlambda_vec[i] = dlambda
@@ -369,7 +261,7 @@ class CySubsetTreeKernel(object):
 
     def calc_K(self, list node_pairs, dict1, dict2):
         """
-        This method calculates the kernel between two trees.
+        The actual SSTK kernel, evaluated over two node lists.
         It also calculates the derivatives wrt lambda and sigma.
         """
         cdef double K_total = 0
@@ -425,16 +317,7 @@ class CySubsetTreeKernel(object):
         #print node2
         for i in range(len(children1)):
             ch1 = children1[i]
-            try:
-                ch2 = children2[i] #<----
-            except:
-                print children1
-                print children2
-                print node1
-                print node2
-                print dict1
-                print dict2
-                raise
+            ch2 = children2[i]
             n1 = dict1[ch1]
             n2 = dict2[ch2]
             if n1.production == n2.production:
