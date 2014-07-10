@@ -5,7 +5,7 @@ Created on 10 Apr 2013
 '''
 from GPy.core import Model
 from GPy.core import SparseGP
-from GPy.util.linalg import PCA
+from GPy.util.linalg import pca
 import numpy
 import itertools
 import pylab
@@ -26,8 +26,8 @@ class MRD(Model):
     :type input_dim: int
     :param initx: initialisation method for the latent space :
 
-        * 'concat' - PCA on concatenation of all datasets
-        * 'single' - Concatenation of PCA on datasets, respectively
+        * 'concat' - pca on concatenation of all datasets
+        * 'single' - Concatenation of pca on datasets, respectively
         * 'random' - Random draw from a normal
 
     :type initx: ['concat'|'single'|'random']
@@ -46,7 +46,9 @@ class MRD(Model):
                  initz='permute', _debug=False, **kw):
         if names is None:
             self.names = ["{}".format(i) for i in range(len(likelihood_or_Y_list))]
-
+        else:
+            self.names = names
+            assert len(names) == len(likelihood_or_Y_list), "one name per data set required"
         # sort out the kernels
         if kernels is None:
             kernels = [None] * len(likelihood_or_Y_list)
@@ -248,11 +250,11 @@ class MRD(Model):
                 Ylist.append(likelihood_or_Y.Y)
         del likelihood_list
         if init in "PCA_concat":
-            X = PCA(numpy.hstack(Ylist), self.input_dim)[0]
+            X = pca(numpy.hstack(Ylist), self.input_dim)[0]
         elif init in "PCA_single":
             X = numpy.zeros((Ylist[0].shape[0], self.input_dim))
             for qs, Y in itertools.izip(numpy.array_split(numpy.arange(self.input_dim), len(Ylist)), Ylist):
-                X[:, qs] = PCA(Y, len(qs))[0]
+                X[:, qs] = pca(Y, len(qs))[0]
         else: # init == 'random':
             X = numpy.random.randn(Ylist[0].shape[0], self.input_dim)
         self.X = X
@@ -325,9 +327,9 @@ class MRD(Model):
         if titles is None:
             titles = [r'${}$'.format(name) for name in self.names]
         ymax = reduce(max, [numpy.ceil(max(g.input_sensitivity())) for g in self.bgplvms])
-        def plotf(i, g, ax):
-            ax.set_ylim([0,ymax])
-            g.kern.plot_ARD(ax=ax, title=titles[i], *args, **kwargs)
+        def plotf(i, g, axis):
+            axis.set_ylim([0,ymax])
+            g.kern.plot_ARD(ax=axis, title=titles[i], *args, **kwargs)
         fig = self._handle_plotting(fignum, ax, plotf, sharex=sharex, sharey=sharey)
         return fig
 

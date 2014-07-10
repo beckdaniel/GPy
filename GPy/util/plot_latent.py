@@ -1,7 +1,7 @@
 import pylab as pb
 import numpy as np
 from .. import util
-from GPy.util.latent_space_visualizations.controllers.imshow_controller import ImshowController
+from .latent_space_visualizations.controllers.imshow_controller import ImshowController
 import itertools
 
 def most_significant_input_dimensions(model, which_indices):
@@ -20,8 +20,8 @@ def most_significant_input_dimensions(model, which_indices):
         input_1, input_2 = which_indices
     return input_1, input_2
 
-def plot_latent(model, labels=None, which_indices=None, 
-                resolution=50, ax=None, marker='o', s=40, 
+def plot_latent(model, labels=None, which_indices=None,
+                resolution=50, ax=None, marker='o', s=40,
                 fignum=None, plot_inducing=False, legend=True,
                 aspect='auto', updates=False):
     """
@@ -40,18 +40,22 @@ def plot_latent(model, labels=None, which_indices=None,
 
     # first, plot the output variance as a function of the latent space
     Xtest, xx, yy, xmin, xmax = util.plot.x_frame2D(model.X[:, [input_1, input_2]], resolution=resolution)
+    #Xtest_full = np.zeros((Xtest.shape[0], model.X.shape[1]))
     Xtest_full = np.zeros((Xtest.shape[0], model.X.shape[1]))
-
     def plot_function(x):
         Xtest_full[:, [input_1, input_2]] = x
         mu, var, low, up = model.predict(Xtest_full)
         var = var[:, :1]
         return np.log(var)
+    
+    xmi, ymi = xmin
+    xma, yma = xmax
+    
     view = ImshowController(ax, plot_function,
-                            tuple(model.X.min(0)[:, [input_1, input_2]]) + tuple(model.X.max(0)[:, [input_1, input_2]]),
+                            (xmi, ymi, xma, yma),
                             resolution, aspect=aspect, interpolation='bilinear',
                             cmap=pb.cm.binary)
-    
+
 #     ax.imshow(var.reshape(resolution, resolution).T,
 #               extent=[xmin[0], xmax[0], xmin[1], xmax[1]], cmap=pb.cm.binary, interpolation='bilinear', origin='lower')
 
@@ -100,8 +104,8 @@ def plot_latent(model, labels=None, which_indices=None,
         raw_input('Enter to continue')
     return ax
 
-def plot_magnification(model, labels=None, which_indices=None, 
-                resolution=60, ax=None, marker='o', s=40, 
+def plot_magnification(model, labels=None, which_indices=None,
+                resolution=60, ax=None, marker='o', s=40,
                 fignum=None, plot_inducing=False, legend=True,
                 aspect='auto', updates=False):
     """
