@@ -706,8 +706,9 @@ class SSTKCheckingTests(unittest.TestCase):
         m = GPy.models.GPRegression(X, Y, kernel=tk)
         m.constrain_positive('')
         m.constrain_fixed('noise_variance')
-        #print m
+        print m
         m.optimize(messages=False, optimizer='lbfgs')
+        print m
         #m.optimize(messages=True)
         #print m
         #print tk.parts[0]._get_params()
