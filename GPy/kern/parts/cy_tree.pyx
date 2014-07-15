@@ -137,6 +137,10 @@ class CySubsetTreeKernel(object):
             if t_repr not in self._tree_cache:
                 node_list, node_dict = self._gen_node_list(t_repr)
                 self._tree_cache[t_repr] = (node_list, node_dict)
+
+    def Kdiag(self, X):
+        X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
+        return X_diag_Ks
         
     def K(self, X, X2):
         """
@@ -163,8 +167,8 @@ class CySubsetTreeKernel(object):
         # because we will need them later to normalize.
         if self.normalize:
             X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
-        if not symmetric:
-            X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
+            if not symmetric:
+                X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
             
         # Initialize the derivatives here 
         # because we are going to calculate them at the same time as K.

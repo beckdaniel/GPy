@@ -28,6 +28,7 @@ class SubsetTreeKernel(Kernpart):
         self.name = 'sstk'
         self._lambda = _lambda
         self._sigma = _sigma
+        self.normalize = normalize
         self.kernel = cy_tree.CySubsetTreeKernel(_lambda, _sigma, normalize)
         
     def _get_params(self):
@@ -47,13 +48,19 @@ class SubsetTreeKernel(Kernpart):
         self.dsigma = ds
 
     def Kdiag(self, X, target):
-        target += np.ones(shape=(len(X),))
+        if self.normalize:
+            target += np.ones(X.shape[0])
+        else:
+            target += self.kernel.Kdiag(X)
 
     def dK_dtheta(self, dL_dK, X, X2, target):
         #################
         #result, dl, ds = self.kernel.K(X, X2)
         #self.dlambda = dl * dL_dK
         #self.dsigma = ds * dL_dK
+        #target += [np.sum(self.dlambda),
+        #           np.sum(self.dsigma)]
+                          
         #print target
         target += [np.sum(self.dlambda * dL_dK),
                    np.sum(self.dsigma * dL_dK)]
