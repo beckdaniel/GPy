@@ -37,10 +37,11 @@ cdef class Node(object):
 
 class CySubsetTreeKernel(object):
     
-    def __init__(self, _lambda=1., _sigma=1.):
+    def __init__(self, _lambda=1., _sigma=1., normalize=True):
         self._lambda = _lambda
         self._sigma = _sigma
         self._tree_cache = {}
+        self.normalize = normalize
 
         cdef np.ndarray[DTYPE_t, ndim=2] delta_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
         cdef np.ndarray[DTYPE_t, ndim=2] dlambda_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
@@ -160,7 +161,8 @@ class CySubsetTreeKernel(object):
             
         # Calculate K for diagonal values
         # because we will need them later to normalize.
-        X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
+        if self.normalize:
+            X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
         if not symmetric:
             X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
             
@@ -185,7 +187,7 @@ class CySubsetTreeKernel(object):
                         continue
                     # Another shortcut: because this is the normalized SSTK
                     # diagonal values will always be equal to 1.
-                    if i == j:
+                    if i == j and self.normalize:
                         Ks[i][j] = 1
                         continue
                 
@@ -193,27 +195,32 @@ class CySubsetTreeKernel(object):
                 nodes1, dict1 = self._tree_cache[x1[0]]
                 nodes2, dict2 = self._tree_cache[x2[0]]
                 node_pairs = self._get_node_pairs(nodes1, nodes2)
-                #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
-                K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, self._lambda, self._sigma)
+                K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
+                #K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, self._lambda, self._sigma)
                 #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
                 #K_result, dlambda, dsigma = result.get()
 
                 # Normalization happens here.
-                if symmetric:
-                    K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                                                                        X_diag_Ks[i], X_diag_Ks[j],
-                                                                        X_diag_dlambdas[i], X_diag_dlambdas[j],
-                                                                        X_diag_dsigmas[i], X_diag_dsigmas[j])
-                else:
-                    K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                                                                        X_diag_Ks[i], X2_diag_Ks[j],
-                                                                        X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                                                                        X_diag_dsigmas[i], X2_diag_dsigmas[j])
+                if self.normalize:
+                    if symmetric:
+                        K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
+                                                                            X_diag_Ks[i], X_diag_Ks[j],
+                                                                            X_diag_dlambdas[i], X_diag_dlambdas[j],
+                                                                            X_diag_dsigmas[i], X_diag_dsigmas[j])
+                    else:
+                        K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
+                                                                            X_diag_Ks[i], X2_diag_Ks[j],
+                                                                            X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                                                            X_diag_dsigmas[i], X2_diag_dsigmas[j])
 
                 # Store everything, including derivatives.
-                Ks[i][j] = K_norm
-                dlambdas[i][j] = dlambda_norm
-                dsigmas[i][j] = dsigma_norm
+                    Ks[i][j] = K_norm
+                    dlambdas[i][j] = dlambda_norm
+                    dsigmas[i][j] = dsigma_norm
+                else:
+                    Ks[i][j] = K_result
+                    dlambdas[i][j] = dlambda
+                    dsigmas[i][j] = dsigma
 
         return (Ks, dlambdas, dsigmas)
 
@@ -268,10 +275,13 @@ class CySubsetTreeKernel(object):
         cdef double dlambda_total = 0
         cdef double dsigma_total = 0
         cdef double K_result, dlambda, dsigma
-        #self.delta_matrix[:,:] = 0.
-        #self.dlambda_matrix[:,:] = 0. 
-        #self.dsigma_matrix[:,:] = 0.
+        self.delta_matrix[:,:] = 0.
+        self.dlambda_matrix[:,:] = 0. 
+        self.dsigma_matrix[:,:] = 0.
 
+        #print self.delta_matrix
+        #print self.dlambda_matrix
+        #print self.dsigma_matrix
         #self.delta_matrix = defaultdict(int)
         #self.dlambda_matrix = defaultdict(int)
         #self.dsigma_matrix = defaultdict(int)

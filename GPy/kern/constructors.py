@@ -600,12 +600,12 @@ def ODE_UY(input_dim=2, varianceU=1.,  varianceY=1., lengthscaleU=None,  lengths
     part = parts.ODE_UY.ODE_UY(input_dim, varianceU, varianceY, lengthscaleU, lengthscaleY)
     return kern(input_dim, [part])
 
-def SubsetTreeKernel(_lambda=1, _sigma=1, mode="cython"):
+def SubsetTreeKernel(_lambda=1, _sigma=1, normalize=True, mode="cython"):
     """
     Tree kernel
     """
     if mode == "cython":
-        part = parts.tree.SubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
+        part = parts.tree.SubsetTreeKernel(_lambda=_lambda, _sigma=_sigma, normalize=normalize)
     elif mode == "python":
         part = parts.tree.PySubsetTreeKernel(_lambda=_lambda, _sigma=_sigma)
     elif mode == "naive":

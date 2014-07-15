@@ -616,8 +616,77 @@ class SSTKCheckingTests(unittest.TestCase):
         k2.parts[0].K(X, None, target2)
         self.assertAlmostEqual(np.sum(target2), np.sum(target1))
 
+    def test_compare_K_unnorm1(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        k1 = SST(normalize=False, _lambda=0.5, _sigma=0.5)
+        k2 = SST(mode="fast", _lambda=0.5, _sigma=0.5)
+        target1 = np.zeros(shape=(len(X), len(X)))
+        target2 = np.zeros(shape=(len(X), len(X)))
+        k1.parts[0].K(X, None, target1)
+        k2.parts[0].K(X, None, target2)
+        self.assertAlmostEqual(np.sum(target2), np.sum(target1))
+
+    def test_compare_K_unnorm2(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        k1 = SST(normalize=False, _lambda=0.5, _sigma=0.5)
+        k2 = SST(mode="naive", _lambda=0.5, _sigma=0.5)
+
+        k1.parts[0].kernel._build_cache(X)
+        nodes1, dict1 = k1.parts[0].kernel._tree_cache[X[0][0]]
+        nodes2, dict2 = k1.parts[0].kernel._tree_cache[X[2][0]]
+        node_pairs = k1.parts[0].kernel._get_node_pairs(nodes1, nodes2)
+        delta1 = k1.parts[0].kernel.calc_K(node_pairs, dict1, dict2)
+
+        t1 = nltk.Tree(X[0][0])
+        t2 = nltk.Tree(X[2][0])
+        result = 0
+        for pos1 in t1.treepositions():
+            node1 = t1[pos1]
+            for pos2 in t2.treepositions():
+                result += k2.parts[0].delta_naive(node1, t2[pos2])
+        
+        print delta1
+        print result
+        self.assertAlmostEqual(delta1[0], result)
+
     def test_grad1(self):
         tk = SST()
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        h = 0.00001
+        k = tk.K(X)
+        dk_dt = tk.dK_dtheta(1, X)
+        tk._set_params([1,1-h])
+        k_b1 = tk.K(X)
+        tk._set_params([1,1+h])
+        k_b2 = tk.K(X)
+        tk._set_params([1-h,1])
+        k_d1 = tk.K(X)
+        tk._set_params([1+h,1])
+        k_d2 = tk.K(X)
+
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        print approx
+        print dk_dt
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
+
+    def test_grad_unnorm1(self):
+        tk = SST(normalize=False, _lambda=0.5, _sigma=0.5)
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],

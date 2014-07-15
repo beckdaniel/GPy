@@ -17,7 +17,7 @@ class SubsetTreeKernel(Kernpart):
     The Cython kernel is stored on the "kernel" attribute.
     """
 
-    def __init__(self, _lambda=0.1, _sigma=1):
+    def __init__(self, _lambda=0.1, _sigma=1, normalize=True):
         try:
             import nltk
         except ImportError:
@@ -28,7 +28,7 @@ class SubsetTreeKernel(Kernpart):
         self.name = 'sstk'
         self._lambda = _lambda
         self._sigma = _sigma
-        self.kernel = cy_tree.CySubsetTreeKernel(_lambda, _sigma)
+        self.kernel = cy_tree.CySubsetTreeKernel(_lambda, _sigma, normalize)
         
     def _get_params(self):
         return np.hstack((self.kernel._lambda, self.kernel._sigma))
