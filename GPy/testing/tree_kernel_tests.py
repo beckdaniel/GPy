@@ -214,6 +214,62 @@ class GradientNaiveTreeKernelTests(unittest.TestCase):
         self.assertAlmostEqual(approx[0], dk_dt[0])
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
+    def test_treekernel_grad2(self):
+        L = 0.5
+        S = 0.5
+        tk = SST(mode="naive", _lambda=L, _sigma=S)
+        X = np.array([['(S (NP a) (VP v))']], dtype=object)
+        X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
+
+        h = 0.00001
+        tk2 = SST(mode="naive")
+        dk_dt = tk.dK_dtheta(1, X, X2)
+
+        tk._set_params([L,S-h])
+        k_b1 = tk.K(X, X2)
+        tk._set_params([L,S+h])
+        k_b2 = tk.K(X, X2)
+
+        tk._set_params([L-h,S])
+        k_d1 = tk.K(X, X2)
+        tk._set_params([L+h,S])
+        k_d2 = tk.K(X, X2)
+
+        tk._set_params([1,1])
+        
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
+
+    def test_treekernel_grad2(self):
+        L = 0.5
+        S = 5
+        tk = SST(mode="naive", _lambda=L, _sigma=S)
+        X = np.array([['(S (NP a) (VP v))']], dtype=object)
+        X2 = np.array([['(S (NP (NP a)) (VP (V c)))']], dtype=object)
+
+        h = 0.00001
+        tk2 = SST(mode="naive")
+        dk_dt = tk.dK_dtheta(1, X, X2)
+
+        tk._set_params([L,S-h])
+        k_b1 = tk.K(X, X2)
+        tk._set_params([L,S+h])
+        k_b2 = tk.K(X, X2)
+
+        tk._set_params([L-h,S])
+        k_d1 = tk.K(X, X2)
+        tk._set_params([L+h,S])
+        k_d2 = tk.K(X, X2)
+
+        tk._set_params([1,1])
+        
+        approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
+        self.assertAlmostEqual(approx[0], dk_dt[0])
+        self.assertAlmostEqual(approx[1], dk_dt[1])
+
+
+
 
 class CacheTreeKernelTests(unittest.TestCase):
     """
@@ -646,18 +702,32 @@ class SSTKCheckingTests(unittest.TestCase):
         nodes2, dict2 = k1.parts[0].kernel._tree_cache[X[2][0]]
         node_pairs = k1.parts[0].kernel._get_node_pairs(nodes1, nodes2)
         delta1 = k1.parts[0].kernel.calc_K(node_pairs, dict1, dict2)
+        print nodes1
+        print nodes2
+        print dict1
+        print dict2
+        print node_pairs
+        print "DELTA"
+        print k1.parts[0].kernel.delta(node_pairs[0][0], node_pairs[0][1], dict1, dict2)
 
         t1 = nltk.Tree(X[0][0])
         t2 = nltk.Tree(X[2][0])
         result = 0
+        dl, ds = (0, 0)
         for pos1 in t1.treepositions():
             node1 = t1[pos1]
             for pos2 in t2.treepositions():
                 result += k2.parts[0].delta_naive(node1, t2[pos2])
-        
+                d, b = k2.parts[0].delta_params_naive(node1, t2[pos2])
+                dl += d
+                ds += b
         print delta1
         print result
+        print dl
+        print ds
         self.assertAlmostEqual(delta1[0], result)
+        self.assertAlmostEqual(delta1[1], dl)
+        self.assertAlmostEqual(delta1[2], ds)
 
     def test_grad1(self):
         tk = SST()
@@ -686,7 +756,9 @@ class SSTKCheckingTests(unittest.TestCase):
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_grad_unnorm1(self):
-        tk = SST(normalize=False, _lambda=0.5, _sigma=0.5)
+        L = 0.5
+        S = 0.5
+        tk = SST(normalize=False, _lambda=L, _sigma=S)
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -696,13 +768,13 @@ class SSTKCheckingTests(unittest.TestCase):
         h = 0.00001
         k = tk.K(X)
         dk_dt = tk.dK_dtheta(1, X)
-        tk._set_params([1,1-h])
+        tk._set_params([L,S-h])
         k_b1 = tk.K(X)
-        tk._set_params([1,1+h])
+        tk._set_params([L,S+h])
         k_b2 = tk.K(X)
-        tk._set_params([1-h,1])
+        tk._set_params([L-h,S])
         k_d1 = tk.K(X)
-        tk._set_params([1+h,1])
+        tk._set_params([L+h,S])
         k_d2 = tk.K(X)
 
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]

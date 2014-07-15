@@ -337,6 +337,9 @@ class CySubsetTreeKernel(object):
                 prod *= denom
                 sum_lambda += dlambda / denom
                 sum_sigma += (1 + dsigma) / denom
+            else:
+                prod *= self._sigma
+                sum_sigma += 1 / self._sigma
         delta_result = self._lambda * prod
         dlambda_result = prod + (delta_result * sum_lambda)
         dsigma_result = delta_result * sum_sigma
