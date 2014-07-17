@@ -29,5 +29,4 @@ import spline
 import symmetric
 import sympy_helpers
 import white
-import tree_kernel
 import tree
