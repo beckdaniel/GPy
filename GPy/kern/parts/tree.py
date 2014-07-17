@@ -62,8 +62,10 @@ class SubsetTreeKernel(Kernpart):
         #           np.sum(self.dsigma)]
                           
         #print target
-        target += [np.sum(self.dlambda * dL_dK),
-                   np.sum(self.dsigma * dL_dK)]
+        #target += [np.sum(self.dlambda * dL_dK),
+        #           np.sum(self.dsigma * dL_dK)]
+        target += [np.sum(self.dlambda.dot(dL_dK)),
+                   np.sum(self.dsigma.dot(dL_dK))]
         
         #target += result
         #self.dlambda = np.sum(dl)

@@ -85,8 +85,21 @@ m['sstk_lambda'] += step
 f1 = m.kern.parts[0].kernel.K(X_trees_train, None)[0] * m.dL_dK
 m['sstk_lambda'] -= 2*step
 f2 = m.kern.parts[0].kernel.K(X_trees_train, None)[0] * m.dL_dK
+#checkgrad(np.trace(grad), np.trace(f1), np.trace(f2))
 checkgrad(np.sum(grad), np.sum(f1), np.sum(f2))
 
 print ''
 print 'MULTIPLYING KERNEL GRADS BY dL_dK - MATRICES'
 checkgrad(grad, f1, f2)
+
+m['sstk_lambda'] = 0.001
+print m
+np.savetxt('0.001.csv',m.kern.parts[0].kernel.K(X_trees_train, None)[0])
+
+m['sstk_lambda'] = 0.0001
+print m
+np.savetxt('0.0001.csv',m.kern.parts[0].kernel.K(X_trees_train, None)[0])
+
+m['sstk_lambda'] = 0.1
+print m
+np.savetxt('0.1.csv',m.kern.parts[0].kernel.K(X_trees_train, None)[0])
