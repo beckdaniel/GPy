@@ -1,0 +1,82 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib
+
+font = {'family' : 'sans-serif',
+        'weight' : 'normal',
+        'size'   : 16}
+
+matplotlib.rc('font', **font)
+
+fig, ax = plt.subplots()
+
+image = np.array([[9.668, 8.459, 5.602, 3.809, 2.226, -0.503],
+                  [8.459, 9.928, 5.350, 3.637, 2.126, -0.480], 
+                  [5.602, 5.350, 3.546, 2.409, 1.408, -0.318], 
+                  [3.809, 3.637, 2.409, 1.638, 0.957, -0.216], 
+                  [2.226, 2.126, 1.408, 0.957, 8.748, -0.126], 
+                  [-0.503, -0.480, -0.318, -0.216, -0.126, 13.119]])
+image = np.array([[24.117, 10.747, 10.927, 6.821, 2.459, -2.200], 
+                  [10.747, 24.462, 9.663, 6.031, 2.175, -1.945], 
+                  [10.927, 9.663, 9.862, 6.132, 2.211, -1.978], 
+                  [6.821, 6.031, 6.132, 3.828, 1.380, -1.234], 
+                  [2.459, 2.175, 2.211, 1.380, 17.054, -0.445], 
+                  [-2.200, -1.945, -1.978, -1.234, -0.445, 24.678]])
+image = np.array([[79.768, 54.306, 32.606, 19.529, 12.321, -12.176], 
+                  [54.306, 81.628, 27.127, 16.412, 9.481, -9.859], 
+                  [32.606, 27.127, 34.297, 22.305, 6.648, -6.436], 
+                  [19.529, 16.412, 22.305, 14.618, 4.037, -3.974], 
+                  [12.321, 9.481, 6.648, 4.037, 58.047, 34.654], 
+                  [-12.176, -9.859, -6.436, -3.974, 34.654, 83.088]])
+image = np.array([[156.827, 174.481, 98.439, 64.705, -47.611, -134.232],
+                  [174.481, 201.369, 109.526, 71.992, -52.974, -149.350], 
+                  [98.439, 109.526, 61.793, 40.617, -29.887, -84.261],
+                  [64.705, 71.992, 40.617, 26.698, -19.645, -55.385], 
+                  [-47.611, -52.974, -29.887, -19.645, 101.032, 40.754], 
+                  [-134.232, -149.350, -84.261, -55.385, 40.754, 196.832]])
+
+image = np.array([[201.369, 174.481, 109.526, 71.992, -52.974, -149.350],
+                  [174.481, 156.827, 98.439, 64.705, -47.611, -134.232], 
+                  [109.526, 98.439, 61.793, 40.617, -29.887, -84.261],
+                  [71.992, 64.705, 40.617, 26.698, -19.645, -55.385], 
+                  [-52.974, -47.611, -29.887, -19.645, 101.032, 40.754], 
+                  [-149.350, -134.232, -84.261, -55.385, 40.754, 196.832]]) 
+
+#image += 5
+#image *= 100
+image /= 200
+plt.imshow(image, cmap=plt.cm.gray, interpolation='nearest')
+#plt.imshow(image, cmap=plt.cm.gray, interpolation='hamming')
+#plt.colorbar()
+
+#imgplot = plt.imshow(image, interpolation='hanning')
+#imgplot = plt.imshow(image, interpolation='none')
+#imgplot.set_cmap('jet')
+plt.colorbar()
+#ax = imgplot.add_subplot(111)
+
+
+# Move left and bottom spines outward by 10 points
+#ax.spines['left'].set_position(('outward', 10))
+#ax.spines['bottom'].set_position(('outward', 10))
+# Hide the right and top spines
+#ax.spines['right'].set_visible(False)
+#ax.spines['top'].set_visible(False)
+# Only show ticks on the left and bottom spines
+#EMOS = ['sadness','fear','anger','disgust','surprise','joy']
+EMOS = ['fear','sadness','anger','disgust','surprise','joy']
+#ax.yaxis.set_ticks_position('left')
+#ax.xaxis.set_ticks_position('bottom')
+
+#labels = [item.get_text() for item in ax.get_xticklabels()]
+#labels
+ax.xaxis.set_ticks(np.arange(-0.5,5.6,1))
+ax.yaxis.set_ticks(np.arange(-0.5,5.6,1))
+ax.xaxis.set_ticks(np.arange(0,6,1), minor=True)
+ax.yaxis.set_ticks(np.arange(0,6,1), minor=True)
+ax.set_xticklabels(EMOS, minor=True, rotation=20)
+ax.set_yticklabels(EMOS, minor=True)
+ax.set_xticklabels([])
+ax.set_yticklabels([])
+#ax.grid(which='major', axis='both', linestyle='-')
+plt.show()

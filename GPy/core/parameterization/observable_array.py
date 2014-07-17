@@ -17,7 +17,13 @@ class ObsAr(np.ndarray, Pickleable, Observable):
     def __new__(cls, input_array, *a, **kw):
         # allways make a copy of input paramters, as we need it to be in C order:
         if not isinstance(input_array, ObsAr):
-            obj = np.atleast_1d(np.require(np.copy(input_array), dtype=np.float64, requirements=['W', 'C'])).view(cls)
+            try:
+                if input_array.dtype != object:
+                    obj = np.atleast_1d(np.require(np.copy(input_array), dtype=np.float64, requirements=['W', 'C'])).view(cls)
+                else:
+                    obj = np.atleast_1d(np.require(np.copy(input_array), dtype=object, requirements=['W', 'C'])).view(cls)
+            except AttributeError:
+                obj = np.atleast_1d(np.require(np.copy(input_array), dtype=np.float64, requirements=['W', 'C'])).view(cls)
         else: obj = input_array
         super(ObsAr, obj).__init__(*a, **kw)
         return obj
