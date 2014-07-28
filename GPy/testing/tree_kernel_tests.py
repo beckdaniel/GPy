@@ -743,13 +743,16 @@ class SSTKCheckingTests(unittest.TestCase):
         h = 0.00001
         k = tk.K(X)
         dk_dt = tk.dK_dtheta(1, X, None)
-        tk._set_params([1,1-h])
+        tk[''] = [1,1-h]
         k_b1 = tk.K(X)
-        tk._set_params([1,1+h])
+        #tk._set_params([1,1+h])
+        tk[''] = [1,1+h]
         k_b2 = tk.K(X)
-        tk._set_params([1-h,1])
+        #tk._set_params([1-h,1])
+        tk[''] = [1-h,1]
         k_d1 = tk.K(X)
-        tk._set_params([1+h,1])
+        #tk._set_params([1+h,1])
+        tk[''] = [1+h,1]
         k_d2 = tk.K(X)
 
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
@@ -771,13 +774,17 @@ class SSTKCheckingTests(unittest.TestCase):
         h = 0.00001
         k = tk.K(X)
         dk_dt = tk.dK_dtheta(1, X, None)
-        tk._set_params([L,S-h])
+        tk[''] = [L,S-h]
+        #tk._set_params([L,S-h])
         k_b1 = tk.K(X)
-        tk._set_params([L,S+h])
+        tk[''] = [L,S+h]
+        #tk._set_params([L,S+h])
         k_b2 = tk.K(X)
-        tk._set_params([L-h,S])
+        tk[''] = [L-h,S]
+        #tk._set_params([L-h,S])
         k_d1 = tk.K(X)
-        tk._set_params([L+h,S])
+        tk[''] = [L+h,S]
+        #tk._set_params([L+h,S])
         k_d2 = tk.K(X)
 
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
@@ -795,13 +802,17 @@ class SSTKCheckingTests(unittest.TestCase):
         h = 0.000001
         k = tk.K(X)
         dk_dt = tk.dK_dtheta(1, X, None)
-        tk._set_params([L,S-h])
+        tk[''] = [L,S-h]
+        #tk._set_params([L,S-h])
         k_b1 = tk.K(X)
-        tk._set_params([L,S+h])
+        tk[''] = [L,S+h]
+        #tk._set_params([L,S+h])
         k_b2 = tk.K(X)
-        tk._set_params([L-h,S])
+        tk[''] = [L-h,S]
+        #tk._set_params([L-h,S])
         k_d1 = tk.K(X)
-        tk._set_params([L+h,S])
+        tk[''] = [L+h,S]
+        #tk._set_params([L+h,S])
         k_d2 = tk.K(X)
 
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
@@ -821,13 +832,19 @@ class SSTKCheckingTests(unittest.TestCase):
         h = 0.00001
         k = tk.K(X)
         dk_dt = tk.dK_dtheta(1, X, None)
-        tk._set_params([0.5,0.5-h])
+        L = 0.5
+        S = 0.5
+        tk[''] = [L,S-h]
+        #tk._set_params([0.5,0.5-h])
         k_b1 = tk.K(X)
-        tk._set_params([0.5,0.5+h])
+        tk[''] = [L,S+h]
+        #tk._set_params([0.5,0.5+h])
         k_b2 = tk.K(X)
-        tk._set_params([0.5-h,0.5])
+        tk[''] = [L-h,S]
+        #tk._set_params([0.5-h,0.5])
         k_d1 = tk.K(X)
-        tk._set_params([0.5+h,0.5])
+        tk[''] = [L+h,S]
+        #tk._set_params([0.5+h,0.5])
         k_d2 = tk.K(X)
 
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
@@ -847,13 +864,19 @@ class SSTKCheckingTests(unittest.TestCase):
         h = 0.00001
         k = tk.K(X)
         dk_dt = tk.dK_dtheta(1, X, None)
-        tk._set_params([0.05,0.05-h])
+        L = 0.05
+        S = 0.05
+        tk[''] = [L,S-h]
+        #tk._set_params([0.05,0.05-h])
         k_b1 = tk.K(X)
-        tk._set_params([0.05,0.05+h])
+        tk[''] = [L,S+h]
+        #tk._set_params([0.05,0.05+h])
         k_b2 = tk.K(X)
-        tk._set_params([0.05-h,0.05])
+        tk[''] = [L-h,S]
+        #tk._set_params([0.05-h,0.05])
         k_d1 = tk.K(X)
-        tk._set_params([0.05+h,0.05])
+        tk[''] = [L+h,S]
+        #tk._set_params([0.05+h,0.05])
         k_d2 = tk.K(X)
 
         approx = [np.sum((k_d2 - k_d1) / (2 * h)), np.sum((k_b2 - k_b1) / (2 * h))]
@@ -863,7 +886,7 @@ class SSTKCheckingTests(unittest.TestCase):
         self.assertAlmostEqual(approx[1], dk_dt[1])
 
     def test_integration1(self):
-        tk = SST(_lambda=1)
+        tk = SST(_lambda=0.1, normalize=True)
         X = np.array([['(S NP VP)'],   # THIS TREE GENERATES A BUG
                       ['(S (NP N) (VP V))'],
                       ['(S (NP (N a)) (VP (V c)))'],
@@ -872,17 +895,24 @@ class SSTKCheckingTests(unittest.TestCase):
                      dtype=object)
         Y = np.array([[(a+10)*5] for a in range(5)])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
-        m.constrain_positive('')
-        m.constrain_fixed('noise_variance')
+        #import ipdb
+        #ipdb.set_trace()
+        #m.constrain_positive('')
+        m['.*lambda'].constrain_bounded(0,1)
+        m['.*sigma'].constrain_positive()
+        m['.*variance'].constrain_fixed(1)
         print m
-        m.optimize(messages=False, optimizer='lbfgs')
+        import ipdb
+        ipdb.set_trace()
+
+        m.optimize(messages=True, optimizer='lbfgs')
         print m
         #m.optimize(messages=True)
         #print m
         #print tk.parts[0]._get_params()
         #m.optimize(messages=True)
-        self.assertAlmostEqual(tk.parts[0]._get_params()[0], 0.00101246)
-        self.assertAlmostEqual(tk.parts[0]._get_params()[1], 0.08544515)
+        self.assertAlmostEqual(tk._get_params()[0], 0.00101246)
+        self.assertAlmostEqual(tk._get_params()[1], 0.08544515)
 
     def test_integration2(self):
         tk = SST(_lambda=1)
@@ -895,7 +925,7 @@ class SSTKCheckingTests(unittest.TestCase):
         Y = np.array([[(a+10)*5] for a in range(4)])
         m = GPy.models.GPRegression(X, Y, kernel=tk)
         m.constrain_positive('')
-        m.constrain_fixed('noise_variance')
+        m['.*variance'].constrain_fixed(1)
         m.optimize(messages=False, optimizer='lbfgs')
         #print m
         X2 = np.array([#['(S NP VP)'],

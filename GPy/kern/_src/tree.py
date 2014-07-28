@@ -49,17 +49,23 @@ class SubsetTreeKernel(Kern):
         return ['lambda', 'sigma']
 
     def K(self, X, X2):#, target):
+        self.kernel._lambda = self._lambda[0]
+        self.kernel._sigma = self._sigma[0]
         result, dl, ds = self.kernel.K(X, X2)
         #target += result
         self.dlambda = dl
         self.dsigma = ds
         return result
 
-    def Kdiag(self, X, target):
+    def Kdiag(self, X):#), target):
+        self.kernel._lambda = self._lambda[0]
+        self.kernel._sigma = self._sigma[0]
         if self.normalize:
-            target += np.ones(X.shape[0])
+            #target += np.ones(X.shape[0])
+            return np.ones(X.shape[0])
         else:
-            target += self.kernel.Kdiag(X)
+            #target += self.kernel.Kdiag(X)
+            return self.kernel.Kdiag(X)
 
     def dK_dtheta(self, dL_dK, X, X2):#, target):
         #################
