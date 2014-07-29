@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import os
+#import os
 from setuptools import setup
 from Cython.Distutils import build_ext
 from Cython.Build import cythonize
@@ -11,8 +11,10 @@ import numpy as np
 # Version number
 version = '0.4.6'
 
+from pkg_resources import Requirement, resource_string
 def read(fname):
-    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+    return resource_string(Requirement.parse("GPy"),fname)
+    #return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 
 
@@ -26,9 +28,7 @@ setup(name = 'GPy',
       url = "http://sheffieldml.github.com/GPy/",
       packages = ["GPy.models", "GPy.inference.optimization", "GPy.inference", "GPy.inference.latent_function_inference", "GPy.likelihoods", "GPy.mappings", "GPy.examples", "GPy.core.parameterization", "GPy.core", "GPy.testing", "GPy", "GPy.util", "GPy.kern", "GPy.kern._src.psi_comp", "GPy.kern._src", "GPy.plotting.matplot_dep.latent_space_visualizations.controllers", "GPy.plotting.matplot_dep.latent_space_visualizations", "GPy.plotting.matplot_dep", "GPy.plotting"],
       package_dir={'GPy': 'GPy'},
-      #package_data = {'GPy': ['GPy/examples']},
-      package_data = {'GPy': ['GPy/examples', 'GPy/defaults.cfg']},
-      #package_data = {'GPy': ['examples', 'defaults.cfg']},
+      package_data = {'GPy': ['defaults.cfg', 'installation.cfg', 'util/data_resources.json', 'util/football_teams.json']},
       py_modules = ['GPy.__init__'],
       long_description=read('README.md'),
       install_requires=['numpy>=1.6', 'scipy>=0.9','matplotlib>=1.1', 'nose'],
@@ -39,5 +39,6 @@ setup(name = 'GPy',
       "License :: OSI Approved :: BSD License"],
       #ext_modules = cythonize("GPy/kern/_src/*.pyx"),
       cmdclass = {'build_ext': build_ext},
-      ext_modules = cythonize([Extension("cy_tree", ["GPy/kern/_src/cy_tree.pyx"], include_dirs=[np.get_include()])])
+      ext_modules = cythonize([Extension("cy_tree", ["GPy/kern/_src/cy_tree.pyx"], include_dirs=[np.get_include()])]),
+      zip_safe = False
       )
