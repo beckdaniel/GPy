@@ -5,12 +5,16 @@ import os
 from setuptools import setup
 from Cython.Distutils import build_ext
 from Cython.Build import cythonize
+from distutils.extension import Extension
+import numpy as np
 
 # Version number
 version = '0.4.6'
 
 def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
+
 
 setup(name = 'GPy',
       version = version,
@@ -33,5 +37,7 @@ setup(name = 'GPy',
       },
       classifiers=[
       "License :: OSI Approved :: BSD License"],
-      ext_modules = cythonize("GPy/kern/_src/*.pyx"),
+      #ext_modules = cythonize("GPy/kern/_src/*.pyx"),
+      cmdclass = {'build_ext': build_ext},
+      ext_modules = cythonize([Extension("cy_tree", ["GPy/kern/_src/cy_tree.pyx"], include_dirs=[np.get_include()])])
       )
