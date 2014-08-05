@@ -71,11 +71,18 @@ class Stationary(Kern):
 
     @Cache_this(limit=5, ignore_args=())
     def K(self, X, X2=None):
+        X = np.array(X, dtype=float)
+        if X2 is not None:
+            X2 = np.array(X2, dtype=float)
         r = self._scaled_dist(X, X2)
         return self.K_of_r(r)
 
     @Cache_this(limit=3, ignore_args=())
     def dK_dr_via_X(self, X, X2):
+        X = np.array(X, dtype=float)
+        if X2 is not None:
+            X2 = np.array(X2, dtype=float)
+
         #a convenience function, so we can cache dK_dr
         return self.dK_dr(self._scaled_dist(X, X2))
 
@@ -85,6 +92,10 @@ class Stationary(Kern):
         Compute the Euclidean distance between each row of X and X2, or between
         each pair of rows of X if X2 is None.
         """
+        X = np.array(X, dtype=float)
+        if X2 is not None:
+            X2 = np.array(X2, dtype=float)
+
         #X, = self._slice_X(X)
         if X2 is None:
             Xsq = np.sum(np.square(X),1)
@@ -128,6 +139,10 @@ class Stationary(Kern):
         self.lengthscale.gradient = 0.
 
     def update_gradients_full(self, dL_dK, X, X2=None):
+        X = np.array(X, dtype=float)
+        if X2 is not None:
+            X2 = np.array(X2, dtype=float)
+
         self.variance.gradient = np.einsum('ij,ij,i', self.K(X, X2), dL_dK, 1./self.variance)
 
         #now the lengthscale gradient(s)
@@ -139,7 +154,12 @@ class Stationary(Kern):
             #self.lengthscale.gradient = -((dL_dr*rinv)[:,:,None]*x_xl3).sum(0).sum(0)/self.lengthscale**3
             tmp = dL_dr*self._inv_dist(X, X2)
             if X2 is None: X2 = X
-            self.lengthscale.gradient = np.array([np.einsum('ij,ij,...', tmp, np.square(X[:,q:q+1] - X2[:,q:q+1].T), -1./self.lengthscale[q]**3) for q in xrange(self.input_dim)])
+            try:
+                self.lengthscale.gradient = np.array([np.einsum('ij,ij,...', tmp, np.square(X[:,q:q+1] - X2[:,q:q+1].T), -1./self.lengthscale[q]**3) for q in xrange(self.input_dim)])
+            except:
+                import ipdb
+                ipdb.set_trace()
+                raise
         else:
             r = self._scaled_dist(X, X2)
             self.lengthscale.gradient = -np.sum(dL_dr*r)/self.lengthscale
