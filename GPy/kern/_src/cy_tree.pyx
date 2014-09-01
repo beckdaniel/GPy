@@ -167,7 +167,12 @@ class CySubsetTreeKernel(object):
         Ks = np.zeros(shape=(len(X), len(X2)))
         dlambdas = np.zeros(shape=(len(X), len(X2)))
         dsigmas = np.zeros(shape=(len(X), len(X2)))
-        
+
+        ##########
+        cdef double _lambda = self._lambda
+        cdef double _sigma = self._sigma
+        ###########
+
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
@@ -189,8 +194,9 @@ class CySubsetTreeKernel(object):
                 nodes1, dict1 = self._tree_cache[x1[0]]
                 nodes2, dict2 = self._tree_cache[x2[0]]
                 node_pairs = self._get_node_pairs(nodes1, nodes2)
-                K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
-                #K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, self._lambda, self._sigma)
+                #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
+
+                K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, _lambda, _sigma)
                 #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
                 #K_result, dlambda, dsigma = result.get()
 
@@ -379,23 +385,78 @@ class CySubsetTreeKernel(object):
         return (delta_result, dlambda_result, dsigma_result)
 
 
+##############
+# EXTERNAL METHODS
+##############
 
-def calc_K_ext(list node_pairs, dict1, dict2, _lambda, _sigma):
+cdef delta_ext(Node node1, Node node2, dict1, dict2,
+              delta_matrix, dlambda_matrix, dsigma_matrix,
+              double _lambda, double _sigma):
+        """
+        Recursive method used in kernel calculation.
+        It also calculates the derivatives wrt lambda and sigma.
+        """
+        cdef int id1, id2, ch1, ch2, i
+        cdef double val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
+        cdef double delta_result, dlambda_result, dsigma_result
+        
+        cdef Node n1, n2
+        id1 = node1.node_id
+        id2 = node2.node_id
+        tup = (id1, id2)
+        val = delta_matrix[tup]
+        if val > 0:
+            return val, dlambda_matrix[tup], dsigma_matrix[tup]
+        if node1.children_ids == None:
+            delta_matrix[tup] = _lambda
+            dlambda_matrix[tup] = 1
+            return (_lambda, 1, 0)
+        prod = 1
+        sum_lambda = 0
+        sum_sigma = 0
+        children1 = node1.children_ids
+        children2 = node2.children_ids
+        for i in range(len(children1)):
+            ch1 = children1[i]
+            ch2 = children2[i]
+            n1 = dict1[ch1]
+            n2 = dict2[ch2]
+            if n1.production == n2.production:
+                K_result, dlambda, dsigma = delta_ext(n1, n2, dict1, dict2, delta_matrix, dlambda_matrix, dsigma_matrix, _lambda, _sigma)
+                denom = _sigma + K_result
+                prod *= denom
+                sum_lambda += dlambda / denom
+                sum_sigma += (1 + dsigma) / denom
+            else:
+                prod *= _sigma
+                sum_sigma += 1 /_sigma
+
+        delta_result = _lambda * prod
+        dlambda_result = prod + (delta_result * sum_lambda)
+        dsigma_result = delta_result * sum_sigma
+
+        delta_matrix[tup] = delta_result
+        dlambda_matrix[tup] = dlambda_result
+        dsigma_matrix[tup] = dsigma_result
+        return delta_result, dlambda_result, dsigma_result
+
+cdef calc_K_ext(list node_pairs, dict1, dict2, double _lambda, double _sigma):
     """
-    This method calculates the kernel between two trees.
+    The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
     """
     cdef double K_total = 0
     cdef double dlambda_total = 0
     cdef double dsigma_total = 0
     cdef double K_result, dlambda, dsigma
-    #cdef np.ndarray[DTYPE_t, ndim=2] delta_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
-    #cdef np.ndarray[DTYPE_t, ndim=2] dlambda_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
-    #cdef np.ndarray[DTYPE_t, ndim=2] dsigma_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
-    delta_matrix = defaultdict(int)
-    dlambda_matrix = defaultdict(int)
-    dsigma_matrix = defaultdict(int)
-
+    
+    # Initialize the DP structure. Python dicts are quite
+    # efficient already but maybe a specialized C structure
+    # would be better?
+    delta_matrix = defaultdict(float)
+    dlambda_matrix = defaultdict(float)
+    dsigma_matrix = defaultdict(float)
+    
     for node_pair in node_pairs:
         K_result, dlambda, dsigma = delta_ext(node_pair[0], node_pair[1], dict1, dict2,
                                               delta_matrix, dlambda_matrix, dsigma_matrix,
@@ -405,58 +466,4 @@ def calc_K_ext(list node_pairs, dict1, dict2, _lambda, _sigma):
         dsigma_total += dsigma
     return (K_total, dlambda_total, dsigma_total)
 
-def delta_ext(Node node1, Node node2, dict1, dict2, 
-              delta_matrix, dlambda_matrix, dsigma_matrix,
-              _lambda, _sigma):
-    """
-    Recursive method used in kernel calculation.
-    It also calculates the derivatives wrt lambda and sigma.
-    """
-    cdef int id1, id2, ch1, ch2, i
-    cdef DTYPE_t val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
-    cdef DTYPE_t delta_result, dlambda_result, dsigma_result
-    cdef Node n1, n2
-    #cdef list children1, children2
-    id1 = node1.node_id
-    id2 = node2.node_id
-    tup = (id1, id2)
-    val = delta_matrix[tup]
-    #val = delta_matrix[id1][id2]
-    if val > 0:
-        #return val, dlambda_matrix[id1, id2], dsigma_matrix[id1, id2]
-        return val, dlambda_matrix[tup], dsigma_matrix[tup]
-    
-    if node1.children_ids == None:
-        #delta_matrix[id1, id2] = _lambda
-        #dlambda_matrix[id1, id2] = 1
-        delta_matrix[tup] = _lambda
-        dlambda_matrix[tup] = 1
-        return (_lambda, 1, 0)
-    prod = 1
-    sum_lambda = 0
-    sum_sigma = 0
-    children1 = node1.children_ids
-    children2 = node2.children_ids
-    for i in range(len(children1)):
-        ch1 = children1[i]
-        ch2 = children2[i]
-        n1 = dict1[ch1]
-        n2 = dict2[ch2]
-        if n1.production == n2.production:
-            K_result, dlambda, dsigma = delta_ext(n1, n2, dict1, dict2,
-                                                  delta_matrix, dlambda_matrix, dsigma_matrix,
-                                                  _lambda, _sigma)
-            denom = _sigma + K_result
-            prod *= denom
-            sum_lambda += dlambda / denom
-            sum_sigma += (1 + dsigma) / denom
-    delta_result = _lambda * prod
-    dlambda_result = prod + (delta_result * sum_lambda)
-    dsigma_result = delta_result * sum_sigma
-    delta_matrix[tup] = delta_result
-    dlambda_matrix[tup] = dlambda_result
-    dsigma_matrix[tup] = dsigma_result
-    #delta_matrix[id1, id2] = delta_result
-    #dlambda_matrix[id1, id2] = dlambda_result
-    #dsigma_matrix[id1, id2] = dsigma_result
-    return (delta_result, dlambda_result, dsigma_result)
+

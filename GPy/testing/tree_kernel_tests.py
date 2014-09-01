@@ -995,7 +995,7 @@ class SSTProfilingTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
-        k = SST(normalize=True)
+        k = SST(normalize=False)
         target = np.zeros(shape=(len(X), len(X)))
         ITS = 10000
         start_time = datetime.datetime.now()
