@@ -995,13 +995,15 @@ class SSTProfilingTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
-        k = SST()
+        k = SST(normalize=True)
         target = np.zeros(shape=(len(X), len(X)))
-        ITS = 1000
+        ITS = 10000
         start_time = datetime.datetime.now()
         for i in range(ITS):
-            k.K(X)
+            target += k.K(X)
         end_time = datetime.datetime.now()
+        #import ipdb
+        #ipdb.set_trace()
         print target/ITS
         print k['.*lambda']
         print k['.*sigma']

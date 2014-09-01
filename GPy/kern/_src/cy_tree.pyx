@@ -43,13 +43,6 @@ class CySubsetTreeKernel(object):
         self._tree_cache = {}
         self.normalize = normalize
 
-        cdef np.ndarray[DTYPE_t, ndim=2] delta_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
-        cdef np.ndarray[DTYPE_t, ndim=2] dlambda_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
-        cdef np.ndarray[DTYPE_t, ndim=2] dsigma_matrix = np.zeros([MAX_NODES, MAX_NODES], dtype=DTYPE)
-        self.delta_matrix = delta_matrix
-        self.dlambda_matrix = dlambda_matrix
-        self.dsigma_matrix = dsigma_matrix
-
     def _gen_node_list(self, tree_repr):
         """
         Generates an ordered list of nodes from a tree.
@@ -113,9 +106,6 @@ class CySubsetTreeKernel(object):
                         reset2 = i2
                         while n1.production == n2.production:
                             node_pairs.append((n1, n2))
-                            self.delta_matrix[n1.node_id, n2.node_id] = 0.
-                            self.dlambda_matrix[n1.node_id, n2.node_id] = 0.
-                            self.dsigma_matrix[n1.node_id, n2.node_id] = 0.
                             i2 += 1
                             n2 = nodes2[i2]
                         i1 += 1
@@ -311,80 +301,81 @@ class CySubsetTreeKernel(object):
         cdef double dlambda_total = 0
         cdef double dsigma_total = 0
         cdef double K_result, dlambda, dsigma
-        self.delta_matrix[:,:] = 0.
-        self.dlambda_matrix[:,:] = 0. 
-        self.dsigma_matrix[:,:] = 0.
 
-        #print self.delta_matrix
-        #print self.dlambda_matrix
-        #print self.dsigma_matrix
-        #self.delta_matrix = defaultdict(int)
-        #self.dlambda_matrix = defaultdict(int)
-        #self.dsigma_matrix = defaultdict(int)
+        # Initialize the DP structure. Python dicts are quite
+        # efficient already but maybe a specialized C structure
+        # would be better?
+        delta_matrix = defaultdict(float)
+        dlambda_matrix = defaultdict(float)
+        dsigma_matrix = defaultdict(float)
+
+        # We store the hypers inside C doubles and pass them as 
+        # parameters for "delta", for efficiency.
+        cdef double _lambda = self._lambda
+        cdef double _sigma = self._sigma
 
         for node_pair in node_pairs:
-            K_result, dlambda, dsigma = self.delta(node_pair[0], node_pair[1], dict1, dict2)
+            K_result, dlambda, dsigma = self.delta(node_pair[0], node_pair[1], dict1, dict2,
+                                                   delta_matrix, dlambda_matrix, dsigma_matrix,
+                                                   _lambda, _sigma)
             K_total += K_result
             dlambda_total += dlambda
             dsigma_total += dsigma
         return (K_total, dlambda_total, dsigma_total)
 
-    def delta(self, Node node1, Node node2, dict1, dict2):
+    def delta(self, Node node1, Node node2, dict1, dict2,
+              delta_matrix, dlambda_matrix, dsigma_matrix,
+              double _lambda, double _sigma):
         """
         Recursive method used in kernel calculation.
         It also calculates the derivatives wrt lambda and sigma.
         """
         cdef int id1, id2, ch1, ch2, i
-        cdef DTYPE_t val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
-        cdef DTYPE_t delta_result, dlambda_result, dsigma_result
+        cdef double val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
+        cdef double delta_result, dlambda_result, dsigma_result
+        
         cdef Node n1, n2
-        #cdef list children1, children2
         id1 = node1.node_id
         id2 = node2.node_id
-        #tup = (id1, id2)
-        val = self.delta_matrix[id1][id2]
-        #val = self.delta_matrix[tup]
+        tup = (id1, id2)
+        val = delta_matrix[tup]
         if val > 0:
-            return val, self.dlambda_matrix[id1, id2], self.dsigma_matrix[id1, id2]
-            #return val, self.dlambda_matrix[tup], self.dsigma_matrix[tup]
-
+            return val, dlambda_matrix[tup], dsigma_matrix[tup]
         if node1.children_ids == None:
-            self.delta_matrix[id1, id2] = self._lambda
-            self.dlambda_matrix[id1, id2] = 1
-            #self.delta_matrix[tup] = self._lambda
-            #self.dlambda_matrix[tup] = 1
-            return (self._lambda, 1, 0)
+            delta_matrix[tup] = _lambda
+            dlambda_matrix[tup] = 1
+            return (_lambda, 1, 0)
         prod = 1
         sum_lambda = 0
         sum_sigma = 0
         children1 = node1.children_ids
         children2 = node2.children_ids
-        #print node1
-        #print node2
         for i in range(len(children1)):
             ch1 = children1[i]
             ch2 = children2[i]
             n1 = dict1[ch1]
             n2 = dict2[ch2]
             if n1.production == n2.production:
-                K_result, dlambda, dsigma = self.delta(n1, n2, 
-                                                       dict1, dict2)
-                denom = self._sigma + K_result
+                K_result, dlambda, dsigma = self.delta(n1, n2, dict1, dict2, 
+                                                       delta_matrix,
+                                                       dlambda_matrix,
+                                                       dsigma_matrix,
+                                                       _lambda, _sigma)
+                denom = _sigma + K_result
                 prod *= denom
                 sum_lambda += dlambda / denom
                 sum_sigma += (1 + dsigma) / denom
             else:
-                prod *= self._sigma
-                sum_sigma += 1 / self._sigma
-        delta_result = self._lambda * prod
+                prod *= _sigma
+                sum_sigma += 1 /_sigma
+
+        delta_result = _lambda * prod
         dlambda_result = prod + (delta_result * sum_lambda)
         dsigma_result = delta_result * sum_sigma
-        self.delta_matrix[id1, id2] = delta_result
-        self.dlambda_matrix[id1, id2] = dlambda_result
-        self.dsigma_matrix[id1, id2] = dsigma_result
-        #self.delta_matrix[tup] = delta_result
-        #self.dlambda_matrix[tup] = dlambda_result
-        #self.dsigma_matrix[tup] = dsigma_result
+
+        delta_matrix[tup] = delta_result
+        dlambda_matrix[tup] = dlambda_result
+        dsigma_matrix[tup] = dsigma_result
         return (delta_result, dlambda_result, dsigma_result)
 
 
