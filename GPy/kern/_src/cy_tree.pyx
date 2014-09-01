@@ -228,6 +228,38 @@ class CySubsetTreeKernel(object):
 
         return (Ks, dlambdas, dsigmas)
 
+    def K_parallel(self, X, X2):
+        """
+        A parallel version of K.
+        """
+        self._threads = 2
+        
+        # Caches must be built in the usual way.
+        self._build_cache(X)
+        if X2 == None:
+            symmetric = True
+            X2 = X
+        else:
+            symmetric = False
+            self._build_cache(X2)
+
+        # Result arrays are also initialized.
+        Ks = np.zeros(shape=(len(X), len(X2)))
+        dlambdas = np.zeros(shape=(len(X), len(X2)))
+        dsigmas = np.zeros(shape=(len(X), len(X2)))
+
+        # Dicts cannot be inside parallel code snippets.
+        # We'll use C lists for our input data instead.
+        cdef list X_cache = []
+        cdef list X2_cache = []
+        for x1 in X:
+            nodes1, _ = self._tree_cache[x1[0]]
+            X_cache.append(nodes1)
+        for x2 in X2:
+            nodes2, _ = self._tree_cache[x2[0]]
+            X2_cache.append(nodes2)
+
+
     def _normalize(self, double K_result, double dlambda, double dsigma, double diag_Ks_i, 
                    double diag_Ks_j, double diag_dlambdas_i, double diag_dlambdas_j, 
                    double diag_dsigmas_i, double diag_dsigmas_j):
