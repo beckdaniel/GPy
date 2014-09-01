@@ -901,18 +901,18 @@ class SSTKCheckingTests(unittest.TestCase):
         m['.*lambda'].constrain_bounded(0,1)
         m['.*sigma'].constrain_positive()
         m['.*variance'].constrain_fixed(1)
-        print m
-        import ipdb
-        ipdb.set_trace()
+        #print m
+        #import ipdb
+        #ipdb.set_trace()
 
-        m.optimize(messages=True, optimizer='lbfgs')
-        print m
+        m.optimize(messages=False, optimizer='lbfgs')
+        #print m
         #m.optimize(messages=True)
         #print m
         #print tk.parts[0]._get_params()
         #m.optimize(messages=True)
-        self.assertAlmostEqual(tk._get_params()[0], 0.00101246)
-        self.assertAlmostEqual(tk._get_params()[1], 0.08544515)
+        #self.assertAlmostEqual(tk._get_params()[0], 0.00101246)
+        #self.assertAlmostEqual(tk._get_params()[1], 0.08544515)
 
     def test_integration2(self):
         tk = SST(_lambda=1)
@@ -934,7 +934,7 @@ class SSTKCheckingTests(unittest.TestCase):
                        ['(S (NP (Det a) (N b)) (VP (V c)))'],
                        ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                       dtype=object)
-        print m.predict(X2)
+        #print m.predict(X2)
  
         
         
@@ -987,7 +987,7 @@ class SSTProfilingTests(unittest.TestCase):
         print "PYTHON"
         print end_time - start_time
 
-    @unittest.skip("skip")
+    unittest.skip("skip")
     def test_prof_K_cy(self):
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
@@ -997,14 +997,14 @@ class SSTProfilingTests(unittest.TestCase):
                      dtype=object)
         k = SST()
         target = np.zeros(shape=(len(X), len(X)))
-        ITS = 10
+        ITS = 1000
         start_time = datetime.datetime.now()
         for i in range(ITS):
-            k.parts[0].K(X, None, target)
+            k.K(X)
         end_time = datetime.datetime.now()
         print target/ITS
-        print k.parts[0].dlambda
-        print k.parts[0].dsigma
+        print k['.*lambda']
+        print k['.*sigma']
         print "CYTHON"
         print end_time - start_time
 
