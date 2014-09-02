@@ -683,8 +683,8 @@ class SSTKCheckingTests(unittest.TestCase):
         k1.kernel._build_cache(X)
         nodes1, dict1 = k1.kernel._tree_cache[X[0][0]]
         nodes2, dict2 = k1.kernel._tree_cache[X[2][0]]
-        node_pairs = k1.kernel._get_node_pairs(nodes1, nodes2)
-        delta1 = k1.kernel.calc_K(node_pairs, dict1, dict2)
+        #node_pairs = k1.kernel._get_node_pairs(nodes1, nodes2)
+        delta1 = k1.kernel.calc_K(nodes1, nodes2, dict1, dict2)
 
         t1 = nltk.Tree(X[0][0])
         t2 = nltk.Tree(X[2][0])
@@ -714,8 +714,8 @@ class SSTKCheckingTests(unittest.TestCase):
         k1.kernel._build_cache(X)
         nodes1, dict1 = k1.kernel._tree_cache[X[4][0]]
         nodes2, dict2 = k1.kernel._tree_cache[X[4][0]]
-        node_pairs = k1.kernel._get_node_pairs(nodes1, nodes2)
-        delta1 = k1.kernel.calc_K(node_pairs, dict1, dict2)
+        #node_pairs = k1.kernel._get_node_pairs(nodes1, nodes2)
+        delta1 = k1.kernel.calc_K(nodes1, nodes2, dict1, dict2)
 
         t1 = nltk.Tree(X[4][0])
         t2 = nltk.Tree(X[4][0])
@@ -1055,7 +1055,7 @@ class SSTProfilingTests(unittest.TestCase):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
         #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 1000
+        TREES = 500
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST()

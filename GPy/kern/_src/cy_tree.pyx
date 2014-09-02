@@ -174,10 +174,11 @@ class CySubsetTreeKernel(object):
                 nodes1, dict1 = self._tree_cache[x1[0]]
                 nodes2, dict2 = self._tree_cache[x2[0]]
                 #node_pairs = self._get_node_pairs(nodes1, nodes2)
-                node_pairs = get_node_pairs_ext(nodes1, nodes2)
+                #node_pairs = self._get_node_pairs(nodes1, nodes2)
                 #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
+                K_result, dlambda, dsigma = self.calc_K(nodes1, nodes2, dict1, dict2)
 
-                K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, _lambda, _sigma)
+                #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2, _lambda, _sigma)
                 #result = pool.apply_async(calc_K_ext, (node_pairs, dict1, dict2, self._lambda, self._sigma))
                 #K_result, dlambda, dsigma = result.get()
 
@@ -204,38 +205,6 @@ class CySubsetTreeKernel(object):
                     dsigmas[i][j] = dsigma
 
         return (Ks, dlambdas, dsigmas)
-
-    def K_parallel(self, X, X2):
-        """
-        A parallel version of K.
-        """
-        self._threads = 2
-        
-        # Caches must be built in the usual way.
-        self._build_cache(X)
-        if X2 == None:
-            symmetric = True
-            X2 = X
-        else:
-            symmetric = False
-            self._build_cache(X2)
-
-        # Result arrays are also initialized.
-        Ks = np.zeros(shape=(len(X), len(X2)))
-        dlambdas = np.zeros(shape=(len(X), len(X2)))
-        dsigmas = np.zeros(shape=(len(X), len(X2)))
-
-        # Dicts cannot be inside parallel code snippets.
-        # We'll use C lists for our input data instead.
-        cdef list X_cache = []
-        cdef list X2_cache = []
-        for x1 in X:
-            nodes1, _ = self._tree_cache[x1[0]]
-            X_cache.append(nodes1)
-        for x2 in X2:
-            nodes2, _ = self._tree_cache[x2[0]]
-            X2_cache.append(nodes2)
-
 
     def _normalize(self, double K_result, double dlambda, double dsigma, double diag_Ks_i, 
                    double diag_Ks_j, double diag_dlambdas_i, double diag_dlambdas_j, 
@@ -272,8 +241,8 @@ class CySubsetTreeKernel(object):
         dsigma_vec = np.zeros(shape=(len(X),))
         for i, x in enumerate(X):
             nodes, dicts = self._tree_cache[x[0]]
-            node_pairs = self._get_node_pairs(nodes, nodes)
-            K_result, dlambda, dsigma = self.calc_K(node_pairs, dicts, dicts)
+            #node_pairs = self._get_node_pairs(nodes, nodes)
+            K_result, dlambda, dsigma = self.calc_K(nodes, nodes, dicts, dicts)
             K_vec[i] = K_result
             dlambda_vec[i] = dlambda
             dsigma_vec[i] = dsigma
@@ -310,7 +279,7 @@ class CySubsetTreeKernel(object):
                 break
         return node_pairs
 
-    def calc_K(self, list node_pairs, dict1, dict2):
+    def calc_K(self, nodes1, nodes2, dict1, dict2):
         """
         The actual SSTK kernel, evaluated over two node lists.
         It also calculates the derivatives wrt lambda and sigma.
@@ -332,6 +301,7 @@ class CySubsetTreeKernel(object):
         cdef double _lambda = self._lambda
         cdef double _sigma = self._sigma
 
+        node_pairs = self._get_node_pairs(nodes1, nodes2)
         for node_pair in node_pairs:
             K_result, dlambda, dsigma = self.delta(node_pair[0], node_pair[1], dict1, dict2,
                                                    delta_matrix, dlambda_matrix, dsigma_matrix,
