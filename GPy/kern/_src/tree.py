@@ -20,7 +20,7 @@ class SubsetTreeKernel(Kern):
     The Cython kernel is stored on the "kernel" attribute.
     """
 
-    def __init__(self, _lambda=0.1, _sigma=1, normalize=True, active_dims=None):
+    def __init__(self, _lambda=0.1, _sigma=1, normalize=True, active_dims=None, parallel=False):
         try:
             import nltk
         except ImportError:
@@ -36,7 +36,10 @@ class SubsetTreeKernel(Kern):
         self._sigma = Param('sigma', _sigma)
         self.add_parameters(self._lambda, self._sigma)
         self.normalize = normalize
-        self.kernel = cy_tree.CySubsetTreeKernel(_lambda, _sigma, normalize)
+        if parallel:
+            self.kernel = cy_tree.ParSubsetTreeKernel(_lambda, _sigma, normalize)
+        else:
+            self.kernel = cy_tree.CySubsetTreeKernel(_lambda, _sigma, normalize)
         
     def _get_params(self):
         return np.hstack((self.kernel._lambda, self.kernel._sigma))

@@ -987,7 +987,7 @@ class SSTProfilingTests(unittest.TestCase):
         print "PYTHON"
         print end_time - start_time
 
-    unittest.skip("skip")
+    @unittest.skip("skip")
     def test_prof_K_cy(self):
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
@@ -997,7 +997,7 @@ class SSTProfilingTests(unittest.TestCase):
                      dtype=object)
         k = SST(normalize=False)
         target = np.zeros(shape=(len(X), len(X)))
-        ITS = 1000
+        ITS = 100
         start_time = datetime.datetime.now()
         for i in range(ITS):
             target += k.K(X)
@@ -1050,12 +1050,12 @@ class SSTProfilingTests(unittest.TestCase):
         print "SSTW2"
         print end_time - start_time
 
-    #@unittest.skip("skip")
+    @unittest.skip("skip")
     def test_prof_K_cy3(self):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
         #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 500
+        TREES = 50
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST()
@@ -1103,8 +1103,23 @@ class SSTProfilingTests(unittest.TestCase):
         ps.print_stats(20)
         print s.getvalue()
 
+class SSTKParallelCheckingTests(unittest.TestCase):
+    """
+    Tests for the SSTK Parallel version.
+    """
+    def test_if_convert_np_arrays_to_string_vectors(self):
+        X = np.array([['(S (NP ns) (VP v))'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        k = SST(parallel=True)
+        target = np.zeros(shape=(len(X), len(X)))
+        target = k.K(X)
 
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
     unittest.main()
+    
