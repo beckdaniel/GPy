@@ -6,6 +6,10 @@ cimport numpy as np
 from cython.parallel import prange
 from collections import defaultdict
 from libcpp.string cimport string
+from libcpp.map cimport map
+from libcpp.pair cimport pair
+from libcpp.list cimport list as clist
+from libcpp.vector cimport vector
 
 cdef extern from "math.h":
     double sqrt(double x)
@@ -34,6 +38,11 @@ cdef class Node(object):
     def __repr__(self):
         return str((self.production, self.node_id, self.children_ids))
 
+cdef struct Node_struct:
+
+    string production
+    int node_id
+    vector[int] children_ids
 
 class CySubsetTreeKernel(object):
     
@@ -85,36 +94,7 @@ class CySubsetTreeKernel(object):
             node_list.append(node)
             return node_id            
 
-    def _get_node_pairs(self, nodes1, nodes2):
-        """
-        The node pair detection method devised by Moschitti (2006).
-        """
-        node_pairs = []
-        i1 = 0
-        i2 = 0
-        cdef Node n1, n2
-        while True:
-            try:
-                n1 = nodes1[i1]
-                n2 = nodes2[i2]
-                if n1.production > n2.production:
-                    i2 += 1
-                elif n1.production < n2.production:
-                    i1 += 1
-                else:
-                    while n1.production == n2.production:
-                        reset2 = i2
-                        while n1.production == n2.production:
-                            node_pairs.append((n1, n2))
-                            i2 += 1
-                            n2 = nodes2[i2]
-                        i1 += 1
-                        i2 = reset2
-                        n1 = nodes1[i1]
-                        n2 = nodes2[i2]
-            except IndexError:
-                break
-        return node_pairs
+
 
     def _build_cache(self, X):
         """
@@ -193,7 +173,8 @@ class CySubsetTreeKernel(object):
                 # It will always be a 1-element array so we just index by 0
                 nodes1, dict1 = self._tree_cache[x1[0]]
                 nodes2, dict2 = self._tree_cache[x2[0]]
-                node_pairs = self._get_node_pairs(nodes1, nodes2)
+                #node_pairs = self._get_node_pairs(nodes1, nodes2)
+                node_pairs = get_node_pairs_ext(nodes1, nodes2)
                 #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
 
                 K_result, dlambda, dsigma = calc_K_ext(node_pairs, dict1, dict2, _lambda, _sigma)
@@ -298,6 +279,37 @@ class CySubsetTreeKernel(object):
             dsigma_vec[i] = dsigma
         return (K_vec, dlambda_vec, dsigma_vec)
 
+    def _get_node_pairs(self, nodes1, nodes2):
+        """
+        The node pair detection method devised by Moschitti (2006).
+        """
+        node_pairs = []
+        i1 = 0
+        i2 = 0
+        cdef Node n1, n2
+        while True:
+            try:
+                n1 = nodes1[i1]
+                n2 = nodes2[i2]
+                if n1.production > n2.production:
+                    i2 += 1
+                elif n1.production < n2.production:
+                    i1 += 1
+                else:
+                    while n1.production == n2.production:
+                        reset2 = i2
+                        while n1.production == n2.production:
+                            node_pairs.append((n1, n2))
+                            i2 += 1
+                            n2 = nodes2[i2]
+                        i1 += 1
+                        i2 = reset2
+                        n1 = nodes1[i1]
+                        n2 = nodes2[i2]
+            except IndexError:
+                break
+        return node_pairs
+
     def calc_K(self, list node_pairs, dict1, dict2):
         """
         The actual SSTK kernel, evaluated over two node lists.
@@ -389,58 +401,77 @@ class CySubsetTreeKernel(object):
 # EXTERNAL METHODS
 ##############
 
-cdef delta_ext(Node node1, Node node2, dict1, dict2,
-              delta_matrix, dlambda_matrix, dsigma_matrix,
-              double _lambda, double _sigma):
-        """
-        Recursive method used in kernel calculation.
-        It also calculates the derivatives wrt lambda and sigma.
-        """
-        cdef int id1, id2, ch1, ch2, i
-        cdef double val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
-        cdef double delta_result, dlambda_result, dsigma_result
-        
-        cdef Node n1, n2
-        id1 = node1.node_id
-        id2 = node2.node_id
-        tup = (id1, id2)
-        val = delta_matrix[tup]
-        if val > 0:
-            return val, dlambda_matrix[tup], dsigma_matrix[tup]
-        if node1.children_ids == None:
-            delta_matrix[tup] = _lambda
-            dlambda_matrix[tup] = 1
-            return (_lambda, 1, 0)
-        prod = 1
-        sum_lambda = 0
-        sum_sigma = 0
-        children1 = node1.children_ids
-        children2 = node2.children_ids
-        for i in range(len(children1)):
-            ch1 = children1[i]
-            ch2 = children2[i]
-            n1 = dict1[ch1]
-            n2 = dict2[ch2]
-            if n1.production == n2.production:
-                K_result, dlambda, dsigma = delta_ext(n1, n2, dict1, dict2, delta_matrix, dlambda_matrix, dsigma_matrix, _lambda, _sigma)
-                denom = _sigma + K_result
-                prod *= denom
-                sum_lambda += dlambda / denom
-                sum_sigma += (1 + dsigma) / denom
-            else:
-                prod *= _sigma
-                sum_sigma += 1 /_sigma
+cdef delta_ext(Node_struct node1, Node_struct node2, dict1, dict2,
+               map[pair[int, int], double] delta_matrix, 
+               map[pair[int, int], double] dlambda_matrix, 
+               map[pair[int, int], double] dsigma_matrix,
+               double _lambda, double _sigma):
+    """
+    Recursive method used in kernel calculation.
+    It also calculates the derivatives wrt lambda and sigma.
+    """
+    cdef int id1, id2, ch1, ch2, i
+    cdef double val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
+    cdef double delta_result, dlambda_result, dsigma_result
+    
+    cdef Node n1, n2
+    id1 = node1.node_id
+    id2 = node2.node_id
+    #tup = (id1, id2)
+    cdef pair[int, int] tup# = (id1, id2)
+    tup.first = id1
+    tup.second = id2
+    val = delta_matrix[tup]
+    cdef Node_struct ns1, ns2
+    if val > 0:
+        return val, dlambda_matrix[tup], dsigma_matrix[tup]
+    #if node1.children_ids == None:
+    if node1.children_ids.empty():
+        delta_matrix[tup] = _lambda
+        dlambda_matrix[tup] = 1
+        return (_lambda, 1, 0)
+    prod = 1
+    sum_lambda = 0
+    sum_sigma = 0
+    children1 = node1.children_ids
+    children2 = node2.children_ids
+    for i in range(len(children1)):
+        ch1 = children1[i]
+        ch2 = children2[i]
+        n1 = dict1[ch1]
+        n2 = dict2[ch2]
+        if n1.production == n2.production:
+            ################
+            ns1.production = n1.production
+            ns1.node_id = n1.node_id
+            if n1.children_ids is not None:
+                for c_id in n1.children_ids:
+                    ns1.children_ids.push_back(c_id)
+            ns2.production = n2.production
+            ns2.node_id = n2.node_id
+            if n2.children_ids is not None:
+                for c_id in n2.children_ids:
+                    ns2.children_ids.push_back(c_id)
+            ####################
+            K_result, dlambda, dsigma = delta_ext(ns1, ns2, dict1, dict2, delta_matrix, dlambda_matrix, dsigma_matrix, _lambda, _sigma)
+            denom = _sigma + K_result
+            prod *= denom
+            sum_lambda += dlambda / denom
+            sum_sigma += (1 + dsigma) / denom
+        else:
+            prod *= _sigma
+            sum_sigma += 1 /_sigma
 
-        delta_result = _lambda * prod
-        dlambda_result = prod + (delta_result * sum_lambda)
-        dsigma_result = delta_result * sum_sigma
+    delta_result = _lambda * prod
+    dlambda_result = prod + (delta_result * sum_lambda)
+    dsigma_result = delta_result * sum_sigma
+    
+    delta_matrix[tup] = delta_result
+    dlambda_matrix[tup] = dlambda_result
+    dsigma_matrix[tup] = dsigma_result
+    return delta_result, dlambda_result, dsigma_result
 
-        delta_matrix[tup] = delta_result
-        dlambda_matrix[tup] = dlambda_result
-        dsigma_matrix[tup] = dsigma_result
-        return delta_result, dlambda_result, dsigma_result
-
-cdef calc_K_ext(list node_pairs, dict1, dict2, double _lambda, double _sigma):
+cdef calc_K_ext(vector[pair[Node_struct, Node_struct]] node_pairs, dict1, dict2, double _lambda, double _sigma):
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -453,12 +484,16 @@ cdef calc_K_ext(list node_pairs, dict1, dict2, double _lambda, double _sigma):
     # Initialize the DP structure. Python dicts are quite
     # efficient already but maybe a specialized C structure
     # would be better?
-    delta_matrix = defaultdict(float)
-    dlambda_matrix = defaultdict(float)
-    dsigma_matrix = defaultdict(float)
+    #delta_matrix = defaultdict(float)
+    #dlambda_matrix = defaultdict(float)
+    #dsigma_matrix = defaultdict(float)
+    cdef map[pair[int, int],double] delta_matrix
+    cdef map[pair[int, int],double] dlambda_matrix
+    cdef map[pair[int, int],double] dsigma_matrix
+
     
     for node_pair in node_pairs:
-        K_result, dlambda, dsigma = delta_ext(node_pair[0], node_pair[1], dict1, dict2,
+        K_result, dlambda, dsigma = delta_ext(node_pair.first, node_pair.second, dict1, dict2,
                                               delta_matrix, dlambda_matrix, dsigma_matrix,
                                               _lambda, _sigma)
         K_total += K_result
@@ -467,3 +502,60 @@ cdef calc_K_ext(list node_pairs, dict1, dict2, double _lambda, double _sigma):
     return (K_total, dlambda_total, dsigma_total)
 
 
+cdef vector[pair[Node_struct, Node_struct]] get_node_pairs_ext(list nodes1, list nodes2):
+    """
+    The node pair detection method devised by Moschitti (2006).
+    """
+    #cdef list node_pairs = []
+    cdef vector[pair[Node_struct, Node_struct]] node_pairs
+    cdef int i1 = 0
+    cdef int i2 = 0
+    cdef Node n1, n2
+    cdef pair[Node_struct, Node_struct] tup
+    cdef Node_struct ns1, ns2
+    #print nodes1
+    #print nodes2
+    while True:
+        #print "INSIDE WHILE"
+        try:
+            n1 = nodes1[i1]
+            n2 = nodes2[i2]
+            if n1.production > n2.production:
+                i2 += 1
+            elif n1.production < n2.production:
+                i1 += 1
+            else:
+                while n1.production == n2.production:
+                    #print "INSIDE FIRST LOOP"
+                    reset2 = i2
+                    while n1.production == n2.production:
+                        ns1 = Node_struct()
+                        ns2 = Node_struct()
+                        #print "INSIDE SECOND LOOP"
+                        ################
+                        ns1.production = n1.production
+                        ns1.node_id = n1.node_id
+                        if n1.children_ids is not None:
+                            for c_id in n1.children_ids:
+                                ns1.children_ids.push_back(c_id)
+                        ns2.production = n2.production
+                        ns2.node_id = n2.node_id
+                        if n2.children_ids is not None:
+                            for c_id in n2.children_ids:
+                                ns2.children_ids.push_back(c_id)
+                        ####################
+                        tup.first = ns1
+                        tup.second = ns2
+                        #node_pairs.append((n1, n2))
+                        #node_pairs.append(tup)
+                        node_pairs.push_back(tup)
+                        i2 += 1
+                        n2 = nodes2[i2]
+                    i1 += 1
+                    i2 = reset2
+                    n1 = nodes1[i1]
+                    n2 = nodes2[i2]
+        except IndexError:
+            break
+    #print node_pairs
+    return node_pairs

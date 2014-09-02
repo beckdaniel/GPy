@@ -997,7 +997,7 @@ class SSTProfilingTests(unittest.TestCase):
                      dtype=object)
         k = SST(normalize=False)
         target = np.zeros(shape=(len(X), len(X)))
-        ITS = 10000
+        ITS = 1000
         start_time = datetime.datetime.now()
         for i in range(ITS):
             target += k.K(X)
@@ -1050,11 +1050,12 @@ class SSTProfilingTests(unittest.TestCase):
         print "SSTW2"
         print end_time - start_time
 
-    @unittest.skip("skip")
+    #@unittest.skip("skip")
     def test_prof_K_cy3(self):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
-        TREES_TRAIN = 'GPy/testing/qc_trees.txt'
-        TREES = 700
+        #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
+        TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
+        TREES = 1000
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST()
@@ -1064,14 +1065,19 @@ class SSTProfilingTests(unittest.TestCase):
         import cProfile, StringIO, pstats
         pr = cProfile.Profile()
         pr.enable()
+        #start_time = datetime.datetime.now()
         for i in range(ITS):
-            k.parts[0].K(X, None, target)
+            target += k.K(X)
         pr.disable()
+        #end_time = datetime.datetime.now()
         s = StringIO.StringIO()
         sortby = 'cumulative'
         ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
         ps.print_stats(20)
         print s.getvalue()
+        print target/ITS
+        print target.shape
+        #print end_time - start_time
 
     @unittest.skip("skip")
     def test_prof_K_cy4(self):
