@@ -9,6 +9,8 @@ from cython.parallel import prange, parallel
 from collections import defaultdict
 from libcpp.string cimport string
 from libcpp.map cimport map
+#from libcpp.unordered_map cimport unordered_map
+from unordered_map cimport unordered_map
 from libcpp.pair cimport pair
 from libcpp.list cimport list as clist
 from libcpp.vector cimport vector
@@ -379,13 +381,20 @@ class CySubsetTreeKernel(object):
 # PARALLEL CLASS
 ################
 
-ctypedef clist[int] IntList
+ctypedef vector[int] IntList
 ctypedef pair[string, IntList] CNode
 ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
-ctypedef vector[NodePair] VecNodePair
+ctypedef pair[int, int] IntPair
+ctypedef vector[IntPair] VecIntPair
 ctypedef pair[double, double] DoublePair
 ctypedef pair[double, DoublePair] Triple
+ctypedef unordered_map[int, double] DPCell
+ctypedef unordered_map[int, DPCell] DPStruct
+#ctypedef map[int, double] DPStruct
+
+ctypedef pair[NodePair, IntPair] PairTup
+ctypedef vector[PairTup] VecPairTup
 
 class ParSubsetTreeKernel(object):
     
@@ -520,10 +529,10 @@ class ParSubsetTreeKernel(object):
                     vecnode.push_back(cnode)
                 X2_list.push_back(vecnode)
 
-        for vecnode in X_list:
-            print vecnode
-        for vecnode in X2_list:
-            print vecnode
+        #for vecnode in X_list:
+        #    print vecnode
+        #for vecnode in X2_list:
+        #    print vecnode
 
         #return
         # Let's forget normalization for now
@@ -551,8 +560,8 @@ class ParSubsetTreeKernel(object):
             normalize = 1
         else:
             normalize = 0
-        print self.normalize
-        print symmetric
+        #print self.normalize
+        #print symmetric
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         with nogil, parallel(num_threads=4):
             for i in prange(X_len):
@@ -598,27 +607,59 @@ class ParSubsetTreeKernel(object):
 # EXTERNAL METHODS
 ##############
 
-cdef VecNodePair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
+cdef void print_node(CNode node) nogil:
+    printf("(%s, [", node.first.c_str())
+    for ch in node.second:
+        printf("%d, ", ch)
+    printf("])")
+
+cdef void print_vecnode(VecNode vecnode) nogil:
+    printf("[")
+    for node in vecnode:
+        print_node(node)
+        printf(", ")
+    printf("]\n")
+
+cdef void print_node_pair(NodePair node_pair) nogil:
+    printf("(")
+    print_node(node_pair.first)
+    printf(" ,")
+    print_node(node_pair.second)
+    printf(" )")
+
+cdef void print_int_pair(IntPair int_pair) nogil:
+    printf("(%d, %d)", int_pair.first, int_pair.second)
+
+cdef void print_int_pairs(VecIntPair int_pairs) nogil:
+    printf("[")
+    cdef IntPair int_pair
+    for int_pair in int_pairs:
+        print_int_pair(int_pair)
+    printf("]\n")
+
+#cdef void print_pair_tups(VecPairTup node_pairs) nogil:
+#    printf("[")
+#    for node_pair in node_pairs:
+#        print_node_pair(node_pair)
+#        printf("- (%d, %d); ", node_pair.second.first, node_pair.second.second)
+#    printf("]\n")
+
+cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
     """
     The node pair detection method devised by Moschitti (2006).
     """
-    cdef VecNodePair node_pairs
+    cdef VecIntPair int_pairs
     cdef int i1 = 0
     cdef int i2 = 0
-    cdef CNode node1, node2
+    cdef CNode n1, n2
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
-    cdef NodePair node_pair
-    #return node_pairs
+    #cdef NodePair node_pair
+    cdef IntPair tup
+    #cdef PairTup pair_tup
     while True:
-        printf("1234\n")
-        for node_pair in node_pairs:
-            printf(node_pair.first.first.c_str())
-            printf("\n")
-            printf(node_pair.second.first.c_str())
-            printf("\n")
-        if (i1 > len1) or (i2 > len2):
-            return node_pairs
+        if (i1 >= len1) or (i2 >= len2):
+            return int_pairs
         n1 = vecnode1[i1]
         n2 = vecnode2[i2]
         if n1.first > n2.first:
@@ -629,23 +670,28 @@ cdef VecNodePair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
             while n1.first == n2.first:
                 reset2 = i2
                 while n1.first == n2.first:
-                    node_pair.first = n1
-                    node_pair.second = n2
-                    node_pairs.push_back(node_pair)
+                    #node_pair.first = n1
+                    #node_pair.second = n2
+                    tup.first = i1
+                    tup.second = i2
+                    #pair_tup.first = node_pair
+                    #pair_tup.second = tup
+                    #node_pairs.push_back(pair_tup)
+                    int_pairs.push_back(tup)
                     i2 += 1
-                    if i2 > len2:
-                        return node_pairs
+                    if i2 >= len2:
+                        return int_pairs
                     n2 = vecnode2[i2]
                 i1 += 1
-                if i1 > len1:
-                    return node_pairs
+                if i1 >= len1:
+                    return int_pairs
                 i2 = reset2
                 n1 = vecnode1[i1]
                 n2 = vecnode2[i2]
-    return node_pairs
+    return int_pairs
 
 
-cdef Triple calc_K(VecNode vecnode, VecNode vecnode2, double _lambda, double _sigma) nogil:
+cdef Triple calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _sigma) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -655,71 +701,104 @@ cdef Triple calc_K(VecNode vecnode, VecNode vecnode2, double _lambda, double _si
     cdef double dsigma_total = 0
     cdef double K_result, dlambda, dsigma
     cdef Triple result
-    cdef VecNodePair node_pairs
-    result.first = 2
-    result.second.first = 4
-    result.second.second = 6
+    #cdef VecNodePair node_pairs
+    cdef VecIntPair node_pairs
+    #result.first = 2
+    #result.second.first = 4
+    #result.second.second = 6
 
-    node_pairs = get_node_pairs(vecnode, vecnode2)
-    #print node_pairs
-    return result
+    node_pairs = get_node_pairs(vecnode1, vecnode2)
+    #print_node_pairs(node_pairs)
+    #print_pair_tups(node_pairs)
+    #print_int_pairs(node_pairs)
+    #print_vecnode(vecnode1)
+    #print_vecnode(vecnode2)
+
+
+    #return result
     # Initialize the DP structure. Python dicts are quite
     # efficient already but maybe a specialized C structure
     # would be better?
-    #delta_matrix = defaultdict(float)
-    #dlambda_matrix = defaultdict(float)
-    #dsigma_matrix = defaultdict(float)
+    #cdef unordered_map[int, int] test
+    #test[8] = 6
+    #cdef int test2 = test[7]
+    cdef DPStruct delta_matrix
+    cdef DPStruct dlambda_matrix
+    cdef DPStruct dsigma_matrix
 
-
-    #node_pairs = self._get_node_pairs(nodes1, nodes2)
-    #for node_pair in node_pairs:
+    for int_pair in node_pairs:
+        result = delta(int_pair, vecnode1, vecnode2,
+                       delta_matrix, dlambda_matrix,
+                       dsigma_matrix, _lambda, _sigma)
     #    K_result, dlambda, dsigma = self.delta(node_pair[0], node_pair[1], dict1, dict2,
     #                                           delta_matrix, dlambda_matrix, dsigma_matrix,
     #                                           _lambda, _sigma)
-    #    K_total += K_result
-    #    dlambda_total += dlambda
-    #    dsigma_total += dsigma
+        K_total += result.first
+        dlambda_total += result.second.first
+        dsigma_total += result.second.second
+    result.first = K_total
+    result.second.first = dlambda_total
+    result.second.second = dsigma_total
+    return result
     #return (K_total, dlambda_total, dsigma_total)
 
 
-cdef delta(self, Node node1, Node node2, dict1, dict2,
-           delta_matrix, dlambda_matrix, dsigma_matrix,
-           double _lambda, double _sigma):
+cdef Triple delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
+                  DPStruct delta_matrix, DPStruct dlambda_matrix,
+                  DPStruct dsigma_matrix, double _lambda, double _sigma) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
     """
     cdef int id1, id2, ch1, ch2, i
     cdef double val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
-    cdef double delta_result, dlambda_result, dsigma_result
-        
-    cdef Node n1, n2
-    id1 = node1.node_id
-    id2 = node2.node_id
-    tup = (id1, id2)
-    val = delta_matrix[tup]
+    cdef IntList children1, children2
+    # cdef double delta_result, dlambda_result, dsigma_result        
+    cdef CNode node1, node2
+    cdef IntPair ch_pair
+    # id1 = node1.node_id
+    # id2 = node2.node_id
+    # tup = (id1, id2)
+    # val = delta_matrix[tup]
+    cdef Triple result
+    val = delta_matrix[int_pair.first][int_pair.second]
+    #printf("VAL: %f\n",val)
     if val > 0:
-        return val, dlambda_matrix[tup], dsigma_matrix[tup]
-    if node1.children_ids == None:
-        delta_matrix[tup] = _lambda
-        dlambda_matrix[tup] = 1
-        return (_lambda, 1, 0)
+        result.first = val
+        result.second.first = dlambda_matrix[int_pair.first][int_pair.second]
+        result.second.second = dsigma_matrix[int_pair.first][int_pair.second]
+        return result
+    #     return val, dlambda_matrix[tup], dsigma_matrix[tup]
+    node1 = vecnode1[int_pair.first]
+    if node1.second.empty():
+        delta_matrix[int_pair.first][int_pair.second] = _lambda
+        dlambda_matrix[int_pair.first][int_pair.second] = 1
+        result.first = _lambda
+        result.second.first = 1
+        result.second.second = 0
+        return result
+    #if node1.children_ids == None:
+    #     delta_matrix[tup] = _lambda
+    #     dlambda_matrix[tup] = 1
+    #     return (_lambda, 1, 0)
+    node2 = vecnode2[int_pair.second]
     prod = 1
     sum_lambda = 0
     sum_sigma = 0
-    children1 = node1.children_ids
-    children2 = node2.children_ids
-    for i in range(len(children1)):
+    children1 = node1.second
+    children2 = node2.second
+    for i in range(children1.size()):
         ch1 = children1[i]
         ch2 = children2[i]
-        n1 = dict1[ch1]
-        n2 = dict2[ch2]
-        if n1.production == n2.production:
-            K_result, dlambda, dsigma = self.delta(n1, n2, dict1, dict2, 
-                                                   delta_matrix,
-                                                   dlambda_matrix,
-                                                   dsigma_matrix,
-                                                   _lambda, _sigma)
+        if vecnode1[ch1].first == vecnode2[ch2].first:
+            ch_pair.first = ch1
+            ch_pair.second = ch2
+            result = delta(ch_pair, vecnode1, vecnode2,
+                           delta_matrix, dlambda_matrix,
+                           dsigma_matrix, _lambda, _sigma)
+            K_result = result.first
+            dlambda = result.second.first
+            dsigma = result.second.second
             denom = _sigma + K_result
             prod *= denom
             sum_lambda += dlambda / denom
@@ -727,14 +806,40 @@ cdef delta(self, Node node1, Node node2, dict1, dict2,
         else:
             prod *= _sigma
             sum_sigma += 1 /_sigma
+    #for i in range(children1.size()):
+    #     ch1 = children1[i]
+    #     ch2 = children2[i]
+    #     n1 = dict1[ch1]
+    #     n2 = dict2[ch2]
+    #     if n1.production == n2.production:
+    #         K_result, dlambda, dsigma = delta(n1, n2, dict1, dict2, 
+    #                                           delta_matrix,
+    #                                           dlambda_matrix,
+    #                                           dsigma_matrix,
+    #                                           _lambda, _sigma)
+    #         denom = _sigma + K_result
+    #         prod *= denom
+    #         sum_lambda += dlambda / denom
+    #         sum_sigma += (1 + dsigma) / denom
+    #     else:
+    #         prod *= _sigma
+    #         sum_sigma += 1 /_sigma
 
     delta_result = _lambda * prod
     dlambda_result = prod + (delta_result * sum_lambda)
     dsigma_result = delta_result * sum_sigma
 
-    delta_matrix[tup] = delta_result
-    dlambda_matrix[tup] = dlambda_result
-    dsigma_matrix[tup] = dsigma_result
-    return (delta_result, dlambda_result, dsigma_result)
+    delta_matrix[int_pair.first][int_pair.second] = delta_result
+    dlambda_matrix[int_pair.first][int_pair.second] = dlambda_result
+    dsigma_matrix[int_pair.first][int_pair.second] = dsigma_result
+
+    result.first = delta_result
+    result.second.first = dlambda_result
+    result.second.second = dsigma_result
+    # delta_matrix[tup] = delta_result
+    # dlambda_matrix[tup] = dlambda_result
+    # dsigma_matrix[tup] = dsigma_result
+    # return (delta_result, dlambda_result, dsigma_result)
+    return result
 
 #endif //CY_TREE_H

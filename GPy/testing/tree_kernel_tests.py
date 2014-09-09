@@ -1050,40 +1050,40 @@ class SSTProfilingTests(unittest.TestCase):
         print "SSTW2"
         print end_time - start_time
 
-    @unittest.skip("skip")
+    #@unittest.skip("skip")
     def test_prof_K_cy3(self):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
         #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 50
+        TREES = 500
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
-        k = SST()
+        k = SST(normalize=False)
         target = np.zeros(shape=(len(X), len(X)))
         ITS = 1
 
-        import cProfile, StringIO, pstats
-        pr = cProfile.Profile()
-        pr.enable()
-        #start_time = datetime.datetime.now()
+        #import cProfile, StringIO, pstats
+        #pr = cProfile.Profile()
+        #pr.enable()
+        start_time = datetime.datetime.now()
         for i in range(ITS):
             target += k.K(X)
-        pr.disable()
-        #end_time = datetime.datetime.now()
-        s = StringIO.StringIO()
-        sortby = 'cumulative'
-        ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
-        ps.print_stats(20)
-        print s.getvalue()
+        #pr.disable()
+        end_time = datetime.datetime.now()
+        #s = StringIO.StringIO()
+        #sortby = 'cumulative'
+        #ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        #ps.print_stats(20)
+        #print s.getvalue()
         print target/ITS
         print target.shape
-        #print end_time - start_time
+        print end_time - start_time
 
     @unittest.skip("skip")
     def test_prof_K_cy4(self):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
         TREES_TRAIN = 'GPy/testing/qc_trees.txt'
-        TREES = 2000
+        TREES = 200
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST()
@@ -1128,13 +1128,47 @@ class SSTKParallelCheckingTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
-        k = SST(parallel=True)
+        k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False)
         start_time = datetime.datetime.now()
         target = k.K(X)
         end_time = datetime.datetime.now()
-        print target
-        print end_time - start_time
 
+        k2 = SST(parallel=False,  _lambda=1, _sigma=1, normalize=False)
+        start_time2 = datetime.datetime.now()
+        target2 = k2.K(X)
+        end_time2 = datetime.datetime.now()
+        print target
+        print target2
+        print end_time - start_time
+        print end_time2 - start_time2
+
+    def test_prof_K_cy_par(self):
+        #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
+        #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
+        TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
+        TREES = 500
+        with open(TREES_TRAIN) as f:
+            X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
+        k = SST(parallel=True, normalize=False)
+        target = np.zeros(shape=(len(X), len(X)))
+        ITS = 1
+
+        #import cProfile, StringIO, pstats
+        #pr = cProfile.Profile()
+        #pr.enable()
+        start_time = datetime.datetime.now()
+        for i in range(ITS):
+            target += k.K(X)
+        #pr.disable()
+        end_time = datetime.datetime.now()
+        #s = StringIO.StringIO()
+        #sortby = 'cumulative'
+        #ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        #ps.print_stats(20)
+        #print s.getvalue()
+        print target/ITS
+        print target.shape
+        print end_time - start_time
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
