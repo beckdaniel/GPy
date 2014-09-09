@@ -39,6 +39,10 @@ setup(name = 'GPy',
       "License :: OSI Approved :: BSD License"],
       #ext_modules = cythonize("GPy/kern/_src/*.pyx"),
       cmdclass = {'build_ext': build_ext},
-      ext_modules = cythonize([Extension("cy_tree", ["GPy/kern/_src/cy_tree.pyx"], include_dirs=[np.get_include()])]),
+      ext_modules = cythonize([Extension("cy_tree", ["GPy/kern/_src/cy_tree.pyx"],
+                                         extra_compile_args=['-fopenmp'],
+                                         extra_link_args=['-fopenmp'],
+                                         language="c++",
+                                         include_dirs=[np.get_include()])]),
       zip_safe = False
       )

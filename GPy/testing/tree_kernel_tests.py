@@ -1107,6 +1107,20 @@ class SSTKParallelCheckingTests(unittest.TestCase):
     """
     Tests for the SSTK Parallel version.
     """
+    def test_gen_node_list1(self):
+        tree = '(S (NP ns) (VP v))'
+        k = SST(parallel=True)
+        result = [('NP ns', None), ('S NP VP', [0, 2]), ('VP v', None)]
+        self.assertEqual(k.kernel._gen_node_list(tree), result)
+
+    def test_gen_node_list2(self):
+        tree = '(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'
+        k = SST(parallel=True)
+        #result = [('NP ns', None), ('S NP VP', [0, 2]), ('VP v', None)]
+        result = [('ADJ colorless', None), ('ADV furiously', None), ('N ideas', None), ('NP ADJ N', [0, 2]), ('S NP VP', [3, 6]), ('V sleep', None), ('VP V ADV', [5, 1])]
+        #print k.kernel._gen_node_list(tree)
+        self.assertEqual(k.kernel._gen_node_list(tree), result)
+
     def test_if_convert_np_arrays_to_string_vectors(self):
         X = np.array([['(S (NP ns) (VP v))'],
                       ['(S (NP n) (VP v))'],
@@ -1115,8 +1129,11 @@ class SSTKParallelCheckingTests(unittest.TestCase):
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
         k = SST(parallel=True)
-        target = np.zeros(shape=(len(X), len(X)))
+        start_time = datetime.datetime.now()
         target = k.K(X)
+        end_time = datetime.datetime.now()
+        print target
+        print end_time - start_time
 
 
 if __name__ == "__main__":
