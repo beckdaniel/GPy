@@ -1128,7 +1128,7 @@ class SSTKParallelCheckingTests(unittest.TestCase):
                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                      dtype=object)
-        k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False)
+        k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False, num_threads=1)
         start_time = datetime.datetime.now()
         target = k.K(X)
         end_time = datetime.datetime.now()
@@ -1146,29 +1146,40 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
         #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 500
+        TREES = 300
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
-        k = SST(parallel=True, normalize=False)
+        k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False, num_threads=1)
         target = np.zeros(shape=(len(X), len(X)))
         ITS = 1
 
-        #import cProfile, StringIO, pstats
-        #pr = cProfile.Profile()
-        #pr.enable()
+        import cProfile, StringIO, pstats
+        pr = cProfile.Profile()
+        pr.enable()
         start_time = datetime.datetime.now()
         for i in range(ITS):
             target += k.K(X)
-        #pr.disable()
+        pr.disable()
         end_time = datetime.datetime.now()
-        #s = StringIO.StringIO()
-        #sortby = 'cumulative'
-        #ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
-        #ps.print_stats(20)
-        #print s.getvalue()
-        print target/ITS
-        print target.shape
+        s = StringIO.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        ps.print_stats(20)
+        print s.getvalue()
+        #print target/ITS
+        #print target.shape
+        #print end_time - start_time
+
+        k2 = SST(parallel=False,  _lambda=1, _sigma=1, normalize=False)
+        start_time2 = datetime.datetime.now()
+        target2 = k2.K(X)
+        end_time2 = datetime.datetime.now()
+        print target
+        print target2
+        print "PARALLEL: ",
         print end_time - start_time
+        print "SINGLE: ",
+        print end_time2 - start_time2
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
