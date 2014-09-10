@@ -318,6 +318,9 @@ class CySubsetTreeKernel(object):
             K_result, dlambda, dsigma = self.delta(node_pair[0], node_pair[1], dict1, dict2,
                                                    delta_matrix, dlambda_matrix, dsigma_matrix,
                                                    _lambda, _sigma)
+            #K_result = 4
+            #dlambda = 6
+            #dsigma = 9
             K_total += K_result
             dlambda_total += dlambda
             dsigma_total += dsigma
@@ -388,15 +391,18 @@ ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
 ctypedef pair[int, int] IntPair
 ctypedef vector[IntPair] VecIntPair
-ctypedef pair[double, double] DoublePair
-ctypedef pair[double, DoublePair] Triple
+#ctypedef pair[double, double] DoublePair
+#ctypedef pair[double, DoublePair] Triple
 #ctypedef unordered_map[int, double] DPCell
 #ctypedef unordered_map[int, DPCell] DPStruct
 #ctypedef map[int, double] DPStruct
 ctypedef map[int, double] DPCell
 ctypedef map[int, DPCell] DPStruct
 ctypedef map[IntPair, double] DPStruct2
-
+ctypedef struct Result:
+    double k
+    double dlambda
+    double dsigma
 
 ctypedef pair[NodePair, IntPair] PairTup
 ctypedef vector[PairTup] VecPairTup
@@ -563,7 +569,7 @@ class ParSubsetTreeKernel(object):
         cdef VecNode vecnode2
         cdef double _lambda = self._lambda
         cdef double _sigma = self._sigma
-        cdef Triple k_dlambda_dsigma
+        cdef Result k_dlambda_dsigma
         if self.normalize:
             normalize = 1
         else:
@@ -573,8 +579,8 @@ class ParSubsetTreeKernel(object):
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         cdef int num_threads = self.num_threads
         print "NUM THREADS: %d" % num_threads
-        with nogil, parallel(num_threads=num_threads):
-            for i in prange(X_len):
+        #with nogil, parallel(num_threads=num_threads):
+        for i in range(X_len):
                 #j = 0
                 for j in range(X2_len):
                     if symmetric:
@@ -607,9 +613,9 @@ class ParSubsetTreeKernel(object):
                 #    dlambdas[i][j] = dlambda_norm
                 #    dsigmas[i][j] = dsigma_norm
                 #else:
-                    Ks[i,j] = k_dlambda_dsigma.first
-                    dlambdas[i,j] = k_dlambda_dsigma.second.first
-                    dsigmas[i,j] = k_dlambda_dsigma.second.second
+                    Ks[i,j] = k_dlambda_dsigma.k
+                    dlambdas[i,j] = k_dlambda_dsigma.dlambda
+                    dsigmas[i,j] = k_dlambda_dsigma.dsigma
 
         return (Ks, dlambdas, dsigmas)
 
@@ -654,7 +660,7 @@ cdef void print_int_pairs(VecIntPair int_pairs) nogil:
 #        printf("- (%d, %d); ", node_pair.second.first, node_pair.second.second)
 #    printf("]\n")
 
-cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
+cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2):# nogil:
     """
     The node pair detection method devised by Moschitti (2006).
     """
@@ -694,7 +700,7 @@ cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
     return int_pairs
 
 
-cdef Triple calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _sigma) nogil:
+cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _sigma):# nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -703,7 +709,7 @@ cdef Triple calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _s
     cdef double dlambda_total = 0
     cdef double dsigma_total = 0
     cdef double K_result, dlambda, dsigma
-    cdef Triple result
+    cdef Result result
     cdef VecIntPair node_pairs
     node_pairs = get_node_pairs(vecnode1, vecnode2)
 
@@ -718,20 +724,28 @@ cdef Triple calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _s
         result = delta(int_pair, vecnode1, vecnode2,
                        delta_matrix, dlambda_matrix,
                        dsigma_matrix, _lambda, _sigma)
+        #result.first = 4
+        #result.second.first = 6
+        #result.second.second = 9
+        K_total += result.k
+        dlambda_total += result.dlambda
+        dsigma_total += result.dsigma
 
-        K_total += result.first
-        dlambda_total += result.second.first
-        dsigma_total += result.second.second
-    result.first = K_total
-    result.second.first = dlambda_total
-    result.second.second = dsigma_total
+    result.k = K_total
+    result.dlambda = dlambda_total
+    result.dsigma = dsigma_total
+
     return result
 
+cdef double get_element(DPStruct2 matrix, IntPair key):
+    return matrix[key]
 
+cdef void set_element(DPStruct2 matrix, IntPair key, double val):
+    matrix[key] = val
 
-cdef Triple delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
+cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
                   DPStruct2 delta_matrix, DPStruct2 dlambda_matrix,
-                  DPStruct2 dsigma_matrix, double _lambda, double _sigma) nogil:
+                  DPStruct2 dsigma_matrix, double _lambda, double _sigma):# nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
@@ -741,16 +755,20 @@ cdef Triple delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
     cdef IntList children1, children2
     cdef CNode node1, node2
     cdef IntPair ch_pair
-    cdef Triple result
+    cdef Result result
     #val = delta_matrix[int_pair.first][int_pair.second]
     val = delta_matrix[int_pair]
+    #val = get_element(delta_matrix, int_pair)
     #printf("VAL: %f\n",val)
     if val > 0:
-        result.first = val
         #result.second.first = dlambda_matrix[int_pair.first][int_pair.second]
         #result.second.second = dsigma_matrix[int_pair.first][int_pair.second]
-        result.second.first = dlambda_matrix[int_pair]
-        result.second.second = dsigma_matrix[int_pair]
+        #result.second.first = get_element(dlambda_matrix, int_pair)
+        #result.second.second = get_element(dsigma_matrix, int_pair)
+        result.k = val
+        result.dlambda = dlambda_matrix[int_pair]
+        result.dsigma = dsigma_matrix[int_pair]
+
         return result
 
     node1 = vecnode1[int_pair.first]
@@ -759,9 +777,11 @@ cdef Triple delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
         #dlambda_matrix[int_pair.first][int_pair.second] = 1
         delta_matrix[int_pair] = _lambda
         dlambda_matrix[int_pair] = 1
-        result.first = _lambda
-        result.second.first = 1
-        result.second.second = 0
+        #set_element(delta_matrix, int_pair, _lambda)
+        #set_element(dlambda_matrix, int_pair, 1)
+        result.k = _lambda
+        result.dlambda = 1
+        result.dsigma = 0
         return result
 
     node2 = vecnode2[int_pair.second]
@@ -779,9 +799,10 @@ cdef Triple delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
             result = delta(ch_pair, vecnode1, vecnode2,
                            delta_matrix, dlambda_matrix,
                            dsigma_matrix, _lambda, _sigma)
-            K_result = result.first
-            dlambda = result.second.first
-            dsigma = result.second.second
+            K_result = result.k
+            dlambda = result.dlambda
+            dsigma = result.dsigma
+
             denom = _sigma + K_result
             prod *= denom
             sum_lambda += dlambda / denom
@@ -800,10 +821,13 @@ cdef Triple delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
     delta_matrix[int_pair] = delta_result
     dlambda_matrix[int_pair] = dlambda_result
     dsigma_matrix[int_pair] = dsigma_result
+    #set_element(delta_matrix, int_pair, delta_result)
+    #set_element(dlambda_matrix, int_pair, dlambda_result)
+    #set_element(dsigma_matrix, int_pair, dsigma_result)
 
-    result.first = delta_result
-    result.second.first = dlambda_result
-    result.second.second = dsigma_result
+    result.k = delta_result
+    result.dlambda = dlambda_result
+    result.dsigma = dsigma_result
     return result
 
 #endif //CY_TREE_H

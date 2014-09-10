@@ -1151,6 +1151,7 @@ class SSTKParallelCheckingTests(unittest.TestCase):
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False, num_threads=1)
         target = np.zeros(shape=(len(X), len(X)))
+        target2 = np.zeros(shape=(len(X), len(X)))
         ITS = 1
 
         import cProfile, StringIO, pstats
@@ -1171,9 +1172,18 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         #print end_time - start_time
 
         k2 = SST(parallel=False,  _lambda=1, _sigma=1, normalize=False)
+        pr = cProfile.Profile()
+        pr.enable()
         start_time2 = datetime.datetime.now()
-        target2 = k2.K(X)
+        for i in range(ITS):
+            target2 += k2.K(X)
+        pr.disable()
         end_time2 = datetime.datetime.now()
+        s = StringIO.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        ps.print_stats(20)
+        print s.getvalue()
         print target
         print target2
         print "PARALLEL: ",
