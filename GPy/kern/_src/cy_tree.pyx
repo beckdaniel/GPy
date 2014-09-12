@@ -1,7 +1,7 @@
 #ifndef CY_TREE_H
 #define CY_TREE_H
 # distutils: language = c++
-# cython: profile=True
+# cython: profile=False
 import nltk
 import numpy as np
 cimport numpy as np
@@ -585,8 +585,8 @@ class ParSubsetTreeKernel(object):
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         cdef int num_threads = self.num_threads
         print "NUM THREADS: %d" % num_threads
-        #with nogil, parallel(num_threads=num_threads):
-        for i in range(X_len):
+        with nogil, parallel(num_threads=num_threads):
+            for i in range(X_len):
                 #j = 0
                 for j in range(X2_len):
                     if symmetric:
@@ -666,7 +666,7 @@ cdef void print_int_pairs(VecIntPair int_pairs) nogil:
 #        printf("- (%d, %d); ", node_pair.second.first, node_pair.second.second)
 #    printf("]\n")
 
-cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2):# nogil:
+cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
     """
     The node pair detection method devised by Moschitti (2006).
     """
@@ -706,7 +706,7 @@ cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2):# nogil:
     return int_pairs
 
 
-cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _sigma):# nogil:
+cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _sigma) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -740,6 +740,7 @@ cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _s
     for i in range(len1):
         for j in range(len2):
             index = i * len2 + j
+            #index = i + (len1 * j)
             delta_matrix[index] = 0
             dlambda_matrix[index] = 0
             dsigma_matrix[index] = 0
@@ -791,7 +792,7 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
                   double* dlambda_matrix,
                   double* dsigma_matrix,
                   double _lambda, double _sigma,
-                  double* k, double* dlambda, double* dsigma):# nogil:
+                  double* k, double* dlambda, double* dsigma) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
@@ -810,6 +811,9 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
     #val = delta_matrix[int_pair]
     cdef int len2 = vecnode2.size()
     cdef int index = id1 * len2 + id2
+    #cdef int len1 = vecnode1.size()
+    #cdef int index = id1 + (len1 * id2)
+
     val = delta_matrix[index]
     #val = get_element(delta_matrix, int_pair)
     #printf("VAL: %f\n",val)
