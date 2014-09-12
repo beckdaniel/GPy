@@ -15,8 +15,10 @@ from libcpp.pair cimport pair
 from libcpp.list cimport list as clist
 from libcpp.vector cimport vector
 from libc.stdio cimport printf
+from libc.stdlib cimport malloc, free
 import multiprocessing as mp
 cimport cython
+from cython cimport view
 
 cdef extern from "math.h":
     double sqrt(double x)
@@ -399,6 +401,10 @@ ctypedef vector[IntPair] VecIntPair
 ctypedef map[int, double] DPCell
 ctypedef map[int, DPCell] DPStruct
 ctypedef map[IntPair, double] DPStruct2
+#ctypedef view.array DPStruct2
+#ctypedef double** DPStruct2
+#ctypedef double** DPStruct3
+#ctypedef np.ndarray[DTYPE_t, ndim=2] DPStruct3
 ctypedef struct Result:
     double k
     double dlambda
@@ -708,7 +714,7 @@ cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _s
     cdef double K_total = 0
     cdef double dlambda_total = 0
     cdef double dsigma_total = 0
-    cdef double K_result, dlambda, dsigma
+    #cdef double K_result, dlambda, dsigma
     cdef Result result
     cdef VecIntPair node_pairs
     node_pairs = get_node_pairs(vecnode1, vecnode2)
@@ -716,24 +722,61 @@ cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _s
     # Initialize the DP structure. Python dicts are quite
     # efficient already but maybe a specialized C structure
     # would be better?
-    cdef DPStruct2 delta_matrix
-    cdef DPStruct2 dlambda_matrix
-    cdef DPStruct2 dsigma_matrix
+    #cdef DPStruct2 delta_matrix
+    #cdef DPStruct2 dlambda_matrix
+    #cdef DPStruct2 dsigma_matrix
+    cdef int len1 = vecnode1.size()
+    cdef int len2 = vecnode2.size()
+    #cdef DPStruct2 delta_matrix = view.array(shape=(len1, len2), itemsize=sizeof(double), format='d')
+    #cdef DPStruct2 dlambda_matrix = view.array(shape=(len1, len2), itemsize=sizeof(double), format='d')
+    #cdef DPStruct2 dsigma_matrix = view.array(shape=(len1, len2), itemsize=sizeof(double), format='d')
+    cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    cdef double* dlambda_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    cdef double* dsigma_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    
+    cdef int i, j
+    cdef int index
 
+    for i in range(len1):
+        for j in range(len2):
+            index = i * len2 + j
+            delta_matrix[index] = 0
+            dlambda_matrix[index] = 0
+            dsigma_matrix[index] = 0
+
+    cdef double *k = <double*> malloc(sizeof(double))
+    cdef double *dlambda = <double*> malloc(sizeof(double))
+    cdef double *dsigma = <double*> malloc(sizeof(double))
+
+
+    #printf("ALLOCATED\n")
     for int_pair in node_pairs:
-        result = delta(int_pair, vecnode1, vecnode2,
+        #result = delta(int_pair, vecnode1, vecnode2,
+        delta(int_pair, vecnode1, vecnode2,
                        delta_matrix, dlambda_matrix,
-                       dsigma_matrix, _lambda, _sigma)
-        #result.first = 4
-        #result.second.first = 6
-        #result.second.second = 9
-        K_total += result.k
-        dlambda_total += result.dlambda
-        dsigma_total += result.dsigma
+                       dsigma_matrix, _lambda, _sigma,
+                       k, dlambda, dsigma)
+        #result.k = 4
+        #result.dlambda = 6
+        #result.dsigma = 9
+        #K_total += result.k
+        #dlambda_total += result.dlambda
+        #dsigma_total += result.dsigma
+        K_total += k[0]
+        dlambda_total += dlambda[0]
+        dsigma_total += dsigma[0]
+
 
     result.k = K_total
     result.dlambda = dlambda_total
     result.dsigma = dsigma_total
+
+    free(delta_matrix)
+    free(dlambda_matrix)
+    free(dsigma_matrix)
+    free(k)
+    free(dlambda)
+    free(dsigma)
 
     return result
 
@@ -744,20 +787,30 @@ cdef void set_element(DPStruct2 matrix, IntPair key, double val):
     matrix[key] = val
 
 cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
-                  DPStruct2 delta_matrix, DPStruct2 dlambda_matrix,
-                  DPStruct2 dsigma_matrix, double _lambda, double _sigma):# nogil:
+                  double* delta_matrix,
+                  double* dlambda_matrix,
+                  double* dsigma_matrix,
+                  double _lambda, double _sigma,
+                  double* k, double* dlambda, double* dsigma):# nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
     """
-    cdef int id1, id2, ch1, ch2, i
-    cdef double val, prod, K_result, dlambda, dsigma, sum_lambda, sum_sigma, denom
+    cdef int ch1, ch2, i
+    cdef double val, prod, 
+    #K_result, dlambda, dsigma, 
+    cdef double sum_lambda, sum_sigma, denom
     cdef IntList children1, children2
     cdef CNode node1, node2
     cdef IntPair ch_pair
     cdef Result result
+    cdef int id1 = int_pair.first
+    cdef int id2 = int_pair.second
     #val = delta_matrix[int_pair.first][int_pair.second]
-    val = delta_matrix[int_pair]
+    #val = delta_matrix[int_pair]
+    cdef int len2 = vecnode2.size()
+    cdef int index = id1 * len2 + id2
+    val = delta_matrix[index]
     #val = get_element(delta_matrix, int_pair)
     #printf("VAL: %f\n",val)
     if val > 0:
@@ -765,26 +818,39 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
         #result.second.second = dsigma_matrix[int_pair.first][int_pair.second]
         #result.second.first = get_element(dlambda_matrix, int_pair)
         #result.second.second = get_element(dsigma_matrix, int_pair)
-        result.k = val
-        result.dlambda = dlambda_matrix[int_pair]
-        result.dsigma = dsigma_matrix[int_pair]
-
+        #result.k = val
+        k[0] = val
+        #result.dlambda = dlambda_matrix[int_pair]
+        #result.dsigma = dsigma_matrix[int_pair]
+        #result.dlambda = dlambda_matrix[index]
+        #result.dsigma = dsigma_matrix[index]
+        dlambda[0] = dlambda_matrix[index]
+        dsigma[0] = dsigma_matrix[index]
+        
         return result
 
-    node1 = vecnode1[int_pair.first]
+    #node1 = vecnode1[int_pair.first]
+    node1 = vecnode1[id1]
     if node1.second.empty():
         #delta_matrix[int_pair.first][int_pair.second] = _lambda
         #dlambda_matrix[int_pair.first][int_pair.second] = 1
-        delta_matrix[int_pair] = _lambda
-        dlambda_matrix[int_pair] = 1
+        #delta_matrix[int_pair] = _lambda
+        #dlambda_matrix[int_pair] = 1
         #set_element(delta_matrix, int_pair, _lambda)
         #set_element(dlambda_matrix, int_pair, 1)
-        result.k = _lambda
-        result.dlambda = 1
-        result.dsigma = 0
+        delta_matrix[index] = _lambda
+        dlambda_matrix[index] = 1
+
+        #result.k = _lambda
+        #result.dlambda = 1
+        #result.dsigma = 0
+        k[0] = _lambda
+        dlambda[0] = 1
+        dsigma[0] = 0
         return result
 
-    node2 = vecnode2[int_pair.second]
+    #node2 = vecnode2[int_pair.second]
+    node2 = vecnode2[id2]
     prod = 1
     sum_lambda = 0
     sum_sigma = 0
@@ -798,15 +864,20 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
             ch_pair.second = ch2
             result = delta(ch_pair, vecnode1, vecnode2,
                            delta_matrix, dlambda_matrix,
-                           dsigma_matrix, _lambda, _sigma)
-            K_result = result.k
-            dlambda = result.dlambda
-            dsigma = result.dsigma
+                           dsigma_matrix, _lambda, _sigma,
+                           k, dlambda, dsigma)
+            #K_result = result.k
+            #dlambda = result.dlambda
+            #dsigma = result.dsigma
+            #K_result = k[0]
+            #dlambda = dlambda[0]
+            #dsigma = dsigma[0]
 
-            denom = _sigma + K_result
+            #denom = _sigma + K_result
+            denom = _sigma + k[0]
             prod *= denom
-            sum_lambda += dlambda / denom
-            sum_sigma += (1 + dsigma) / denom
+            sum_lambda += dlambda[0] / denom
+            sum_sigma += (1 + dsigma[0]) / denom
         else:
             prod *= _sigma
             sum_sigma += 1 /_sigma
@@ -818,16 +889,23 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
     #delta_matrix[int_pair.first][int_pair.second] = delta_result
     #dlambda_matrix[int_pair.first][int_pair.second] = dlambda_result
     #dsigma_matrix[int_pair.first][int_pair.second] = dsigma_result
-    delta_matrix[int_pair] = delta_result
-    dlambda_matrix[int_pair] = dlambda_result
-    dsigma_matrix[int_pair] = dsigma_result
+    #delta_matrix[int_pair] = delta_result
+    #dlambda_matrix[int_pair] = dlambda_result
+    #dsigma_matrix[int_pair] = dsigma_result
     #set_element(delta_matrix, int_pair, delta_result)
     #set_element(dlambda_matrix, int_pair, dlambda_result)
     #set_element(dsigma_matrix, int_pair, dsigma_result)
+    delta_matrix[index] = delta_result
+    dlambda_matrix[index] = dlambda_result
+    dsigma_matrix[index] = dsigma_result
 
-    result.k = delta_result
-    result.dlambda = dlambda_result
-    result.dsigma = dsigma_result
+    #result.k = delta_result
+    #result.dlambda = dlambda_result
+    #result.dsigma = dsigma_result
+    k[0] = delta_result
+    dlambda[0] = dlambda_result
+    dsigma[0] = dsigma_result
+
     return result
 
 #endif //CY_TREE_H
