@@ -586,7 +586,7 @@ class ParSubsetTreeKernel(object):
         cdef int num_threads = self.num_threads
         print "NUM THREADS: %d" % num_threads
         with nogil, parallel(num_threads=num_threads):
-            for i in range(X_len):
+            for i in prange(X_len):
                 #j = 0
                 for j in range(X2_len):
                     if symmetric:
@@ -787,7 +787,10 @@ cdef double get_element(DPStruct2 matrix, IntPair key):
 cdef void set_element(DPStruct2 matrix, IntPair key, double val):
     matrix[key] = val
 
-cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
+cdef CNode get_node(VecNode vecnode, int i):
+    return vecnode[i]
+
+cdef void delta(IntPair int_pair, VecNode& vecnode1, VecNode& vecnode2,
                   double* delta_matrix,
                   double* dlambda_matrix,
                   double* dsigma_matrix,
@@ -804,13 +807,13 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
     cdef IntList children1, children2
     cdef CNode node1, node2
     cdef IntPair ch_pair
-    cdef Result result
+    #cdef Result result
     cdef int id1 = int_pair.first
     cdef int id2 = int_pair.second
     #val = delta_matrix[int_pair.first][int_pair.second]
     #val = delta_matrix[int_pair]
-    cdef int len2 = vecnode2.size()
-    cdef int index = id1 * len2 + id2
+    #cdef int len2 = vecnode2.size()
+    cdef int index = id1 * vecnode2.size() + id2
     #cdef int len1 = vecnode1.size()
     #cdef int index = id1 + (len1 * id2)
 
@@ -831,10 +834,12 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
         dlambda[0] = dlambda_matrix[index]
         dsigma[0] = dsigma_matrix[index]
         
-        return result
+        #return result
+        return
 
     #node1 = vecnode1[int_pair.first]
     node1 = vecnode1[id1]
+    #node1 = get_node(vecnode1, id1)
     if node1.second.empty():
         #delta_matrix[int_pair.first][int_pair.second] = _lambda
         #dlambda_matrix[int_pair.first][int_pair.second] = 1
@@ -851,10 +856,12 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
         k[0] = _lambda
         dlambda[0] = 1
         dsigma[0] = 0
-        return result
+        #return result
+        return
 
     #node2 = vecnode2[int_pair.second]
     node2 = vecnode2[id2]
+    #node2 = get_node(vecnode2, id2)
     prod = 1
     sum_lambda = 0
     sum_sigma = 0
@@ -864,12 +871,14 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
         ch1 = children1[i]
         ch2 = children2[i]
         if vecnode1[ch1].first == vecnode2[ch2].first:
+        #if vecnode1[ch1].first.compare(vecnode2[ch2].first) == 0:
             ch_pair.first = ch1
             ch_pair.second = ch2
-            result = delta(ch_pair, vecnode1, vecnode2,
-                           delta_matrix, dlambda_matrix,
-                           dsigma_matrix, _lambda, _sigma,
-                           k, dlambda, dsigma)
+            #result = delta(ch_pair, vecnode1, vecnode2,
+            delta(ch_pair, vecnode1, vecnode2,
+                  delta_matrix, dlambda_matrix,
+                  dsigma_matrix, _lambda, _sigma,
+                  k, dlambda, dsigma)
             #K_result = result.k
             #dlambda = result.dlambda
             #dsigma = result.dsigma
@@ -910,6 +919,6 @@ cdef Result delta(IntPair int_pair, VecNode vecnode1, VecNode vecnode2,
     dlambda[0] = dlambda_result
     dsigma[0] = dsigma_result
 
-    return result
+    #return result
 
 #endif //CY_TREE_H
