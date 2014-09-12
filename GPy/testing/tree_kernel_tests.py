@@ -1146,7 +1146,7 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
         #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 500
+        TREES = 300
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False, num_threads=4)

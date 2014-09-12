@@ -666,7 +666,7 @@ cdef void print_int_pairs(VecIntPair int_pairs) nogil:
 #        printf("- (%d, %d); ", node_pair.second.first, node_pair.second.second)
 #    printf("]\n")
 
-cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
+cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     """
     The node pair detection method devised by Moschitti (2006).
     """
@@ -706,7 +706,7 @@ cdef VecIntPair get_node_pairs(VecNode vecnode1, VecNode vecnode2) nogil:
     return int_pairs
 
 
-cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _sigma) nogil:
+cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double _sigma) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -743,14 +743,14 @@ cdef Result calc_K(VecNode vecnode1, VecNode vecnode2, double _lambda, double _s
 
     #printf("ALLOCATED\n")
     for int_pair in node_pairs:
-        delta(int_pair, vecnode1, vecnode2,
-                       delta_matrix, dlambda_matrix,
-                       dsigma_matrix, _lambda, _sigma,
-                       k, dlambda, dsigma)
+        delta(int_pair.first, int_pair.second, 
+              vecnode1, vecnode2,
+              delta_matrix, dlambda_matrix,
+              dsigma_matrix, _lambda, _sigma,
+              k, dlambda, dsigma)
         K_total += k[0]
         dlambda_total += dlambda[0]
         dsigma_total += dsigma[0]
-
 
     result.k = K_total
     result.dlambda = dlambda_total
@@ -774,7 +774,8 @@ cdef void set_element(DPStruct2 matrix, IntPair key, double val):
 cdef CNode get_node(VecNode vecnode, int i):
     return vecnode[i]
 
-cdef void delta(IntPair int_pair, VecNode& vecnode1, VecNode& vecnode2,
+#cdef void delta(IntPair int_pair, VecNode& vecnode1, VecNode& vecnode2,
+cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
                   double* delta_matrix,
                   double* dlambda_matrix,
                   double* dsigma_matrix,
@@ -789,9 +790,9 @@ cdef void delta(IntPair int_pair, VecNode& vecnode1, VecNode& vecnode2,
     cdef double sum_lambda, sum_sigma, denom
     cdef IntList children1, children2
     cdef CNode node1, node2
-    cdef IntPair ch_pair
-    cdef int id1 = int_pair.first
-    cdef int id2 = int_pair.second
+    #cdef IntPair ch_pair
+    #cdef int id1 = int_pair.first
+    #cdef int id2 = int_pair.second
     cdef int len2 = vecnode2.size()
     cdef int index = id1 * len2 + id2
     val = delta_matrix[index]
@@ -821,9 +822,10 @@ cdef void delta(IntPair int_pair, VecNode& vecnode1, VecNode& vecnode2,
         ch1 = children1[i]
         ch2 = children2[i]
         if vecnode1[ch1].first == vecnode2[ch2].first:
-            ch_pair.first = ch1
-            ch_pair.second = ch2
-            delta(ch_pair, vecnode1, vecnode2,
+            #ch_pair.first = ch1
+            #ch_pair.second = ch2
+            #delta(ch_pair, vecnode1, vecnode2,
+            delta(ch1, ch2, vecnode1, vecnode2,
                   delta_matrix, dlambda_matrix,
                   dsigma_matrix, _lambda, _sigma,
                   k, dlambda, dsigma)
