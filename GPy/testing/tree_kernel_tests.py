@@ -12,6 +12,8 @@ from GPy.kern import OldSubsetTreeKernel as OldSST
 import sys
 import datetime
 
+np.set_printoptions(suppress=True)
+
 @unittest.skip("skip")
 class NaiveSubsetTreeKernelTests(unittest.TestCase):
     """
@@ -1050,7 +1052,7 @@ class SSTProfilingTests(unittest.TestCase):
         print "SSTW2"
         print end_time - start_time
 
-    #@unittest.skip("skip")
+    @unittest.skip("skip")
     def test_prof_K_cy3(self):
         #TREES_TRAIN = 'cython_kernels/test/ALL.stanford-np'
         #TREES_TRAIN = 'GPy/testing/qc_trees.txt'
@@ -1194,13 +1196,14 @@ class SSTKParallelCheckingTests(unittest.TestCase):
 
     def test_prof_K_cy_par_noprof(self):
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 500
+        TREES = 600
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False, num_threads=4)
         target = np.zeros(shape=(len(X), len(X)))
         target2 = np.zeros(shape=(len(X), len(X)))
         ITS = 1
+ 
 
         start_time = datetime.datetime.now()
         for i in range(ITS):
@@ -1212,12 +1215,32 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         for i in range(ITS):
             target2 += k2.K(X)
         end_time2 = datetime.datetime.now()
-        print target
-        print target2
+        import pprint
+        #np.set_printoptions(suppress=True, precision=1)
+        #np.savetxt(sys.stdout, target, "%5.2f")
+        print ''
+        #np.savetxt(sys.stdout, target2, "%5.2f")
+        #print target2
         print "PARALLEL: ",
         print end_time - start_time
         print "SINGLE: ",
         print end_time2 - start_time2
+        #print np.argwhere((target != target2))
+        
+        t1, t2 = np.where(target != target2)
+        l1 = list(t1)
+        l2 = list(t2)
+        print t1
+        print t2
+        for i1, i2 in zip(t1, t2):
+            print target[i1][i2],
+            print target2[i1][i2]
+        #print nltk.Tree(X[36][0])
+        #print nltk.Tree(X[37][0])
+        l1.sort()
+        l2.sort()
+        print l1 == l2
+        #self.assertTrue((target == target2).all())
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

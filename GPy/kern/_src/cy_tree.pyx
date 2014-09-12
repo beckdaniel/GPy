@@ -575,7 +575,7 @@ class ParSubsetTreeKernel(object):
         cdef VecNode vecnode2
         cdef double _lambda = self._lambda
         cdef double _sigma = self._sigma
-        cdef Result k_dlambda_dsigma
+        cdef Result result
         if self.normalize:
             normalize = 1
         else:
@@ -586,7 +586,7 @@ class ParSubsetTreeKernel(object):
         cdef int num_threads = self.num_threads
         print "NUM THREADS: %d" % num_threads
         with nogil, parallel(num_threads=num_threads):
-            for i in prange(X_len, schedule='guided'):
+            for i in prange(X_len, schedule='dynamic'):
                 #j = 0
                 for j in range(X2_len):
                     if symmetric:
@@ -599,7 +599,7 @@ class ParSubsetTreeKernel(object):
                         
                     vecnode = X_list[i]
                     vecnode2 = X2_list[j]
-                    k_dlambda_dsigma = calc_K(vecnode, vecnode2, _lambda, _sigma)
+                    result = calc_K(vecnode, vecnode2, _lambda, _sigma)
 
                 # Normalization happens here.
                 #if self.normalize:
@@ -619,9 +619,13 @@ class ParSubsetTreeKernel(object):
                 #    dlambdas[i][j] = dlambda_norm
                 #    dsigmas[i][j] = dsigma_norm
                 #else:
-                    Ks[i,j] = k_dlambda_dsigma.k
-                    dlambdas[i,j] = k_dlambda_dsigma.dlambda
-                    dsigmas[i,j] = k_dlambda_dsigma.dsigma
+                    Ks[i,j] = result.k
+                    dlambdas[i,j] = result.dlambda
+                    dsigmas[i,j] = result.dsigma
+                    if symmetric:
+                        Ks[j,i] = result.k
+                        dlambdas[j,i] = result.dlambda
+                        dsigmas[j,i] = result.dsigma
 
         return (Ks, dlambdas, dsigmas)
 
