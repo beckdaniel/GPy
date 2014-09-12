@@ -10,7 +10,7 @@ from collections import defaultdict
 from libcpp.string cimport string
 from libcpp.map cimport map
 #from libcpp.unordered_map cimport unordered_map
-from unordered_map cimport unordered_map
+#from unordered_map cimport unordered_map
 from libcpp.pair cimport pair
 from libcpp.list cimport list as clist
 from libcpp.vector cimport vector
