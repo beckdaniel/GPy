@@ -586,7 +586,7 @@ class ParSubsetTreeKernel(object):
         cdef int num_threads = self.num_threads
         print "NUM THREADS: %d" % num_threads
         with nogil, parallel(num_threads=num_threads):
-            for i in prange(X_len):
+            for i in prange(X_len, schedule='guided'):
                 #j = 0
                 for j in range(X2_len):
                     if symmetric:
