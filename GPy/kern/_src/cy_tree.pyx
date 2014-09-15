@@ -284,6 +284,8 @@ class CySubsetTreeKernel(object):
                         while n1.production == n2.production:
                             node_pairs.append((n1, n2))
                             i2 += 1
+                            if i2 >= len(nodes2):
+                                break
                             n2 = nodes2[i2]
                         i1 += 1
                         i2 = reset2
@@ -639,7 +641,7 @@ cdef void print_node(CNode node) nogil:
         printf("%d, ", ch)
     printf("])")
 
-cdef void print_vecnode(VecNode vecnode) nogil:
+cdef void print_vec_node(VecNode vecnode) nogil:
     printf("[")
     for node in vecnode:
         print_node(node)
@@ -681,6 +683,7 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
     cdef IntPair tup
+    cdef int reset2
     while True:
         if (i1 >= len1) or (i2 >= len2):
             return int_pairs
@@ -699,7 +702,8 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
                     int_pairs.push_back(tup)
                     i2 += 1
                     if i2 >= len2:
-                        return int_pairs
+                        #return int_pairs
+                        break
                     n2 = vecnode2[i2]
                 i1 += 1
                 if i1 >= len1:
@@ -721,7 +725,11 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
     cdef Result result
     cdef VecIntPair node_pairs
     node_pairs = get_node_pairs(vecnode1, vecnode2)
-
+    #printf("\n\n")
+    #print_int_pairs(node_pairs)
+    #printf("\n\n")
+    #print_vec_node(vecnode1)
+    #print_vec_node(vecnode2)
     # Initialize the DP structure. Python dicts are quite
     # efficient already but maybe a specialized C structure
     # would be better?
@@ -747,6 +755,8 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
 
     #printf("ALLOCATED\n")
     for int_pair in node_pairs:
+        #print_node(vecnode1[int_pair.first])
+        #print_node(vecnode2[int_pair.second])
         delta(int_pair.first, int_pair.second, 
               vecnode1, vecnode2,
               delta_matrix, dlambda_matrix,
@@ -769,16 +779,6 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
 
     return result
 
-cdef double get_element(DPStruct2 matrix, IntPair key):
-    return matrix[key]
-
-cdef void set_element(DPStruct2 matrix, IntPair key, double val):
-    matrix[key] = val
-
-cdef CNode get_node(VecNode vecnode, int i):
-    return vecnode[i]
-
-#cdef void delta(IntPair int_pair, VecNode& vecnode1, VecNode& vecnode2,
 cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
                   double* delta_matrix,
                   double* dlambda_matrix,

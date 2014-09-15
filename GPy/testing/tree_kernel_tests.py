@@ -1105,6 +1105,7 @@ class SSTProfilingTests(unittest.TestCase):
         ps.print_stats(20)
         print s.getvalue()
 
+
 class SSTKParallelCheckingTests(unittest.TestCase):
     """
     Tests for the SSTK Parallel version.
@@ -1194,9 +1195,10 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         print "SINGLE: ",
         print end_time2 - start_time2
 
+    #@unittest.skip("skip")
     def test_prof_K_cy_par_noprof(self):
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 600
+        TREES = 100
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
         k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False, num_threads=4)
@@ -1230,17 +1232,30 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         t1, t2 = np.where(target != target2)
         l1 = list(t1)
         l2 = list(t2)
-        print t1
-        print t2
-        for i1, i2 in zip(t1, t2):
-            print target[i1][i2],
-            print target2[i1][i2]
-        #print nltk.Tree(X[36][0])
-        #print nltk.Tree(X[37][0])
+        #print t1
+        #print t2
+        #for i1, i2 in zip(t1, t2):
+        #    print target[i1][i2],
+        #    print target2[i1][i2]
+        #print nltk.Tree(X[5][0])
+        #print nltk.Tree(X[67][0])
+        #print (X[5][0])
+        #print (X[67][0])
+
         l1.sort()
         l2.sort()
-        print l1 == l2
+        #print l1 == l2
         #self.assertTrue((target == target2).all())
+
+    def test_correct_K_1(self):
+        X = np.array([["(ROOT (S (NP (DT The) (JJ presidential) (NN couple)) (ADVP (RB then)) (VP (VBZ has) (NP (NP (DT a) (NN meeting)) (VP (VBN scheduled) (PP (IN with) (NP (NP (NNP King) (NNP Harald) (NNP V) (CC and) (NNP Queen) (NNP Sonja)) (PP (IN of) (NP (NNP Norway)))))))) (. .)))"], ["(ROOT (S (NP (DT This)) (VP (VBZ is) (NP (NP (DT the) (NN goal)) (PP (IN of) (NP (NP (DT the) (JJ American) (NN company) (NN Vmware)) (, ,) (SBAR (WHNP (WDT which)) (S (ADVP (RB primarily)) (VP (VBZ develops) (NP (NN computer) (NN virtualisation) (NN software))))))))) (. .)))"]], dtype=object)
+        X2 = np.array([X[1], X[0]], dtype=object)
+        k_single = SST(parallel=False, _lambda=1, _sigma=1, normalize=False)
+        k_par = SST(parallel=True, _lambda=1, _sigma=1, normalize=False)
+        self.assertTrue(k_single.K(X)[0][1] == k_par.K(X)[0][1])
+        self.assertTrue(k_single.K(X2)[0][1] == k_par.K(X2)[0][1])
+
+        
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
