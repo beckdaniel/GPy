@@ -1217,35 +1217,19 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         for i in range(ITS):
             target2 += k2.K(X)
         end_time2 = datetime.datetime.now()
+
+        k3 = SST(parallel=True,  _lambda=1, _sigma=1, normalize=False, num_threads=1)
+        start_time3 = datetime.datetime.now()
+        for i in range(ITS):
+            target2 += k3.K(X)
+        end_time3 = datetime.datetime.now()
         import pprint
-        #np.set_printoptions(suppress=True, precision=1)
-        #np.savetxt(sys.stdout, target, "%5.2f")
-        print ''
-        #np.savetxt(sys.stdout, target2, "%5.2f")
-        #print target2
         print "PARALLEL: ",
         print end_time - start_time
         print "SINGLE: ",
         print end_time2 - start_time2
-        #print np.argwhere((target != target2))
-        
-        t1, t2 = np.where(target != target2)
-        l1 = list(t1)
-        l2 = list(t2)
-        #print t1
-        #print t2
-        #for i1, i2 in zip(t1, t2):
-        #    print target[i1][i2],
-        #    print target2[i1][i2]
-        #print nltk.Tree(X[5][0])
-        #print nltk.Tree(X[67][0])
-        #print (X[5][0])
-        #print (X[67][0])
-
-        l1.sort()
-        l2.sort()
-        #print l1 == l2
-        #self.assertTrue((target == target2).all())
+        print "PARALLEL 1 THREAD: ",
+        print end_time3 - start_time3
 
     def test_correct_K_1(self):
         X = np.array([["(ROOT (S (NP (DT The) (JJ presidential) (NN couple)) (ADVP (RB then)) (VP (VBZ has) (NP (NP (DT a) (NN meeting)) (VP (VBN scheduled) (PP (IN with) (NP (NP (NNP King) (NNP Harald) (NNP V) (CC and) (NNP Queen) (NNP Sonja)) (PP (IN of) (NP (NNP Norway)))))))) (. .)))"], ["(ROOT (S (NP (DT This)) (VP (VBZ is) (NP (NP (DT the) (NN goal)) (PP (IN of) (NP (NP (DT the) (JJ American) (NN company) (NN Vmware)) (, ,) (SBAR (WHNP (WDT which)) (S (ADVP (RB primarily)) (VP (VBZ develops) (NP (NN computer) (NN virtualisation) (NN software))))))))) (. .)))"]], dtype=object)
@@ -1255,6 +1239,15 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         self.assertTrue(k_single.K(X)[0][1] == k_par.K(X)[0][1])
         self.assertTrue(k_single.K(X2)[0][1] == k_par.K(X2)[0][1])
 
+    def test_correct_K_2(self):
+        X = np.array([["(ROOT (S (NP (DT The) (JJ presidential) (NN couple)) (ADVP (RB then)) (VP (VBZ has) (NP (NP (DT a) (NN meeting)) (VP (VBN scheduled) (PP (IN with) (NP (NP (NNP King) (NNP Harald) (NNP V) (CC and) (NNP Queen) (NNP Sonja)) (PP (IN of) (NP (NNP Norway)))))))) (. .)))"], ["(ROOT (S (NP (DT This)) (VP (VBZ is) (NP (NP (DT the) (NN goal)) (PP (IN of) (NP (NP (DT the) (JJ American) (NN company) (NN Vmware)) (, ,) (SBAR (WHNP (WDT which)) (S (ADVP (RB primarily)) (VP (VBZ develops) (NP (NN computer) (NN virtualisation) (NN software))))))))) (. .)))"]], dtype=object)
+        X2 = np.array([X[1], X[0]], dtype=object)
+        k_single = SST(parallel=False, _lambda=1, _sigma=1, normalize=True)
+        k_par = SST(parallel=True, _lambda=1, _sigma=1, normalize=True)
+        print k_single.K(X)
+        print k_par.K(X)
+        self.assertTrue(k_single.K(X)[0][1] == k_par.K(X)[0][1])
+        self.assertTrue(k_single.K(X2)[0][1] == k_par.K(X2)[0][1])
         
 
 if __name__ == "__main__":

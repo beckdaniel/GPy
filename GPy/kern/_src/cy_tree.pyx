@@ -159,13 +159,6 @@ class CySubsetTreeKernel(object):
         dlambdas = np.zeros(shape=(len(X), len(X2)))
         dsigmas = np.zeros(shape=(len(X), len(X2)))
 
-        ##########
-        cdef double _lambda = self._lambda
-        cdef double _sigma = self._sigma
-        ###########
-
-        #pool = mp.Pool(1)
-
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
@@ -186,15 +179,7 @@ class CySubsetTreeKernel(object):
                 # It will always be a 1-element array so we just index by 0
                 nodes1, dict1 = self._tree_cache[x1[0]]
                 nodes2, dict2 = self._tree_cache[x2[0]]
-                #node_pairs = self._get_node_pairs(nodes1, nodes2)
-                #node_pairs = self._get_node_pairs(nodes1, nodes2)
-                #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2)
                 K_result, dlambda, dsigma = self.calc_K(nodes1, nodes2, dict1, dict2)
-                #K_result, dlambda, dsigma = calc_K_ext(nodes1, nodes2, dict1, dict2, self._lambda, self._sigma)
-                #K_result, dlambda, dsigma = self.calc_K(node_pairs, dict1, dict2, _lambda, _sigma)
-                #result = pool.apply_async(calc_K_ext, (nodes1, nodes2, dict1, dict2, _lambda, _sigma))
-                #K_result, dlambda, dsigma = result.get()
-                #K_result, dlambda, dsigma = super_wrapper(nodes1, nodes2, dict1, dict2, _lambda, _sigma)
 
                 # Normalization happens here.
                 if self.normalize:
@@ -491,6 +476,24 @@ class ParSubsetTreeKernel(object):
             if t_repr not in self._tree_cache:
                 self._tree_cache[t_repr] = self._gen_node_list(t_repr)
 
+    def _diag_calculations(self, X_list):
+        """
+        Calculate the K(x,x) values first because
+        they are used in normalization.
+        """
+        cdef double _lambda = self._lambda
+        cdef double _sigma = self._sigma
+        cdef Result result
+        K_vec = np.zeros(shape=(len(X_list),))
+        dlambda_vec = np.zeros(shape=(len(X_list),))
+        dsigma_vec = np.zeros(shape=(len(X_list),))
+        for i in range(len(X_list)):
+            result = calc_K(X_list[i], X_list[i], _lambda, _sigma)
+            K_vec[i] = result.k
+            dlambda_vec[i] = result.dlambda
+            dsigma_vec[i] = result.dsigma
+        return (K_vec, dlambda_vec, dsigma_vec)
+
     @cython.boundscheck(False)
     def K(self, X, X2):
         """
@@ -501,13 +504,7 @@ class ParSubsetTreeKernel(object):
         The final goal is to be able to deal only with C objects inside the main
         gram matrix loop.
         """
-        # A check to ensure that derivatives cache will always change when K changes
-        #self.dlambdas = None
-        #self.dsigmas = None
-        #print "YAY"
-
-        # First, as normal, we build the cache. This is exactly as in the normal
-        # version, except that we will use C++ STD structures here.
+        # First, as normal, we build the cache.
         self._build_cache(X)
         if X2 == None:
             symmetric = True
@@ -551,17 +548,16 @@ class ParSubsetTreeKernel(object):
                     vecnode.push_back(cnode)
                 X2_list.push_back(vecnode)
 
-        #for vecnode in X_list:
-        #    print vecnode
-        #for vecnode in X2_list:
-        #    print vecnode
 
-        #return
-        # Let's forget normalization for now
-        #if self.normalize:
-        #    X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
-        #    if not symmetric:
-        #        X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
+        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_Ks = np.zeros(shape=(len(X),))
+        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_dlambdas = np.zeros(shape=(len(X),))
+        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_dsigmas = np.zeros(shape=(len(X),))
+        cdef np.ndarray[DTYPE_t, ndim=1] X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas
+        # Start the diag values for normalization
+        if self.normalize:
+            X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_list)
+            if not symmetric:
+                X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2_list)
             
         # Initialize the derivatives here 
         # because we are going to calculate them at the same time as K.
@@ -577,7 +573,7 @@ class ParSubsetTreeKernel(object):
         cdef VecNode vecnode2
         cdef double _lambda = self._lambda
         cdef double _sigma = self._sigma
-        cdef Result result
+        cdef Result result, norm_result
         if self.normalize:
             normalize = 1
         else:
@@ -586,7 +582,7 @@ class ParSubsetTreeKernel(object):
         #print symmetric
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         cdef int num_threads = self.num_threads
-        print "NUM THREADS: %d" % num_threads
+        #print "NUM THREADS: %d" % num_threads
         with nogil, parallel(num_threads=num_threads):
             for i in prange(X_len, schedule='dynamic'):
                 #j = 0
@@ -604,10 +600,11 @@ class ParSubsetTreeKernel(object):
                     result = calc_K(vecnode, vecnode2, _lambda, _sigma)
 
                 # Normalization happens here.
-                #if self.normalize:
+                #if normalize:
                 #    if symmetric:
-                #        K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                #                                                            X_diag_Ks[i], X_diag_Ks[j],
+                        
+                        #K_norm, dlambda_norm, dsigma_norm = normalize(K_result, dlambda, dsigma,
+                         #                                                   X_diag_Ks[i], X_diag_Ks[j],
                 #                                                            X_diag_dlambdas[i], X_diag_dlambdas[j],
                 #                                                            X_diag_dsigmas[i], X_diag_dsigmas[j])
                 #    else:
