@@ -20,7 +20,7 @@ import multiprocessing as mp
 cimport cython
 from cython cimport view
 
-cdef extern from "math.h":
+cdef extern from "math.h" nogil:
     double sqrt(double x)
 
 cdef extern from "unistd.h" nogil:
@@ -568,16 +568,16 @@ class ParSubsetTreeKernel(object):
         cdef np.ndarray[DTYPE_t, ndim=2] dsigmas = np.zeros(shape=(len(X), len(X2)))
         cdef int X_len = len(X)
         cdef int X2_len = len(X2)
-        cdef int normalize
+        cdef int do_normalize
         cdef int i, j
         cdef VecNode vecnode2
         cdef double _lambda = self._lambda
         cdef double _sigma = self._sigma
         cdef Result result, norm_result
         if self.normalize:
-            normalize = 1
+            do_normalize = 1
         else:
-            normalize = 0
+            do_normalize = 0
         #print self.normalize
         #print symmetric
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
@@ -590,7 +590,7 @@ class ParSubsetTreeKernel(object):
                     if symmetric:
                         if i < j:
                             continue
-                        if i == j and normalize:
+                        if i == j and do_normalize:
                             Ks[i,j] = 1
                             continue
                         #Ks[i,j] = i * j
@@ -599,32 +599,35 @@ class ParSubsetTreeKernel(object):
                     vecnode2 = X2_list[j]
                     result = calc_K(vecnode, vecnode2, _lambda, _sigma)
 
-                # Normalization happens here.
-                #if normalize:
-                #    if symmetric:
-                        
-                        #K_norm, dlambda_norm, dsigma_norm = normalize(K_result, dlambda, dsigma,
-                         #                                                   X_diag_Ks[i], X_diag_Ks[j],
-                #                                                            X_diag_dlambdas[i], X_diag_dlambdas[j],
-                #                                                            X_diag_dsigmas[i], X_diag_dsigmas[j])
-                #    else:
-                #        K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                #                                                            X_diag_Ks[i], X2_diag_Ks[j],
-                #                                                            X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                #                                                            X_diag_dsigmas[i], X2_diag_dsigmas[j])
+                    # Normalization happens here.
+                    if do_normalize:
+                        if symmetric:
+                            #K_norm, dlambda_norm, dsigma_norm = normalize(K_result, dlambda, dsigma,
+                            norm_result = normalize(result.k, result.dlambda, result.dsigma,               
+                                                    X_diag_Ks[i], X_diag_Ks[j],
+                                                    X_diag_dlambdas[i], X_diag_dlambdas[j],
+                                                    X_diag_dsigmas[i], X_diag_dsigmas[j])
+                        else:
+                            #K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
+                            norm_result = normalize(result.k, result.dlambda, result.dsigma,
+                                                    X_diag_Ks[i], X2_diag_Ks[j],
+                                                    X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                                    X_diag_dsigmas[i], X2_diag_dsigmas[j])
 
                 # Store everything, including derivatives.
                 #    Ks[i][j] = K_norm
                 #    dlambdas[i][j] = dlambda_norm
                 #    dsigmas[i][j] = dsigma_norm
                 #else:
-                    Ks[i,j] = result.k
-                    dlambdas[i,j] = result.dlambda
-                    dsigmas[i,j] = result.dsigma
+                    else:
+                        norm_result = result
+                    Ks[i,j] = norm_result.k
+                    dlambdas[i,j] = norm_result.dlambda
+                    dsigmas[i,j] = norm_result.dsigma
                     if symmetric:
-                        Ks[j,i] = result.k
-                        dlambdas[j,i] = result.dlambda
-                        dsigmas[j,i] = result.dsigma
+                        Ks[j,i] = norm_result.k
+                        dlambdas[j,i] = norm_result.dlambda
+                        dsigmas[j,i] = norm_result.dsigma
 
         return (Ks, dlambdas, dsigmas)
 
@@ -852,5 +855,36 @@ cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     dsigma[0] = dsigma_result
 
     #return result
+
+cdef Result normalize(double K_result, double dlambda, double dsigma, double diag_Ks_i, 
+                      double diag_Ks_j, double diag_dlambdas_i, double diag_dlambdas_j, 
+                      double diag_dsigmas_i, double diag_dsigmas_j) nogil:
+    """
+    Normalize the result from SSTK, including derivatives.
+    """
+    cdef double norm, sqrt_nrorm, K_norm, diff_lambda, dlambda_norm, diff_sigma, dsigma_norm
+    cdef Result result
+
+    norm = diag_Ks_i * diag_Ks_j
+    sqrt_norm = sqrt(norm)
+    K_norm = K_result / sqrt_norm
+    
+    diff_lambda = ((diag_dlambdas_i * diag_Ks_j) +
+                   (diag_Ks_i * diag_dlambdas_j))
+    diff_lambda /= 2 * norm
+    dlambda_norm = ((dlambda / sqrt_norm) -
+                    (K_norm * diff_lambda))
+        
+    diff_sigma = ((diag_dsigmas_i * diag_Ks_j) +
+                  (diag_Ks_i * diag_dsigmas_j))
+    diff_sigma /= 2 * norm
+    dsigma_norm = ((dsigma / sqrt_norm) -
+                   (K_norm * diff_sigma))
+
+    result.k = K_norm
+    result.dlambda = dlambda_norm
+    result.dsigma = dsigma_norm
+    return result
+    #return K_norm, dlambda_norm, dsigma_norm
 
 #endif //CY_TREE_H
