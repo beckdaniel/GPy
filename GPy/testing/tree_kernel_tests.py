@@ -1198,10 +1198,10 @@ class SSTKParallelCheckingTests(unittest.TestCase):
     #@unittest.skip("skip")
     def test_prof_K_cy_par_noprof(self):
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        TREES = 100
+        TREES = 500
         with open(TREES_TRAIN) as f:
             X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
-        k = SST(parallel=True, _lambda=1, _sigma=1, normalize=False, num_threads=4)
+        k = SST(parallel=True, _lambda=1, _sigma=1, normalize=True, num_threads=4)
         target = np.zeros(shape=(len(X), len(X)))
         target2 = np.zeros(shape=(len(X), len(X)))
         ITS = 1
@@ -1212,7 +1212,7 @@ class SSTKParallelCheckingTests(unittest.TestCase):
             target += k.K(X)
         end_time = datetime.datetime.now()
 
-        k2 = SST(parallel=False,  _lambda=1, _sigma=1, normalize=False)
+        k2 = SST(parallel=False,  _lambda=1, _sigma=1, normalize=True)
         start_time2 = datetime.datetime.now()
         for i in range(ITS):
             target2 += k2.K(X)

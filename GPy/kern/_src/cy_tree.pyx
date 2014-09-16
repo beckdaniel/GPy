@@ -494,6 +494,24 @@ class ParSubsetTreeKernel(object):
             dsigma_vec[i] = result.dsigma
         return (K_vec, dlambda_vec, dsigma_vec)
 
+    def Kdiag(self, X):
+        cdef vector[VecNode] X_list
+        cdef VecNode vecnode
+        cdef CNode cnode
+        for tree in X:
+            node_list = self._tree_cache[tree[0]]
+            vecnode.clear()
+            for node in node_list:
+                cnode.first = node[0]
+                cnode.second.clear()
+                if node[1] != None:
+                    for ch in node[1]:
+                        cnode.second.push_back(ch)
+                vecnode.push_back(cnode)
+            X_list.push_back(vecnode)
+        X_diag_Ks, _, _ = self._diag_calculations(X_list)
+        return X_diag_Ks
+
     @cython.boundscheck(False)
     def K(self, X, X2):
         """
@@ -613,14 +631,10 @@ class ParSubsetTreeKernel(object):
                                                     X_diag_Ks[i], X2_diag_Ks[j],
                                                     X_diag_dlambdas[i], X2_diag_dlambdas[j],
                                                     X_diag_dsigmas[i], X2_diag_dsigmas[j])
-
-                # Store everything, including derivatives.
-                #    Ks[i][j] = K_norm
-                #    dlambdas[i][j] = dlambda_norm
-                #    dsigmas[i][j] = dsigma_norm
-                #else:
                     else:
                         norm_result = result
+                    
+                    # Store everything
                     Ks[i,j] = norm_result.k
                     dlambdas[i,j] = norm_result.dlambda
                     dsigmas[i,j] = norm_result.dsigma
