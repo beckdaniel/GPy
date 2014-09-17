@@ -1195,7 +1195,7 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         print "SINGLE: ",
         print end_time2 - start_time2
 
-    #@unittest.skip("skip")
+    @unittest.skip("skip")
     def test_prof_K_cy_par_noprof(self):
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
         TREES = 500
@@ -1248,7 +1248,31 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         print k_par.K(X)
         self.assertTrue(k_single.K(X)[0][1] == k_par.K(X)[0][1])
         self.assertTrue(k_single.K(X2)[0][1] == k_par.K(X2)[0][1])
-        
+
+    def test_when_leaves_are_trees_1(self):
+        tree = '(NN (appos (NNP (poss Nicole (POS (possessive \'s)))) dad))'
+        print nltk.Tree(tree)
+        k = SST(parallel=True)
+        #import ipdb; ipdb.set_trace()
+        print k.kernel._gen_node_list(tree)
+
+    def test_when_leaves_are_trees_2(self):
+        tree = ' (SEG (SENT (NN (null (NNP (nsubj (NNP (nn (Barack))) (Obama))) (VBZ (cop (becomes))) (DT (det (the))) (JJ (amod (fourth))) (JJ (amod (American))) (president) (VB (infmod (TO (aux (to))) (receive) (NNP (dobj (DT (det (the))) (NNP (nn (Nobel))) (NNP (nn (Peace))) (Prize))))))))) '
+        print nltk.Tree(tree)
+        k = SST(parallel=True)
+        #import ipdb; ipdb.set_trace()
+        print k.kernel._gen_node_list(tree)
+
+    def test_when_leaves_are_trees_3(self):
+        tree = '(NN (appos (NNP (poss Nicole (POS (possessive \'s)))) dad (VP is cool)))'
+        tree2 = '(NN (appos (NNP (poss Nicole (POS (possessive \'s)))) mom (VP is cool)))'
+        #print nltk.Tree(tree)
+        k = SST(parallel=True)
+        #import ipdb; ipdb.set_trace()
+        #node_list = k.kernel._gen_node_list(tree)
+        X = np.array([[tree], [tree2]], dtype=object)
+        print k.K(X)
+
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

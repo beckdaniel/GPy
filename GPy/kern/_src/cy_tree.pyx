@@ -420,7 +420,7 @@ class ParSubsetTreeKernel(object):
         tree = nltk.Tree(tree_repr)
         c = 0
         cdef list node_list = []
-        self._get_node(tree, node_list)
+        self._get_node2(tree, node_list)
         node_list.sort(key=lambda Node x: x.production)
         cdef Node node
         node_dict = dict([(node.node_id, node) for node in node_list])
@@ -444,7 +444,7 @@ class ParSubsetTreeKernel(object):
         """
         cdef Node node
         cdef string cprod
-        if type(tree[0]) != str: #non preterm
+        if type(tree[0]) != str and len(tree[0]) > 0: #non preterm
             prod_list = [tree.node]
             children = []
             for ch in tree:
@@ -458,13 +458,46 @@ class ParSubsetTreeKernel(object):
             node_list.append(node)
             return node_id
         else:
-            prod = ' '.join([tree.node, tree[0]])
+            if type(tree[0]) == str:
+                prod = ' '.join([tree.node, tree[0]])
+            else:
+                prod = ' '.join([tree.node, tree[0].node])
             cprod = prod
             node_id = len(node_list)
             node = Node(cprod, node_id, None)
             node_list.append(node)
             return node_id            
 
+    def _get_node2(self, tree, node_list):
+        """
+        Recursive method for generating the node lists.
+        """
+        cdef Node node
+        cdef string cprod
+        if type(tree) == str:
+            return -1
+        if len(tree) == 0:
+            return -2
+        prod_list = [tree.node]
+        children = []
+        for ch in tree:
+            ch_id = self._get_node2(ch, node_list)
+            if ch_id == -1:
+                prod_list.append(ch)
+            elif ch_id == -2:
+                prod_list.append(ch.node)
+            else:
+                prod_list.append(ch.node)
+                children.append(ch_id)
+        node_id = len(node_list)
+        prod = ' '.join(prod_list)
+        cprod = prod
+        if children == []:
+            children = None
+        node = Node(cprod, node_id, children)
+        node_list.append(node)
+        return node_id
+        
     def _build_cache(self, X):
         """
         Caches the node lists, for each tree that it is not
