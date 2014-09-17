@@ -380,25 +380,17 @@ ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
 ctypedef pair[int, int] IntPair
 ctypedef vector[IntPair] VecIntPair
-#ctypedef pair[double, double] DoublePair
-#ctypedef pair[double, DoublePair] Triple
-#ctypedef unordered_map[int, double] DPCell
-#ctypedef unordered_map[int, DPCell] DPStruct
-#ctypedef map[int, double] DPStruct
-ctypedef map[int, double] DPCell
-ctypedef map[int, DPCell] DPStruct
-ctypedef map[IntPair, double] DPStruct2
-#ctypedef view.array DPStruct2
-#ctypedef double** DPStruct2
-#ctypedef double** DPStruct3
-#ctypedef np.ndarray[DTYPE_t, ndim=2] DPStruct3
+ctypedef vector[VecNode] VecVecNode
+#ctypedef map[int, double] DPCell
+#ctypedef map[int, DPCell] DPStruct
+#ctypedef map[IntPair, double] DPStruct2
 ctypedef struct Result:
     double k
     double dlambda
     double dsigma
 
-ctypedef pair[NodePair, IntPair] PairTup
-ctypedef vector[PairTup] VecPairTup
+#ctypedef pair[NodePair, IntPair] PairTup
+#ctypedef vector[PairTup] VecPairTup
 
 class ParSubsetTreeKernel(object):
     
@@ -495,20 +487,22 @@ class ParSubsetTreeKernel(object):
         return (K_vec, dlambda_vec, dsigma_vec)
 
     def Kdiag(self, X):
-        cdef vector[VecNode] X_list
-        cdef VecNode vecnode
-        cdef CNode cnode
-        for tree in X:
-            node_list = self._tree_cache[tree[0]]
-            vecnode.clear()
-            for node in node_list:
-                cnode.first = node[0]
-                cnode.second.clear()
-                if node[1] != None:
-                    for ch in node[1]:
-                        cnode.second.push_back(ch)
-                vecnode.push_back(cnode)
-            X_list.push_back(vecnode)
+        #cdef vector[VecNode] X_list
+        #cdef VecNode vecnode
+        #cdef CNode cnode
+        #for tree in X:
+        #    node_list = self._tree_cache[tree[0]]
+        #    vecnode.clear()
+        #    for node in node_list:
+        #        cnode.first = node[0]
+        #        cnode.second.clear()
+        #        if node[1] != None:
+        #            for ch in node[1]:
+        #                cnode.second.push_back(ch)
+        #        vecnode.push_back(cnode)
+        #    X_list.push_back(vecnode)
+        cdef VecVecNode X_list
+        X_list = create_list(X, self._tree_cache)
         X_diag_Ks, _, _ = self._diag_calculations(X_list)
         return X_diag_Ks
 
@@ -534,38 +528,14 @@ class ParSubsetTreeKernel(object):
         # Caches are python dicts that assign a node_list with a string.
         # We have to convert these node_lists to C++ lists, so we can use them
         # inside the nogil loop.
-        cdef vector[VecNode] X_list
-        cdef vector[VecNode] X2_list
+        cdef VecVecNode X_list, X2_list
         cdef VecNode vecnode
         cdef CNode cnode
-        #cdef Node node
-        for tree in X:
-            node_list = self._tree_cache[tree[0]]
-            vecnode.clear()
-            for node in node_list:
-                cnode.first = node[0]
-                cnode.second.clear()
-                if node[1] != None:
-                    for ch in node[1]:
-                        cnode.second.push_back(ch)
-                #cnode.second = node[1]
-                vecnode.push_back(cnode)
-            X_list.push_back(vecnode)
+        X_list = create_list(X, self._tree_cache)
         if symmetric:
             X2_list = X_list
         else:
-            for tree in X2:
-                node_list = self._tree_cache[tree[0]]
-                vecnode.clear()
-                for node in node_list:
-                    cnode.first = node[0]
-                    cnode.second.clear()
-                    if node[1] != None:
-                        for ch in node[1]:
-                            cnode.second.push_back(ch)
-                    vecnode.push_back(cnode)
-                X2_list.push_back(vecnode)
-
+            X2_list = create_list(X2, self._tree_cache)
 
         cdef np.ndarray[DTYPE_t, ndim=1] X_diag_Ks = np.zeros(shape=(len(X),))
         cdef np.ndarray[DTYPE_t, ndim=1] X_diag_dlambdas = np.zeros(shape=(len(X),))
@@ -601,10 +571,13 @@ class ParSubsetTreeKernel(object):
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         cdef int num_threads = self.num_threads
         #print "NUM THREADS: %d" % num_threads
+        cdef int index
         with nogil, parallel(num_threads=num_threads):
-            for i in prange(X_len, schedule='dynamic'):
+            for index in prange(X_len * X2_len, schedule='guided'):
                 #j = 0
-                for j in range(X2_len):
+                #for j in range(X2_len):
+                    i = index / X2_len
+                    j = index % X2_len
                     if symmetric:
                         if i < j:
                             continue
@@ -649,42 +622,23 @@ class ParSubsetTreeKernel(object):
 # EXTERNAL METHODS
 ##############
 
-cdef void print_node(CNode node) nogil:
-    printf("(%s, [", node.first.c_str())
-    for ch in node.second:
-        printf("%d, ", ch)
-    printf("])")
+cdef VecVecNode create_list(X, tree_cache):
+    cdef VecVecNode X_list
+    cdef VecNode vecnode
+    cdef CNode cnode
+    for tree in X:
+        node_list = tree_cache[tree[0]]
+        vecnode.clear()
+        for node in node_list:
+            cnode.first = node[0]
+            cnode.second.clear()
+            if node[1] != None:
+                for ch in node[1]:
+                    cnode.second.push_back(ch)
+            vecnode.push_back(cnode)
+        X_list.push_back(vecnode)
+    return X_list
 
-cdef void print_vec_node(VecNode vecnode) nogil:
-    printf("[")
-    for node in vecnode:
-        print_node(node)
-        printf(", ")
-    printf("]\n")
-
-cdef void print_node_pair(NodePair node_pair) nogil:
-    printf("(")
-    print_node(node_pair.first)
-    printf(" ,")
-    print_node(node_pair.second)
-    printf(" )")
-
-cdef void print_int_pair(IntPair int_pair) nogil:
-    printf("(%d, %d)", int_pair.first, int_pair.second)
-
-cdef void print_int_pairs(VecIntPair int_pairs) nogil:
-    printf("[")
-    cdef IntPair int_pair
-    for int_pair in int_pairs:
-        print_int_pair(int_pair)
-    printf("]\n")
-
-#cdef void print_pair_tups(VecPairTup node_pairs) nogil:
-#    printf("[")
-#    for node_pair in node_pairs:
-#        print_node_pair(node_pair)
-#        printf("- (%d, %d); ", node_pair.second.first, node_pair.second.second)
-#    printf("]\n")
 
 cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     """
@@ -716,7 +670,6 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
                     int_pairs.push_back(tup)
                     i2 += 1
                     if i2 >= len2:
-                        #return int_pairs
                         break
                     n2 = vecnode2[i2]
                 i1 += 1
@@ -739,14 +692,7 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
     cdef Result result
     cdef VecIntPair node_pairs
     node_pairs = get_node_pairs(vecnode1, vecnode2)
-    #printf("\n\n")
-    #print_int_pairs(node_pairs)
-    #printf("\n\n")
-    #print_vec_node(vecnode1)
-    #print_vec_node(vecnode2)
-    # Initialize the DP structure. Python dicts are quite
-    # efficient already but maybe a specialized C structure
-    # would be better?
+
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
     cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
@@ -767,10 +713,7 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
     cdef double *dlambda = <double*> malloc(sizeof(double))
     cdef double *dsigma = <double*> malloc(sizeof(double))
 
-    #printf("ALLOCATED\n")
     for int_pair in node_pairs:
-        #print_node(vecnode1[int_pair.first])
-        #print_node(vecnode2[int_pair.second])
         delta(int_pair.first, int_pair.second, 
               vecnode1, vecnode2,
               delta_matrix, dlambda_matrix,
@@ -808,13 +751,9 @@ cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     cdef double sum_lambda, sum_sigma, denom
     cdef IntList children1, children2
     cdef CNode node1, node2
-    #cdef IntPair ch_pair
-    #cdef int id1 = int_pair.first
-    #cdef int id2 = int_pair.second
     cdef int len2 = vecnode2.size()
     cdef int index = id1 * len2 + id2
     val = delta_matrix[index]
-    #printf("VAL: %f\n",val)
     if val > 0:
         k[0] = val
         dlambda[0] = dlambda_matrix[index]
@@ -840,9 +779,6 @@ cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
         ch1 = children1[i]
         ch2 = children2[i]
         if vecnode1[ch1].first == vecnode2[ch2].first:
-            #ch_pair.first = ch1
-            #ch_pair.second = ch2
-            #delta(ch_pair, vecnode1, vecnode2,
             delta(ch1, ch2, vecnode1, vecnode2,
                   delta_matrix, dlambda_matrix,
                   dsigma_matrix, _lambda, _sigma,
@@ -868,7 +804,6 @@ cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     dlambda[0] = dlambda_result
     dsigma[0] = dsigma_result
 
-    #return result
 
 cdef Result normalize(double K_result, double dlambda, double dsigma, double diag_Ks_i, 
                       double diag_Ks_j, double diag_dlambdas_i, double diag_dlambdas_j, 
@@ -899,6 +834,40 @@ cdef Result normalize(double K_result, double dlambda, double dsigma, double dia
     result.dlambda = dlambda_norm
     result.dsigma = dsigma_norm
     return result
-    #return K_norm, dlambda_norm, dsigma_norm
+
+
+##################
+# PRINTING METHODS
+##################
+
+cdef void print_node(CNode node) nogil:
+    printf("(%s, [", node.first.c_str())
+    for ch in node.second:
+        printf("%d, ", ch)
+    printf("])")
+
+cdef void print_vec_node(VecNode vecnode) nogil:
+    printf("[")
+    for node in vecnode:
+        print_node(node)
+        printf(", ")
+    printf("]\n")
+
+cdef void print_node_pair(NodePair node_pair) nogil:
+    printf("(")
+    print_node(node_pair.first)
+    printf(" ,")
+    print_node(node_pair.second)
+    printf(" )")
+
+cdef void print_int_pair(IntPair int_pair) nogil:
+    printf("(%d, %d)", int_pair.first, int_pair.second)
+
+cdef void print_int_pairs(VecIntPair int_pairs) nogil:
+    printf("[")
+    cdef IntPair int_pair
+    for int_pair in int_pairs:
+        print_int_pair(int_pair)
+    printf("]\n")
 
 #endif //CY_TREE_H
