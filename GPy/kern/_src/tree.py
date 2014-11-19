@@ -142,7 +142,8 @@ class PySubsetTreeKernel(Kern):
         self._tree_cache = {}
 
     def _gen_node_list(self, tree_repr):
-        tree = nltk.Tree(tree_repr)
+        #tree = nltk.Tree(tree_repr)
+        tree = nltk.tree.Tree.fromstring(tree_repr)
         c = 0
         node_list = []
         self._get_node(tree, node_list)
@@ -152,18 +153,21 @@ class PySubsetTreeKernel(Kern):
 
     def _get_node(self, tree, node_list):
         if type(tree[0]) != str: #non preterm
-            prod = [tree.node]
+            #prod = [tree.node]
+            prod = [tree.label()]
             children = []
             for ch in tree:
                 ch_id = self._get_node(ch, node_list)
-                prod.append(ch.node)
+                #prod.append(ch.node)
+                prod.append(ch.label())
                 children.append(ch_id)
             node_id = len(node_list)
             node = Node(' '.join(prod), node_id, children)
             node_list.append(node)
             return node_id
         else:
-            prod = ' '.join([tree.node, tree[0]])
+            #prod = ' '.join([tree.node, tree[0]])
+            prod = ' '.join([tree.label(), tree[0]])
             node_id = len(node_list)
             node = Node(prod, node_id, None)
             node_list.append(node)
@@ -427,7 +431,8 @@ class OldSubsetTreeKernel(Kern):
         if type(node1) == str or type(node2) == str:
             return 0
         # first case
-        if node1.node != node2.node:
+        #if node1.node != node2.node:
+        if node1.label() != node2.label():
             return 0
         if node1.productions()[0] != node2.productions()[0]:
             return 0
@@ -445,7 +450,8 @@ class OldSubsetTreeKernel(Kern):
         if type(node1) == str or type(node2) == str:
             return (0, 0)
         # first case
-        if node1.node != node2.node:
+        #if node1.node != node2.node:
+        if node1.label() != node2.label():
             return (0, 0)
         if node1.productions()[0] != node2.productions()[0]:
             return (0, 0)
@@ -721,7 +727,8 @@ class OldSubsetTreeKernel(Kern):
                 self.fill_cache(t1, child2, child_key)
 
         # first case: diff nodes or diff lengths imply diff productions
-        if (t1.node != t2.node or len(t1) != len(t2)):
+        #if (t1.node != t2.node or len(t1) != len(t2)):
+        if (t1.label() != t2.label() or len(t1) != len(t2)):
             self.cache[key] = 0
             self.cache_ddecay[key] = 0
             self.cache_dbranch[key] = 0
@@ -743,7 +750,8 @@ class OldSubsetTreeKernel(Kern):
         
         # third case, non-preterms with different children
         for i, ch in enumerate(t1):
-            if ch.node != t2[i].node: 
+            #if ch.node != t2[i].node: 
+            if ch.label() != t2[i].label(): 
                 self.cache[key] = 0
                 self.cache_ddecay[key] = 0
                 self.cache_dbranch[key] = 0
@@ -786,12 +794,12 @@ class OldSubsetTreeKernel(Kern):
         try:
             t1 = self.tree_cache[x1[0]]
         except KeyError:
-            t1 = nltk.Tree(x1[0])
+            t1 = nltk.tree.Tree.fromstring(x1[0])
             self.tree_cache[x1[0]] = t1
         try:
             t2 = self.tree_cache[x2[0]]
         except KeyError:
-            t2 = nltk.Tree(x2[0])
+            t2 = nltk.tree.Tree.fromstring(x2[0])
             self.tree_cache[x2[0]] = t2
         return (t1, t2)
 

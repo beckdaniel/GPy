@@ -688,8 +688,8 @@ class SSTKCheckingTests(unittest.TestCase):
         #node_pairs = k1.kernel._get_node_pairs(nodes1, nodes2)
         delta1 = k1.kernel.calc_K(nodes1, nodes2, dict1, dict2)
 
-        t1 = nltk.Tree(X[0][0])
-        t2 = nltk.Tree(X[2][0])
+        t1 = nltk.tree.Tree.fromstring(X[0][0])
+        t2 = nltk.tree.Tree.fromstring(X[2][0])
         result = 0
         dl, ds = (0, 0)
         for pos1 in t1.treepositions():
@@ -719,8 +719,8 @@ class SSTKCheckingTests(unittest.TestCase):
         #node_pairs = k1.kernel._get_node_pairs(nodes1, nodes2)
         delta1 = k1.kernel.calc_K(nodes1, nodes2, dict1, dict2)
 
-        t1 = nltk.Tree(X[4][0])
-        t2 = nltk.Tree(X[4][0])
+        t1 = nltk.tree.Tree.fromstring(X[4][0])
+        t2 = nltk.tree.Tree.fromstring(X[4][0])
         result = 0
         dl, ds = (0, 0)
         for pos1 in t1.treepositions():
@@ -1251,14 +1251,14 @@ class SSTKParallelCheckingTests(unittest.TestCase):
 
     def test_when_leaves_are_trees_1(self):
         tree = '(NN (appos (NNP (poss Nicole (POS (possessive \'s)))) dad))'
-        print nltk.Tree(tree)
+        print nltk.tree.Tree.fromstring(tree)
         k = SST(parallel=True)
         #import ipdb; ipdb.set_trace()
         print k.kernel._gen_node_list(tree)
 
     def test_when_leaves_are_trees_2(self):
         tree = ' (SEG (SENT (NN (null (NNP (nsubj (NNP (nn (Barack))) (Obama))) (VBZ (cop (becomes))) (DT (det (the))) (JJ (amod (fourth))) (JJ (amod (American))) (president) (VB (infmod (TO (aux (to))) (receive) (NNP (dobj (DT (det (the))) (NNP (nn (Nobel))) (NNP (nn (Peace))) (Prize))))))))) '
-        print nltk.Tree(tree)
+        print nltk.tree.Tree.fromstring(tree)
         k = SST(parallel=True)
         #import ipdb; ipdb.set_trace()
         print k.kernel._gen_node_list(tree)

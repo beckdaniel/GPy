@@ -70,7 +70,8 @@ class CySubsetTreeKernel(object):
         calculating K.
         It also returns a nodes dict for fast node access.
         """
-        tree = nltk.Tree(tree_repr)
+        #tree = nltk.Tree(tree_repr)
+        tree = nltk.tree.Tree.fromstring(tree_repr)
         c = 0
         node_list = []
         self._get_node(tree, node_list)
@@ -85,11 +86,13 @@ class CySubsetTreeKernel(object):
         """
         cdef string cprod
         if type(tree[0]) != str: #non preterm
-            prod_list = [tree.node]
+            #prod_list = [tree.node]
+            prod_list = [tree.label()]
             children = []
             for ch in tree:
                 ch_id = self._get_node(ch, node_list)
-                prod_list.append(ch.node)
+                #prod_list.append(ch.node)
+                prod_list.append(ch.label())
                 children.append(ch_id)
             node_id = len(node_list)
             prod = ' '.join(prod_list)
@@ -98,7 +101,8 @@ class CySubsetTreeKernel(object):
             node_list.append(node)
             return node_id
         else:
-            prod = ' '.join([tree.node, tree[0]])
+            #prod = ' '.join([tree.node, tree[0]])
+            prod = ' '.join([tree.label(), tree[0]])
             cprod = prod
             node_id = len(node_list)
             node = Node(cprod, node_id, None)
@@ -417,7 +421,8 @@ class ParSubsetTreeKernel(object):
         calculating K.
         It also returns a nodes dict for fast node access.
         """
-        tree = nltk.Tree(tree_repr)
+        #tree = nltk.Tree(tree_repr)
+        tree = nltk.tree.Tree.fromstring(tree_repr)
         c = 0
         cdef list node_list = []
         self._get_node2(tree, node_list)
@@ -445,11 +450,13 @@ class ParSubsetTreeKernel(object):
         cdef Node node
         cdef string cprod
         if type(tree[0]) != str and len(tree[0]) > 0: #non preterm
-            prod_list = [tree.node]
+            #prod_list = [tree.node]
+            prod_list = [tree.label()]
             children = []
             for ch in tree:
                 ch_id = self._get_node(ch, node_list)
-                prod_list.append(ch.node)
+                #prod_list.append(ch.node)
+                prod_list.append(ch.label())
                 children.append(ch_id)
             node_id = len(node_list)
             prod = ' '.join(prod_list)
@@ -459,9 +466,11 @@ class ParSubsetTreeKernel(object):
             return node_id
         else:
             if type(tree[0]) == str:
-                prod = ' '.join([tree.node, tree[0]])
+                #prod = ' '.join([tree.node, tree[0]])
+                prod = ' '.join([tree.label(), tree[0]])
             else:
-                prod = ' '.join([tree.node, tree[0].node])
+                #prod = ' '.join([tree.node, tree[0].node])
+                prod = ' '.join([tree.label(), tree[0].label()])
             cprod = prod
             node_id = len(node_list)
             node = Node(cprod, node_id, None)
@@ -478,16 +487,19 @@ class ParSubsetTreeKernel(object):
             return -1
         if len(tree) == 0:
             return -2
-        prod_list = [tree.node]
+        #prod_list = [tree.node]
+        prod_list = [tree.label()]
         children = []
         for ch in tree:
             ch_id = self._get_node2(ch, node_list)
             if ch_id == -1:
                 prod_list.append(ch)
             elif ch_id == -2:
-                prod_list.append(ch.node)
+                #prod_list.append(ch.node)
+                prod_list.append(ch.label())
             else:
-                prod_list.append(ch.node)
+                #prod_list.append(ch.node)
+                prod_list.append(ch.label())
                 children.append(ch_id)
         node_id = len(node_list)
         prod = ' '.join(prod_list)
