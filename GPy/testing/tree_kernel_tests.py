@@ -7,6 +7,7 @@ import GPy
 import nltk # Need to cope with this in a better way...
 #import sympy as sp
 from GPy.kern import SubsetTreeKernel as SST
+from GPy.kern import SymbolAwareSubsetTreeKernel as SASST
 from GPy.kern import PySubsetTreeKernel as PySST
 from GPy.kern import OldSubsetTreeKernel as OldSST
 import sys
@@ -1272,6 +1273,7 @@ class SSTKParallelCheckingTests(unittest.TestCase):
         #node_list = k.kernel._gen_node_list(tree)
         X = np.array([[tree], [tree2]], dtype=object)
         print k.K(X)
+
 
 
 if __name__ == "__main__":

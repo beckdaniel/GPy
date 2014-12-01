@@ -28,11 +28,6 @@ class SubsetTreeKernel(Kern):
             sys.stderr.write("Tree Kernels need NLTK. Install it using \"pip install nltk\"")
             raise
         super(SubsetTreeKernel, self).__init__(1, active_dims, 'sstk')
-        #self.input_dim = 1
-        #self.num_params = 2
-        #self.name = 'sstk'
-        #self._lambda = _lambda
-        #self._sigma = _sigma
         self._lambda = Param('lambda', _lambda)
         self._sigma = Param('sigma', _sigma)
         self.add_parameters(self._lambda, self._sigma)
@@ -57,7 +52,6 @@ class SubsetTreeKernel(Kern):
         self.kernel._lambda = self._lambda[0]
         self.kernel._sigma = self._sigma[0]
         result, dl, ds = self.kernel.K(X, X2)
-        #target += result
         self.dlambda = dl
         self.dsigma = ds
         return result
@@ -73,35 +67,69 @@ class SubsetTreeKernel(Kern):
             return self.kernel.Kdiag(X)
 
     def dK_dtheta(self, dL_dK, X, X2):#, target):
-        #################
-        #result, dl, ds = self.kernel.K(X, X2)
-        #self.dlambda = dl * dL_dK
-        #self.dsigma = ds * dL_dK
-        #target += [np.sum(self.dlambda),
-        #           np.sum(self.dsigma)]
-                          
-        #print target
-        #target += [np.sum(self.dlambda * dL_dK),
-        #           np.sum(self.dsigma * dL_dK)]
-        #target += [np.sum(self.dlambda.dot(dL_dK)),
-        #           np.sum(self.dsigma.dot(dL_dK))]
-        #return [np.sum(self.dlambda.dot(dL_dK)),
-        #        np.sum(self.dsigma.dot(dL_dK))]
         return [np.sum(self.dlambda * dL_dK),
                 np.sum(self.dsigma * dL_dK)]
-        
-        #target += result
-        #self.dlambda = np.sum(dl)
-        #self.dsigma = np.sum(ds)
-        ################
-        #s_like = np.sum(dL_dK)
-        #target += [s_like * self.dlambda,
-        #           s_like * self.dsigma]
 
     def update_gradients_full(self, dL_dK, X, X2):
         self._lambda.gradient = np.sum(self.dlambda * dL_dK)
         self._sigma.gradient = np.sum(self.dsigma * dL_dK)
+
+####################################
+
+class SymbolAwareSubsetTreeKernel(Kern):
+    """
+    An extension of SST, including specific lambdas/sigmas for each symbol.
+    """
+    def __init__(self, _lambda=np.array([0.5]), _sigma=np.array([1.0]), lambda_buckets={}, sigma_buckets={},
+                 normalize=True, active_dims=None, num_threads=1):
+        try:
+            import nltk
+        except ImportError:
+            sys.stderr.write("Tree Kernels need NLTK. Install it using \"pip install nltk\"")
+            raise
+        super(SymbolAwareSubsetTreeKernel, self).__init__(1, active_dims, 'sasstk')
+        self.normalize = normalize
+        # SASST will be parallel by default.
+        self._lambda = Param('_lambda', _lambda)
+        self._sigma = Param('_sigma', _sigma)
+        self.kernel = cy_tree.SymbolAwareSubsetTreeKernel(_lambda, _sigma, lambda_buckets, sigma_buckets,
+                                                          normalize, num_threads=num_threads)
         
+    def _get_params(self):
+        return np.hstack((self.kernel._lambda, self.kernel._sigma))
+
+    def _set_params(self, x):
+        self.kernel._lambda = x[0]
+        self.kernel._sigma = x[1]
+
+    def _get_param_names(self):
+        return ['lambda', 'sigma']
+
+    def K(self, X, X2):#, target):
+        self.kernel._lambda = self._lambda
+        self.kernel._sigma = self._sigma
+        result, dl, ds = self.kernel.K(X, X2)
+        self.dlambda = dl
+        self.dsigma = ds
+        return result
+
+    def Kdiag(self, X):#), target):
+        self.kernel._lambda = self._lambda
+        self.kernel._sigma = self._sigma
+        if self.normalize:
+            #target += np.ones(X.shape[0])
+            return np.ones(X.shape[0])
+        else:
+            #target += self.kernel.Kdiag(X)
+            return self.kernel.Kdiag(X)
+
+    def dK_dtheta(self, dL_dK, X, X2):#, target):
+        return [np.sum(self.dlambda * dL_dK),
+                np.sum(self.dsigma * dL_dK)]
+
+    def update_gradients_full(self, dL_dK, X, X2):
+        self._lambda.gradient = np.sum(self.dlambda * dL_dK)
+        self._sigma.gradient = np.sum(self.dsigma * dL_dK)
 
 ####################################
 

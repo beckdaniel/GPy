@@ -9,8 +9,6 @@ from cython.parallel import prange, parallel
 from collections import defaultdict
 from libcpp.string cimport string
 from libcpp.map cimport map
-#from libcpp.unordered_map cimport unordered_map
-#from unordered_map cimport unordered_map
 from libcpp.pair cimport pair
 from libcpp.list cimport list as clist
 from libcpp.vector cimport vector
@@ -53,7 +51,6 @@ cdef class Node(object):
     def __repr__(self):
         return str((self.production, self.node_id, self.children_ids))
 
-#ctypedef Node NODE_t
 
 class CySubsetTreeKernel(object):
     
@@ -392,6 +389,8 @@ ctypedef vector[IntPair] VecIntPair
 ctypedef map[int, double] DPCell
 ctypedef map[int, DPCell] DPStruct
 ctypedef map[IntPair, double] DPStruct2
+ctypedef map[string, double] SAStruct
+ctypedef vector[double*] SAMatrix
 #ctypedef view.array DPStruct2
 #ctypedef double** DPStruct2
 #ctypedef double** DPStruct3
@@ -400,6 +399,12 @@ ctypedef struct Result:
     double k
     double dlambda
     double dsigma
+ctypedef struct SAResult:
+    double k
+    double dlambda
+    double dsigma
+    vector[double] dsa_lambda
+    vector[double] dsa_sigma
 
 ctypedef pair[NodePair, IntPair] PairTup
 ctypedef vector[PairTup] VecPairTup
@@ -691,6 +696,257 @@ class ParSubsetTreeKernel(object):
         return (Ks, dlambdas, dsigmas)
 
 ##############
+# SYMBOL AWARE
+##############
+
+
+class SymbolAwareSubsetTreeKernel(object):
+    
+    def __init__(self, _lambda=np.array([0.5]), _sigma=np.array([1.0]),
+                 lambda_buckets={}, sigma_buckets={}, normalize=True, num_threads=1):
+        #super(SymbolAwareSubsetTreeKernel, self).__init__(_lambda, _sigma, normalize, num_threads)
+        self._lambda = _lambda
+        self._sigma = _sigma
+        self.lambda_buckets = lambda_buckets
+        self.sigma_buckets = sigma_buckets
+        self._tree_cache = {}
+        self.normalize = normalize
+        self.num_threads = num_threads
+
+    def _dict_to_map(self, dic):
+        cdef SAStruct result_map
+        for item in dic:
+            result_map[item] = dic[item]
+        return result_map
+
+    def _gen_node_list(self, tree_repr):
+        """
+        Generates an ordered list of nodes from a tree.
+        The list is used to generate the node pairs when
+        calculating K.
+        It also returns a nodes dict for fast node access.
+        """
+        #tree = nltk.Tree(tree_repr)
+        tree = nltk.tree.Tree.fromstring(tree_repr)
+        c = 0
+        cdef list node_list = []
+        self._get_node2(tree, node_list)
+        node_list.sort(key=lambda Node x: x.production)
+        cdef Node node
+        node_dict = dict([(node.node_id, node) for node in node_list])
+        final_list = []
+        cdef list ch_ids
+        for node in node_list:
+            if node.children_ids == None:
+                final_list.append((node.production, None))
+            else:
+                ch_ids = []
+                for ch in node.children_ids:
+                    ch_node = node_dict[ch]
+                    index = node_list.index(ch_node)
+                    ch_ids.append(index)
+                final_list.append((node.production, ch_ids))
+        return final_list
+
+    def _get_node2(self, tree, node_list):
+        """
+        Recursive method for generating the node lists.
+        """
+        cdef Node node
+        cdef string cprod
+        if type(tree) == str:
+            return -1
+        if len(tree) == 0:
+            return -2
+        #prod_list = [tree.node]
+        prod_list = [tree.label()]
+        children = []
+        for ch in tree:
+            ch_id = self._get_node2(ch, node_list)
+            if ch_id == -1:
+                prod_list.append(ch)
+            elif ch_id == -2:
+                #prod_list.append(ch.node)
+                prod_list.append(ch.label())
+            else:
+                #prod_list.append(ch.node)
+                prod_list.append(ch.label())
+                children.append(ch_id)
+        node_id = len(node_list)
+        prod = ' '.join(prod_list)
+        cprod = prod
+        if children == []:
+            children = None
+        node = Node(cprod, node_id, children)
+        node_list.append(node)
+        return node_id
+
+    def _diag_calculations(self, X_list):
+        """
+        Calculate the K(x,x) values first because
+        they are used in normalization.
+        """
+        cdef SAResult result
+        cdef SAStruct lambda_buckets = self._dict_to_map(self.lambda_buckets)
+        cdef SAStruct sigma_buckets = self._dict_to_map(self.sigma_buckets)
+        
+        K_vec = np.zeros(shape=(len(X_list),))
+        dlambda_mat = np.zeros(shape=(len(X_list), len(self._lambda)))
+        dsigma_mat = np.zeros(shape=(len(X_list), len(self._sigma)))
+        for i in range(len(X_list)):
+            result = calc_K_sa(X_list[i], X_list[i], self._lambda, self._sigma, 
+                               lambda_buckets, sigma_buckets)
+            K_vec[i] = result.k
+            dlambda_mat[i] = result.dlambda
+            dsigma_mat[i] = result.dsigma
+
+        return (K_vec, dlambda_mat, dsigma_mat)
+
+    def _build_cache(self, X):
+        """
+        Caches the node lists, for each tree that it is not
+        in the cache. If all trees in X are already cached, this
+        method does nothing.
+        """
+        for tree_repr in X:
+            t_repr = tree_repr[0]
+            if t_repr not in self._tree_cache:
+                self._tree_cache[t_repr] = self._gen_node_list(t_repr)
+
+    @cython.boundscheck(False)
+    def K(self, X, X2):
+        """
+        The method that calls the SSTK for each tree pair. Some shortcuts are used
+        when X2 == None (when calculating the Gram matrix for X).
+        IMPORTANT: this is the normalized version.
+
+        The final goal is to be able to deal only with C objects inside the main
+        gram matrix loop.
+        """
+        # First, as normal, we build the cache.
+        self._build_cache(X)
+        if X2 == None:
+            symmetric = True
+            X2 = X
+        else:
+            symmetric = False
+            self._build_cache(X2)
+
+        # Caches are python dicts that assign a node_list with a string.
+        # We have to convert these node_lists to C++ lists, so we can use them
+        # inside the nogil loop.
+        cdef vector[VecNode] X_list
+        cdef vector[VecNode] X2_list
+        cdef VecNode vecnode
+        cdef CNode cnode
+        #cdef Node node
+        for tree in X:
+            node_list = self._tree_cache[tree[0]]
+            vecnode.clear()
+            for node in node_list:
+                cnode.first = node[0]
+                cnode.second.clear()
+                if node[1] != None:
+                    for ch in node[1]:
+                        cnode.second.push_back(ch)
+                #cnode.second = node[1]
+                vecnode.push_back(cnode)
+            X_list.push_back(vecnode)
+        if symmetric:
+            X2_list = X_list
+        else:
+            for tree in X2:
+                node_list = self._tree_cache[tree[0]]
+                vecnode.clear()
+                for node in node_list:
+                    cnode.first = node[0]
+                    cnode.second.clear()
+                    if node[1] != None:
+                        for ch in node[1]:
+                            cnode.second.push_back(ch)
+                    vecnode.push_back(cnode)
+                X2_list.push_back(vecnode)
+
+
+        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_Ks = np.zeros(shape=(len(X),))
+        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_dlambdas = np.zeros(shape=(len(X),))
+        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_dsigmas = np.zeros(shape=(len(X),))
+        cdef np.ndarray[DTYPE_t, ndim=1] X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas
+        # Start the diag values for normalization
+        if self.normalize:
+            X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_list)
+            if not symmetric:
+                X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2_list)
+            
+        # Initialize the derivatives here 
+        # because we are going to calculate them at the same time as K.
+        # It is a bit ugly but way more efficient. We store the derivatives
+        # and just return the stored values when dK_dtheta is called.
+        cdef np.ndarray[DTYPE_t, ndim=2] Ks = np.zeros(shape=(len(X), len(X2)))
+        cdef np.ndarray[DTYPE_t, ndim=2] dlambdas = np.zeros(shape=(len(X), len(X2)))
+        cdef np.ndarray[DTYPE_t, ndim=2] dsigmas = np.zeros(shape=(len(X), len(X2)))
+        cdef int X_len = len(X)
+        cdef int X2_len = len(X2)
+        cdef int do_normalize
+        cdef int i, j
+        cdef VecNode vecnode2
+        cdef double _lambda = self._lambda
+        cdef double _sigma = self._sigma
+        cdef Result result, norm_result
+        if self.normalize:
+            do_normalize = 1
+        else:
+            do_normalize = 0
+        #print self.normalize
+        #print symmetric
+        # Iterate over the trees in X and X2 (or X and X in the symmetric case).
+        cdef int num_threads = self.num_threads
+        #print "NUM THREADS: %d" % num_threads
+        with nogil, parallel(num_threads=num_threads):
+            for i in prange(X_len, schedule='dynamic'):
+                #j = 0
+                for j in range(X2_len):
+                    if symmetric:
+                        if i < j:
+                            continue
+                        if i == j and do_normalize:
+                            Ks[i,j] = 1
+                            continue
+                        #Ks[i,j] = i * j
+                        
+                    vecnode = X_list[i]
+                    vecnode2 = X2_list[j]
+                    result = calc_K(vecnode, vecnode2, _lambda, _sigma)
+
+                    # Normalization happens here.
+                    if do_normalize:
+                        if symmetric:
+                            #K_norm, dlambda_norm, dsigma_norm = normalize(K_result, dlambda, dsigma,
+                            norm_result = normalize(result.k, result.dlambda, result.dsigma,               
+                                                    X_diag_Ks[i], X_diag_Ks[j],
+                                                    X_diag_dlambdas[i], X_diag_dlambdas[j],
+                                                    X_diag_dsigmas[i], X_diag_dsigmas[j])
+                        else:
+                            #K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
+                            norm_result = normalize(result.k, result.dlambda, result.dsigma,
+                                                    X_diag_Ks[i], X2_diag_Ks[j],
+                                                    X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                                    X_diag_dsigmas[i], X2_diag_dsigmas[j])
+                    else:
+                        norm_result = result
+                    
+                    # Store everything
+                    Ks[i,j] = norm_result.k
+                    dlambdas[i,j] = norm_result.dlambda
+                    dsigmas[i,j] = norm_result.dsigma
+                    if symmetric:
+                        Ks[j,i] = norm_result.k
+                        dlambdas[j,i] = norm_result.dlambda
+                        dsigmas[j,i] = norm_result.dsigma
+
+        return (Ks, dlambdas, dsigmas)
+
+##############
 # EXTERNAL METHODS
 ##############
 
@@ -723,13 +979,6 @@ cdef void print_int_pairs(VecIntPair int_pairs) nogil:
     for int_pair in int_pairs:
         print_int_pair(int_pair)
     printf("]\n")
-
-#cdef void print_pair_tups(VecPairTup node_pairs) nogil:
-#    printf("[")
-#    for node_pair in node_pairs:
-#        print_node_pair(node_pair)
-#        printf("- (%d, %d); ", node_pair.second.first, node_pair.second.second)
-#    printf("]\n")
 
 cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     """
@@ -784,14 +1033,7 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
     cdef Result result
     cdef VecIntPair node_pairs
     node_pairs = get_node_pairs(vecnode1, vecnode2)
-    #printf("\n\n")
-    #print_int_pairs(node_pairs)
-    #printf("\n\n")
-    #print_vec_node(vecnode1)
-    #print_vec_node(vecnode2)
-    # Initialize the DP structure. Python dicts are quite
-    # efficient already but maybe a specialized C structure
-    # would be better?
+
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
     cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
@@ -814,8 +1056,6 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
 
     #printf("ALLOCATED\n")
     for int_pair in node_pairs:
-        #print_node(vecnode1[int_pair.first])
-        #print_node(vecnode2[int_pair.second])
         delta(int_pair.first, int_pair.second, 
               vecnode1, vecnode2,
               delta_matrix, dlambda_matrix,
@@ -838,6 +1078,7 @@ cdef Result calc_K(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double 
 
     return result
 
+
 cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
                   double* delta_matrix,
                   double* dlambda_matrix,
@@ -853,13 +1094,9 @@ cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     cdef double sum_lambda, sum_sigma, denom
     cdef IntList children1, children2
     cdef CNode node1, node2
-    #cdef IntPair ch_pair
-    #cdef int id1 = int_pair.first
-    #cdef int id2 = int_pair.second
     cdef int len2 = vecnode2.size()
     cdef int index = id1 * len2 + id2
     val = delta_matrix[index]
-    #printf("VAL: %f\n",val)
     if val > 0:
         k[0] = val
         dlambda[0] = dlambda_matrix[index]
@@ -885,9 +1122,6 @@ cdef void delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
         ch1 = children1[i]
         ch2 = children2[i]
         if vecnode1[ch1].first == vecnode2[ch2].first:
-            #ch_pair.first = ch1
-            #ch_pair.second = ch2
-            #delta(ch_pair, vecnode1, vecnode2,
             delta(ch1, ch2, vecnode1, vecnode2,
                   delta_matrix, dlambda_matrix,
                   dsigma_matrix, _lambda, _sigma,
@@ -944,6 +1178,89 @@ cdef Result normalize(double K_result, double dlambda, double dsigma, double dia
     result.dlambda = dlambda_norm
     result.dsigma = dsigma_norm
     return result
-    #return K_norm, dlambda_norm, dsigma_norm
+
+
+cdef SAResult calc_K_sa(VecNode& vecnode1, VecNode& vecnode2, double _lambda, double _sigma, 
+                      SAStruct sa_lambda, SAStruct sa_sigma) nogil:
+    """
+    The actual SSTK kernel, evaluated over two node lists.
+    It also calculates the derivatives wrt lambda and sigma.
+    """
+    cdef double K_total = 0
+    cdef double dlambda_total = 0
+    cdef double dsigma_total = 0
+    cdef vector[double] dsa_lambda_total
+    cdef vector[double] dsa_sigma_total
+    cdef SAResult result
+    cdef VecIntPair node_pairs
+    node_pairs = get_node_pairs(vecnode1, vecnode2)
+
+    cdef int len1 = vecnode1.size()
+    cdef int len2 = vecnode2.size()
+    cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    cdef double* dlambda_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    cdef double* dsigma_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    
+    cdef int i, j
+    cdef int index
+
+    cdef int sa_lambda_size = sa_lambda.size()
+    cdef int sa_sigma_size = sa_sigma.size()
+    cdef SAMatrix dsa_lambda_vecmatrix
+    cdef SAMatrix dsa_sigma_vecmatrix
+    cdef double* symbol_matrix
+    for i in range(sa_lambda_size):
+        symbol_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+        dsa_lambda_vecmatrix.push_back(symbol_matrix)
+    for i in range(sa_sigma_size):
+        symbol_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+        dsa_sigma_vecmatrix.push_back(symbol_matrix)
+
+    for i in range(len1):
+        for j in range(len2):
+            index = i * len2 + j
+            delta_matrix[index] = 0
+            dlambda_matrix[index] = 0
+            dsigma_matrix[index] = 0
+
+    for sid in range(sa_lambda_size):
+        for i in range(len1):
+            for j in range(len2):
+                index = i * len2 + j
+                dsa_lambda_vecmatrix[sid][index] = 0
+
+    for sid in range(sa_sigma_size):
+        for i in range(len1):
+            for j in range(len2):
+                index = i * len2 + j
+                dsa_sigma_vecmatrix[sid][index] = 0
+
+    cdef double *k = <double*> malloc(sizeof(double))
+    cdef double *dlambda = <double*> malloc(sizeof(double))
+    cdef double *dsigma = <double*> malloc(sizeof(double))
+
+    #printf("ALLOCATED\n")
+    for int_pair in node_pairs:
+        delta(int_pair.first, int_pair.second, 
+              vecnode1, vecnode2,
+              delta_matrix, dlambda_matrix,
+              dsigma_matrix, _lambda, _sigma,
+              k, dlambda, dsigma)
+        K_total += k[0]
+        dlambda_total += dlambda[0]
+        dsigma_total += dsigma[0]
+
+    result.k = K_total
+    result.dlambda = dlambda_total
+    result.dsigma = dsigma_total
+
+    free(delta_matrix)
+    free(dlambda_matrix)
+    free(dsigma_matrix)
+    free(k)
+    free(dlambda)
+    free(dsigma)
+
+    return result
 
 #endif //CY_TREE_H
