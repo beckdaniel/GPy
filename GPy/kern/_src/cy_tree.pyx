@@ -1303,8 +1303,8 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     """
     cdef int ch1, ch2, i
     cdef double val, prod, 
-    cdef double sum_lambda, sum_sigma, denom
-    cdef double delta_result, dlambda_result, dsigma_result
+    cdef double sum_lambda, sum_sigma, denom, sum_sigma_ne
+    cdef double delta_result, dlambda_result, dsigma_result, dsigma_result_ne
     cdef IntList children1, children2
     cdef CNode node1, node2
     cdef int len2 = vecnode2.size()
@@ -1332,20 +1332,24 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     cdef int space = production.find(SPACE)
     cdef string root = production.substr(0, space)
     cdef int lambda_index, sigma_index
+    lambda_index = lambda_buckets[root]
     #printf(root.c_str())
     if node1.second.empty():
-        lambda_index = lambda_buckets[root]
         #printf("%s: %d\n", root.c_str(), lambda_index)
-        delta_matrix[index] = _lambda[0] # WRONG HERE
-        result.k = _lambda[0] # WRONG HERE
+        #delta_matrix[index] = _lambda[0] # WRONG HERE
+        delta_matrix[index] = _lambda[lambda_index] 
+        #result.k = _lambda[0] # WRONG HERE
+        result.k = _lambda[lambda_index]
         for i in range(lambda_size):
-            result.dlambda[i] = 1
-            dlambda_vecmatrix[i][index] = 1
+            if i == lambda_index:
+                result.dlambda[i] = 1
+                dlambda_vecmatrix[i][index] = 1
+            else:
+                result.dlambda[i] = 0
+                dlambda_vecmatrix[i][index] = 0
         for i in range(sigma_size):
             result.dsigma[i] = 0
             dsigma_vecmatrix[i][index] = 0
-        #dlambda[0] = 1
-        #dsigma[0] = 0
         return result
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
@@ -1353,8 +1357,10 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     prod = 1
     sum_lambda = 0
     sum_sigma = 0
+    sum_sigma_ne = 0
     children1 = node1.second
     children2 = node2.second
+    sigma_index = sigma_buckets[root]
     for i in range(children1.size()):
         ch1 = children1[i]
         ch2 = children2[i]
@@ -1363,26 +1369,43 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
                               delta_matrix, dlambda_vecmatrix,
                               dsigma_vecmatrix, _lambda, _sigma,
                               lambda_buckets, sigma_buckets)
-            denom = _sigma[0] + result.k # WRONG HERE
+            #denom = _sigma[0] + result.k # WRONG HERE
+            denom = _sigma[sigma_index] + result.k
             prod *= denom
-            sum_lambda += result.dlambda[0] / denom # WRONG HERE
-            sum_sigma += (1 + result.dsigma[0]) / denom # WRONG HERE
+            #sum_lambda += result.dlambda[0] / denom # WRONG HERE
+            #sum_sigma += (1 + result.dsigma[0]) / denom # WRONG HERE
+            sum_lambda += result.dlambda[lambda_index] / denom
+            sum_sigma += (1 + result.dsigma[sigma_index]) / denom
+            sum_sigma_ne += (result.dsigma[sigma_index]) / denom
         else:
-            prod *= _sigma[0] # WRONG HERE
-            sum_sigma += 1 /_sigma[0] # WRONG HERE
+            #prod *= _sigma[0] # WRONG HERE
+            #sum_sigma += 1 /_sigma[0] # WRONG HERE
+            prod *= _sigma[sigma_index]
+            sum_sigma += 1 /_sigma[sigma_index]
 
-    delta_result = _lambda[0] * prod # WRONG HERE
-    dlambda_result = prod + (delta_result * sum_lambda)
+    #delta_result = _lambda[0] * prod # WRONG HERE
+    delta_result = _lambda[lambda_index] * prod
+    #dlambda_result = prod + (delta_result * sum_lambda) # OLD
+    dlambda_result = delta_result * sum_lambda
     dsigma_result = delta_result * sum_sigma
+    dsigma_result_ne = delta_result * sum_sigma_ne
 
     delta_matrix[index] = delta_result
     result.k = delta_result
     for i in range(lambda_size):
-        dlambda_vecmatrix[i][index] = dlambda_result
-        result.dlambda[i] = dlambda_result
+        if i == lambda_index:
+            dlambda_vecmatrix[i][index] = prod + dlambda_result
+            result.dlambda[i] = prod + dlambda_result
+        else:
+            dlambda_vecmatrix[i][index] = dlambda_result
+            result.dlambda[i] = dlambda_result            
     for i in range(sigma_size):
-        dsigma_vecmatrix[i][index] = dsigma_result
-        result.dsigma[i] = dsigma_result
+        if i  == sigma_index:
+            dsigma_vecmatrix[i][index] = dsigma_result
+            result.dsigma[i] = dsigma_result
+        else:
+            dsigma_vecmatrix[i][index] = dsigma_result_ne
+            result.dsigma[i] = dsigma_result_ne
 
     return result
 
