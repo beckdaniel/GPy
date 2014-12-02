@@ -389,7 +389,7 @@ ctypedef vector[IntPair] VecIntPair
 ctypedef map[int, double] DPCell
 ctypedef map[int, DPCell] DPStruct
 ctypedef map[IntPair, double] DPStruct2
-ctypedef map[string, double] SAStruct
+ctypedef map[string, int] SAStruct
 ctypedef vector[double*] SAMatrix
 #ctypedef view.array DPStruct2
 #ctypedef double** DPStruct2
@@ -970,6 +970,8 @@ class SymbolAwareSubsetTreeKernel(object):
 # EXTERNAL METHODS
 ##############
 
+cdef string SPACE = " "
+
 cdef void print_node(CNode node) nogil:
     printf("(%s, [", node.first.c_str())
     for ch in node.second:
@@ -1201,7 +1203,7 @@ cdef Result normalize(double K_result, double dlambda, double dsigma, double dia
 
 
 cdef SAResult calc_K_sa(VecNode& vecnode1, VecNode& vecnode2, double[:] _lambda, double[:] _sigma, 
-                        SAStruct sa_lambda, SAStruct sa_sigma) nogil:
+                        SAStruct& lambda_buckets, SAStruct& sigma_buckets) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -1265,7 +1267,8 @@ cdef SAResult calc_K_sa(VecNode& vecnode1, VecNode& vecnode2, double[:] _lambda,
         delta_result = sa_delta(int_pair.first, int_pair.second, 
                                 vecnode1, vecnode2,
                                 delta_matrix, dlambda_vecmatrix,
-                                dsigma_vecmatrix, _lambda, _sigma)
+                                dsigma_vecmatrix, _lambda, _sigma,
+                                lambda_buckets, sigma_buckets)
 
         k_total += delta_result.k
         for i in range(lambda_size):
@@ -1292,7 +1295,8 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
                        double* delta_matrix,
                        SAMatrix dlambda_vecmatrix,
                        SAMatrix dsigma_vecmatrix,
-                       double[:] _lambda, double[:] _sigma) nogil:
+                       double[:] _lambda, double[:] _sigma,
+                       SAStruct& lambda_buckets, SAStruct& sigma_buckets) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
@@ -1300,6 +1304,7 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     cdef int ch1, ch2, i
     cdef double val, prod, 
     cdef double sum_lambda, sum_sigma, denom
+    cdef double delta_result, dlambda_result, dsigma_result
     cdef IntList children1, children2
     cdef CNode node1, node2
     cdef int len2 = vecnode2.size()
@@ -1311,6 +1316,7 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     result.dlambda = <double*> malloc(lambda_size * sizeof(double))
     result.dsigma = <double*> malloc(sigma_size * sizeof(double))
 
+    # RECURSIVE CASE: get value from DP matrix if it was already calculated
     val = delta_matrix[index]
     if val > 0:
         result.k = val
@@ -1320,49 +1326,63 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
             result.dsigma[i] = dsigma_vecmatrix[i][index]
         return result
 
-    # node1 = vecnode1[id1]
-    # if node1.second.empty():
-    #     delta_matrix[index] = _lambda
-    #     dlambda_matrix[index] = 1
-    #     k[0] = _lambda
-    #     dlambda[0] = 1
-    #     dsigma[0] = 0
-    #     return
+    # BASE CASE: found a preterminal
+    node1 = vecnode1[id1]
+    cdef string production = node1.first
+    cdef int space = production.find(SPACE)
+    cdef string root = production.substr(0, space)
+    cdef int lambda_index, sigma_index
+    #printf(root.c_str())
+    if node1.second.empty():
+        lambda_index = lambda_buckets[root]
+        #printf("%s: %d\n", root.c_str(), lambda_index)
+        delta_matrix[index] = _lambda[0] # WRONG HERE
+        result.k = _lambda[0] # WRONG HERE
+        for i in range(lambda_size):
+            result.dlambda[i] = 1
+            dlambda_vecmatrix[i][index] = 1
+        for i in range(sigma_size):
+            result.dsigma[i] = 0
+            dsigma_vecmatrix[i][index] = 0
+        #dlambda[0] = 1
+        #dsigma[0] = 0
+        return result
 
-    # node2 = vecnode2[id2]
-    # prod = 1
-    # sum_lambda = 0
-    # sum_sigma = 0
-    # children1 = node1.second
-    # children2 = node2.second
-    # for i in range(children1.size()):
-    #     ch1 = children1[i]
-    #     ch2 = children2[i]
-    #     if vecnode1[ch1].first == vecnode2[ch2].first:
-    #         delta(ch1, ch2, vecnode1, vecnode2,
-    #               delta_matrix, dlambda_matrix,
-    #               dsigma_matrix, _lambda, _sigma,
-    #               k, dlambda, dsigma)
+    # RECURSIVE CASE: if val == 0, then we proceed to do recursion
+    node2 = vecnode2[id2]
+    prod = 1
+    sum_lambda = 0
+    sum_sigma = 0
+    children1 = node1.second
+    children2 = node2.second
+    for i in range(children1.size()):
+        ch1 = children1[i]
+        ch2 = children2[i]
+        if vecnode1[ch1].first == vecnode2[ch2].first:
+            result = sa_delta(ch1, ch2, vecnode1, vecnode2,
+                              delta_matrix, dlambda_vecmatrix,
+                              dsigma_vecmatrix, _lambda, _sigma,
+                              lambda_buckets, sigma_buckets)
+            denom = _sigma[0] + result.k # WRONG HERE
+            prod *= denom
+            sum_lambda += result.dlambda[0] / denom # WRONG HERE
+            sum_sigma += (1 + result.dsigma[0]) / denom # WRONG HERE
+        else:
+            prod *= _sigma[0] # WRONG HERE
+            sum_sigma += 1 /_sigma[0] # WRONG HERE
 
-    #         denom = _sigma + k[0]
-    #         prod *= denom
-    #         sum_lambda += dlambda[0] / denom
-    #         sum_sigma += (1 + dsigma[0]) / denom
-    #     else:
-    #         prod *= _sigma
-    #         sum_sigma += 1 /_sigma
+    delta_result = _lambda[0] * prod # WRONG HERE
+    dlambda_result = prod + (delta_result * sum_lambda)
+    dsigma_result = delta_result * sum_sigma
 
-    # delta_result = _lambda * prod
-    # dlambda_result = prod + (delta_result * sum_lambda)
-    # dsigma_result = delta_result * sum_sigma
-
-    # delta_matrix[index] = delta_result
-    # dlambda_matrix[index] = dlambda_result
-    # dsigma_matrix[index] = dsigma_result
-
-    # k[0] = delta_result
-    # dlambda[0] = dlambda_result
-    # dsigma[0] = dsigma_result
+    delta_matrix[index] = delta_result
+    result.k = delta_result
+    for i in range(lambda_size):
+        dlambda_vecmatrix[i][index] = dlambda_result
+        result.dlambda[i] = dlambda_result
+    for i in range(sigma_size):
+        dsigma_vecmatrix[i][index] = dsigma_result
+        result.dsigma[i] = dsigma_result
 
     return result
 
