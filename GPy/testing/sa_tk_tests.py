@@ -146,6 +146,11 @@ class SASSTKDiagSmallSigmaTests(unittest.TestCase):
                   lambda_buckets={'AA':1, 'B': 2, 'S': 3})
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 4.112)
 
+    def test_Kdiag_buckets_4(self):
+        k = SASST(normalize=False, _lambda=np.array([1, 0.6, 0.2]), _sigma=np.array([1.0, 0.3]),
+                  lambda_buckets={'AA':1, 'B': 2}, sigma_buckets={'S': 1})
+        self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.39)
+
 
 
 
