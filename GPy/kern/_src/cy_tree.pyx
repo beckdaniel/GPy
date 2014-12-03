@@ -701,7 +701,8 @@ class ParSubsetTreeKernel(object):
 class SymbolAwareSubsetTreeKernel(object):
     
     def __init__(self, _lambda=np.array([0.5]), _sigma=np.array([1.0]),
-                 lambda_buckets={}, sigma_buckets={}, normalize=True, num_threads=1):
+                 lambda_buckets={}, sigma_buckets={}, normalize=True, num_threads=1,
+                 parallel=True):
         #super(SymbolAwareSubsetTreeKernel, self).__init__(_lambda, _sigma, normalize, num_threads)
         self._lambda = _lambda
         self._sigma = _sigma
@@ -710,6 +711,7 @@ class SymbolAwareSubsetTreeKernel(object):
         self._tree_cache = {}
         self.normalize = normalize
         self.num_threads = num_threads
+        #self.parallel = parallel
 
     def _dict_to_map(self, dic):
         cdef SAStruct result_map
