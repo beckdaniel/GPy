@@ -207,13 +207,55 @@ class SASSTGradientTests(unittest.TestCase):
         self.assertAlmostEqual(k.dlambda, 10)
         self.assertAlmostEqual(k.dsigma, 6)
 
-    def test_grad_1(self):
+    def test_grad_2(self):
         k = SASST(normalize=False, _lambda=np.array([1.0, 0.4]), _sigma=np.array([1.0, 0.2]),
                   lambda_buckets={'AA':1}, sigma_buckets={'AA':1})
         result = k.K(self.X1, self.X2)
         #print result
         #print k.dlambda
         #print k.dsigma
+        self.assertAlmostEqual(result, 1.88)
+        self.assertAlmostEqual(k.dlambda[0], 1.24)
+        self.assertAlmostEqual(k.dlambda[1], 3)
+        self.assertAlmostEqual(k.dsigma[0], 2.24)
+        self.assertAlmostEqual(k.dsigma[1], 0.8)
+
+class SASSTNormTests(unittest.TestCase):
+    """
+    Tests for the normalized version
+    """
+    def setUp(self):
+        self.tree1 = '(S (AA (AA a)) (B b))'
+        self.tree2 = '(S (AA (AA a)) (B c))'
+        self.X1 = np.array([[self.tree1]], dtype=object)
+        self.X2 = np.array([[self.tree2]], dtype=object)
+
+    def test_grad_1(self):
+        k = SASST(normalize=True, _lambda=np.array([1.0]))
+        result = k.K(self.X1, self.X2)
+        #print result
+        #print k.dlambda
+        #print k.dsigma
+        #k2 = SASST(normalize=False, _lambda=np.array([1.0]))
+        #result2 = k2.K(self.X1)
+        #print result2
+        #print k2.dlambda
+        #print k2.dsigma
+        #result3 = k2.K(self.X1, self.X2)
+        #print result3
+
+        self.assertAlmostEqual(result, 0.6)
+        self.assertAlmostEqual(k.dlambda, -0.2)
+        self.assertAlmostEqual(k.dsigma, 0.12)
+    
+    @unittest.skip("need to do the maths for this test")
+    def test_grad_2(self):
+        k = SASST(normalize=True, _lambda=np.array([1.0, 0.4]), _sigma=np.array([1.0, 0.2]),
+                  lambda_buckets={'AA':1}, sigma_buckets={'AA':1})
+        result = k.K(self.X1, self.X2)
+        print result
+        print k.dlambda
+        print k.dsigma
         self.assertAlmostEqual(result, 1.88)
         self.assertAlmostEqual(k.dlambda[0], 1.24)
         self.assertAlmostEqual(k.dlambda[1], 3)

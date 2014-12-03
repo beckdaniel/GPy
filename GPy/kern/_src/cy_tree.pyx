@@ -891,10 +891,15 @@ class SymbolAwareSubsetTreeKernel(object):
                 X2_list.push_back(vecnode)
 
 
-        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_Ks = np.zeros(shape=(len(X),))
-        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_dlambdas = np.zeros(shape=(len(X),))
-        cdef np.ndarray[DTYPE_t, ndim=1] X_diag_dsigmas = np.zeros(shape=(len(X),))
-        cdef np.ndarray[DTYPE_t, ndim=1] X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas
+        #cdef np.ndarray[DTYPE_t, ndim=1] X_diag_Ks = np.zeros(shape=(len(X),))
+        #cdef np.ndarray[DTYPE_t, ndim=2] X_diag_dlambdas = np.zeros(shape=(len(X),))
+        #cdef np.ndarray[DTYPE_t, ndim=2] X_diag_dsigmas = np.zeros(shape=(len(X),))
+        #cdef np.ndarray[DTYPE_t, ndim=1] X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas
+        #cdef np.ndarray[DTYPE_t, ndim=1] X_diag_Ks, X2_diag_Ks
+        #cdef np.ndarray[DTYPE_t, ndim=2] X_diag_dlambdas, X_diag_dsigmas, X2_diag_dlambdas, X2_diag_dsigmas
+        cdef double[:] X_diag_Ks, X2_diag_Ks
+        cdef double[:,:] X_diag_dlambdas, X_diag_dsigmas, X2_diag_dlambdas, X2_diag_dsigmas
+
         # Start the diag values for normalization
         if self.normalize:
             X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_list)
@@ -936,6 +941,10 @@ class SymbolAwareSubsetTreeKernel(object):
         #print Ks
         #print dlambdas
         #print dsigmas
+        #cdef double[:] X_diag_dlambdas_i, X_diag_dsigmas_i
+        #cdef double[:] X_diag_dlambdas_j, X_diag_dsigmas_j
+        #cdef double[:] X2_diag_dlambdas_i, X2_diag_dsigmas_i
+        #cdef double[:] X2_diag_dlambdas_j, X2_diag_dsigmas_j
         with nogil, parallel(num_threads=num_threads):
             for i in prange(X_len, schedule='dynamic'):
                 #j = 0
@@ -954,24 +963,23 @@ class SymbolAwareSubsetTreeKernel(object):
                                        lambda_buckets, sigma_buckets)
 
                     # Normalization happens here.
-                    #if do_normalize:
-                        #if symmetric:
+                    if do_normalize:
+                        if symmetric:
                             #K_norm, dlambda_norm, dsigma_norm = normalize(K_result, dlambda, dsigma,
-                            #norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,               
-                            #                           X_diag_Ks[i], X_diag_Ks[j],
-                            #                           X_diag_dlambdas[i], X_diag_dlambdas[j],
-                            #                           X_diag_dsigmas[i], X_diag_dsigmas[j])
-                        #else:
+                            norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,               
+                                                       X_diag_Ks[i], X_diag_Ks[j],
+                                                       X_diag_dlambdas[i], X_diag_dlambdas[j],
+                                                       X_diag_dsigmas[i], X_diag_dsigmas[j],
+                                                       lambda_size, sigma_size)
+                        else:
                             #K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                            #norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,
-                            #                           X_diag_Ks[i], X2_diag_Ks[j],
-                            #                           X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                            #                           X_diag_dsigmas[i], X2_diag_dsigmas[j])
-                    #else:
-                    #    norm_result = result
-
-                    norm_result = result
-
+                            norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,
+                                                       X_diag_Ks[i], X2_diag_Ks[j],
+                                                       X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                                       X_diag_dsigmas[i], X2_diag_dsigmas[j],
+                                                       lambda_size, sigma_size)
+                    else:
+                        norm_result = result
 
                     # Store everything
                     Ks[i,j] = norm_result.k
@@ -1478,36 +1486,46 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     return result
 
 
-cdef SAResult normalize_sa(double K_result, double dlambda, double dsigma, double diag_Ks_i, 
-                         double diag_Ks_j, double diag_dlambdas_i, double diag_dlambdas_j, 
-                         double diag_dsigmas_i, double diag_dsigmas_j) nogil:
+cdef SAResult normalize_sa(double K_result, double* dlambda, double* dsigma, double diag_Ks_i, 
+                           double diag_Ks_j, double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
+                           double[:] diag_dsigmas_i, double[:] diag_dsigmas_j,
+                           int lambda_size, int sigma_size) nogil:
     """
     Normalize the result from SSTK, including derivatives.
     """
     cdef double norm, sqrt_nrorm, K_norm, diff_lambda, dlambda_norm, diff_sigma, dsigma_norm
-    cdef Result result
-    cdef SAResult saresult
+    #cdef Result result
+    cdef SAResult result
+    cdef int i
+    result.dlambda = <double*> malloc(lambda_size)
+    result.dsigma = <double*> malloc(sigma_size)
 
     norm = diag_Ks_i * diag_Ks_j
     sqrt_norm = sqrt(norm)
     K_norm = K_result / sqrt_norm
-    
-    diff_lambda = ((diag_dlambdas_i * diag_Ks_j) +
-                   (diag_Ks_i * diag_dlambdas_j))
-    diff_lambda /= 2 * norm
-    dlambda_norm = ((dlambda / sqrt_norm) -
-                    (K_norm * diff_lambda))
-        
-    diff_sigma = ((diag_dsigmas_i * diag_Ks_j) +
-                  (diag_Ks_i * diag_dsigmas_j))
-    diff_sigma /= 2 * norm
-    dsigma_norm = ((dsigma / sqrt_norm) -
-                   (K_norm * diff_sigma))
-
     result.k = K_norm
-    result.dlambda = dlambda_norm
-    result.dsigma = dsigma_norm
-    #return result
-    return saresult
+
+    for i in range(lambda_size):
+        diff_lambda = ((diag_dlambdas_i[i] * diag_Ks_j) +
+                       (diag_Ks_i * diag_dlambdas_j[i]))
+        diff_lambda /= 2 * norm
+        #dlambda_norm = ((dlambda / sqrt_norm) -
+        #                (K_norm * diff_lambda))
+        result.dlambda[i] = ((dlambda[i] / sqrt_norm) -
+                             (K_norm * diff_lambda))
+
+    for i in range(sigma_size):
+        diff_sigma = ((diag_dsigmas_i[i] * diag_Ks_j) +
+                      (diag_Ks_i * diag_dsigmas_j[i]))
+        diff_sigma /= 2 * norm
+        #dsigma_norm = ((dsigma / sqrt_norm) -
+        #               (K_norm * diff_sigma))
+        result.dsigma[i] = ((dsigma[i] / sqrt_norm) -
+                            (K_norm * diff_sigma))
+
+
+    #result.dlambda = dlambda_norm
+    #result.dsigma = dsigma_norm
+    return result
 
 #endif //CY_TREE_H
