@@ -174,6 +174,16 @@ class SASSTKKernelTests(unittest.TestCase):
         k = SASST(normalize=False, _lambda=np.array([1.0]), _sigma=np.array([0.2]))
         self.assertAlmostEqual(k.K(self.X1, self.X2), 2.48)
 
+    def test_K_3(self):
+        k = SASST(normalize=False, _lambda=np.array([1.0, 0.5]), _sigma=np.array([0.2]),
+                  lambda_buckets={'AA':1})
+        self.assertAlmostEqual(k.K(self.X1, self.X2), 0.96)
+
+    def test_K_4(self):
+        k = SASST(normalize=False, _lambda=np.array([1.0, 0.5]), _sigma=np.array([1.0, 0.2]),
+                  lambda_buckets={'AA':1}, sigma_buckets={'AA':1})
+        self.assertAlmostEqual(k.K(self.X1, self.X2), 2.2)
+
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
     unittest.main()
