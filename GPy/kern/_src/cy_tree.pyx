@@ -851,6 +851,9 @@ class SymbolAwareSubsetTreeKernel(object):
         else:
             symmetric = False
             self._build_cache(X2)
+        cdef SAStruct lambda_buckets = self._dict_to_map(self.lambda_buckets)
+        cdef SAStruct sigma_buckets = self._dict_to_map(self.sigma_buckets)
+
 
         # Caches are python dicts that assign a node_list with a string.
         # We have to convert these node_lists to C++ lists, so we can use them
@@ -903,16 +906,23 @@ class SymbolAwareSubsetTreeKernel(object):
         # It is a bit ugly but way more efficient. We store the derivatives
         # and just return the stored values when dK_dtheta is called.
         cdef np.ndarray[DTYPE_t, ndim=2] Ks = np.zeros(shape=(len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=2] dlambdas = np.zeros(shape=(len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=2] dsigmas = np.zeros(shape=(len(X), len(X2)))
+        #cdef np.ndarray[DTYPE_t, ndim=2] dlambdas = np.zeros(shape=(len(X), len(X2)))
+        #cdef np.ndarray[DTYPE_t, ndim=2] dsigmas = np.zeros(shape=(len(X), len(X2)))
+        cdef np.ndarray[DTYPE_t, ndim=3] dlambdas = np.zeros(shape=(len(self.lambda_buckets), 
+                                                                    len(X), len(X2)))
+        cdef np.ndarray[DTYPE_t, ndim=3] dsigmas = np.zeros(shape=(len(self.sigma_buckets),
+                                                                   len(X), len(X2)))
+
         cdef int X_len = len(X)
         cdef int X2_len = len(X2)
         cdef int do_normalize
-        cdef int i, j
+        cdef int i, j, k
+        cdef int lambda_size = len(self.lambda_buckets)
+        cdef int sigma_size = len(self.sigma_buckets)
         cdef VecNode vecnode2
-        cdef double _lambda = self._lambda
-        cdef double _sigma = self._sigma
-        cdef Result result, norm_result
+        cdef double[:] _lambda = self._lambda
+        cdef double[:] _sigma = self._sigma
+        cdef SAResult result, norm_result
         if self.normalize:
             do_normalize = 1
         else:
@@ -936,33 +946,41 @@ class SymbolAwareSubsetTreeKernel(object):
                         
                     vecnode = X_list[i]
                     vecnode2 = X2_list[j]
-                    result = calc_K(vecnode, vecnode2, _lambda, _sigma)
+                    result = calc_K_sa(vecnode, vecnode2, _lambda, _sigma,
+                                       lambda_buckets, sigma_buckets)
 
                     # Normalization happens here.
-                    if do_normalize:
-                        if symmetric:
+                    #if do_normalize:
+                        #if symmetric:
                             #K_norm, dlambda_norm, dsigma_norm = normalize(K_result, dlambda, dsigma,
-                            norm_result = normalize(result.k, result.dlambda, result.dsigma,               
-                                                    X_diag_Ks[i], X_diag_Ks[j],
-                                                    X_diag_dlambdas[i], X_diag_dlambdas[j],
-                                                    X_diag_dsigmas[i], X_diag_dsigmas[j])
-                        else:
+                            #norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,               
+                            #                           X_diag_Ks[i], X_diag_Ks[j],
+                            #                           X_diag_dlambdas[i], X_diag_dlambdas[j],
+                            #                           X_diag_dsigmas[i], X_diag_dsigmas[j])
+                        #else:
                             #K_norm, dlambda_norm, dsigma_norm = self._normalize(K_result, dlambda, dsigma,
-                            norm_result = normalize(result.k, result.dlambda, result.dsigma,
-                                                    X_diag_Ks[i], X2_diag_Ks[j],
-                                                    X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                                                    X_diag_dsigmas[i], X2_diag_dsigmas[j])
-                    else:
-                        norm_result = result
-                    
+                            #norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,
+                            #                           X_diag_Ks[i], X2_diag_Ks[j],
+                            #                           X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                            #                           X_diag_dsigmas[i], X2_diag_dsigmas[j])
+                    #else:
+                    #    norm_result = result
+
+                    norm_result = result
+
+
                     # Store everything
                     Ks[i,j] = norm_result.k
-                    dlambdas[i,j] = norm_result.dlambda
-                    dsigmas[i,j] = norm_result.dsigma
+                    for k in range(lambda_size):
+                        dlambdas[k,i,j] = norm_result.dlambda[k]
+                    for k in range(sigma_size):
+                        dsigmas[k,i,j] = norm_result.dsigma[k]
                     if symmetric:
                         Ks[j,i] = norm_result.k
-                        dlambdas[j,i] = norm_result.dlambda
-                        dsigmas[j,i] = norm_result.dsigma
+                        for k in range(lambda_size):
+                            dlambdas[k,j,i] = norm_result.dlambda[k]
+                        for k in range(sigma_size):
+                            dsigmas[k,j,i] = norm_result.dsigma[k]
 
         return (Ks, dlambdas, dsigmas)
 
@@ -1324,6 +1342,7 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
             result.dlambda[i] = dlambda_vecmatrix[i][index]
         for i in range(sigma_size):
             result.dsigma[i] = dsigma_vecmatrix[i][index]
+        #printf("%s %f\n", root.c_str(), result.k)
         return result
 
     # BASE CASE: found a preterminal
@@ -1350,6 +1369,8 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
         for i in range(sigma_size):
             result.dsigma[i] = 0
             dsigma_vecmatrix[i][index] = 0
+        #print_node(node1)
+        #printf("BASE CASE: %s %f\n", root.c_str(), result.k)
         return result
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
@@ -1407,6 +1428,42 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
             dsigma_vecmatrix[i][index] = dsigma_result_ne
             result.dsigma[i] = dsigma_result_ne
 
+    #print_node(node1)
+    #print_node(node2)
+    #printf("REC CASE: %s %f\n", root.c_str(), result.k)
     return result
+
+
+cdef SAResult normalize_sa(double K_result, double dlambda, double dsigma, double diag_Ks_i, 
+                         double diag_Ks_j, double diag_dlambdas_i, double diag_dlambdas_j, 
+                         double diag_dsigmas_i, double diag_dsigmas_j) nogil:
+    """
+    Normalize the result from SSTK, including derivatives.
+    """
+    cdef double norm, sqrt_nrorm, K_norm, diff_lambda, dlambda_norm, diff_sigma, dsigma_norm
+    cdef Result result
+    cdef SAResult saresult
+
+    norm = diag_Ks_i * diag_Ks_j
+    sqrt_norm = sqrt(norm)
+    K_norm = K_result / sqrt_norm
+    
+    diff_lambda = ((diag_dlambdas_i * diag_Ks_j) +
+                   (diag_Ks_i * diag_dlambdas_j))
+    diff_lambda /= 2 * norm
+    dlambda_norm = ((dlambda / sqrt_norm) -
+                    (K_norm * diff_lambda))
+        
+    diff_sigma = ((diag_dsigmas_i * diag_Ks_j) +
+                  (diag_Ks_i * diag_dsigmas_j))
+    diff_sigma /= 2 * norm
+    dsigma_norm = ((dsigma / sqrt_norm) -
+                   (K_norm * diff_sigma))
+
+    result.k = K_norm
+    result.dlambda = dlambda_norm
+    result.dsigma = dsigma_norm
+    #return result
+    return saresult
 
 #endif //CY_TREE_H

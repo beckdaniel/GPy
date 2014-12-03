@@ -15,6 +15,7 @@ import datetime
 
 np.set_printoptions(suppress=True)
 
+@unittest.skip("skip")
 class SASSTKParallelCheckingTests(unittest.TestCase):
     """
     Tests for the symbol-aware SSTK Parallel version.
@@ -61,6 +62,7 @@ class SASSTKParallelCheckingTests(unittest.TestCase):
         #print k.Kdiag(X)
 
 
+@unittest.skip("skip")
 class SASSTKDiagSmallTests(unittest.TestCase):
     """
     Tests for KDiag only, using a small tree.
@@ -106,6 +108,7 @@ class SASSTKDiagSmallTests(unittest.TestCase):
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.72)
 
 
+@unittest.skip("skip")
 class SASSTKDiagSmallSigmaTests(unittest.TestCase):
     """
     Tests for KDiag only for sigma_buckets, using a small tree.
@@ -152,7 +155,24 @@ class SASSTKDiagSmallSigmaTests(unittest.TestCase):
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.39)
 
 
+class SASSTKKernelTests(unittest.TestCase):
+    """
+    Tests for K, on a small set of trees
+    """
 
+    def setUp(self):
+        self.tree1 = '(S (AA (AA a)) (B b))'
+        self.tree2 = '(S (AA (AA a)) (B c))'
+        self.X1 = np.array([[self.tree1]], dtype=object)
+        self.X2 = np.array([[self.tree2]], dtype=object)
+
+    def test_K_1(self):
+        k = SASST(normalize=False, _lambda=np.array([1.0]))
+        self.assertAlmostEqual(k.K(self.X1, self.X2), 6)
+
+    def test_K_2(self):
+        k = SASST(normalize=False, _lambda=np.array([1.0]), _sigma=np.array([0.2]))
+        self.assertAlmostEqual(k.K(self.X1, self.X2), 2.48)
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
