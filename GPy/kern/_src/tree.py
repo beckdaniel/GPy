@@ -90,8 +90,9 @@ class SymbolAwareSubsetTreeKernel(Kern):
         super(SymbolAwareSubsetTreeKernel, self).__init__(1, active_dims, 'sasstk')
         self.normalize = normalize
         # SASST will be parallel by default.
-        self._lambda = Param('_lambda', _lambda)
-        self._sigma = Param('_sigma', _sigma)
+        self._lambda = Param('lambda', _lambda)
+        self._sigma = Param('sigma', _sigma)
+        self.add_parameters(self._lambda, self._sigma)
         self.kernel = cy_tree.SymbolAwareSubsetTreeKernel(_lambda, _sigma, lambda_buckets, sigma_buckets,
                                                           normalize, num_threads=num_threads)
         
@@ -130,8 +131,18 @@ class SymbolAwareSubsetTreeKernel(Kern):
                 np.sum(self.dsigma * dL_dK)]
 
     def update_gradients_full(self, dL_dK, X, X2):
-        self._lambda.gradient = np.sum(self.dlambda * dL_dK)
-        self._sigma.gradient = np.sum(self.dsigma * dL_dK)
+        #print self._lambda
+        #print self._sigma
+        #print len(self._lambda)
+        #print self.dlambda
+        #print self.dsigma
+        #a = np.array([np.sum(self.dlambda[i] * dL_dK) for i in range(len(self._lambda))])
+        #print a
+        self._lambda.gradient = np.array([np.sum(self.dlambda[i] * dL_dK) for i in range(len(self._lambda))])
+        self._sigma.gradient = np.array([np.sum(self.dsigma[i] * dL_dK) for i in range(len(self._sigma))])
+        #print self._lambda.gradient
+        #print self._sigma.gradient
+
 
 ####################################
 

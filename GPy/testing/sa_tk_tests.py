@@ -220,6 +220,7 @@ class SASSTGradientTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
 
+
 class SASSTNormTests(unittest.TestCase):
     """
     Tests for the normalized version
@@ -261,6 +262,64 @@ class SASSTNormTests(unittest.TestCase):
         self.assertAlmostEqual(k.dlambda[1], 3)
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
+
+
+class SASSTIntegrationTests(unittest.TestCase):
+    """
+    Tests for integration into GPs.
+    """
+    def setUp(self):
+        self.X = np.array([['(S (NP ns) (VP v))'],
+                           ['(S (NP n) (VP v))'],
+                           ['(S (NP (N a)) (VP (V c)))'],
+                           ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                           ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                          dtype=object)
+        self.Y = np.array([[(a+10)*5] for a in range(5)])
+
+    def test_integration_1(self):
+        k = SASST(_lambda=np.array([1.0]))
+        m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
+        m.constrain_positive('')
+        print m
+        m.optimize(messages=False)
+        print m
+
+    def test_integration_2(self):
+        k = SASST(_lambda=np.array([1.0, 0.5]))
+        m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
+        m.constrain_positive('')
+        #print m
+        m.optimize(messages=False)
+        #print m
+        #print m['sasstk.lambda']
+        k2 = SST(_lambda=1.0)
+        m2 = GPy.models.GPRegression(self.X, self.Y, kernel=k2)
+        m2.constrain_positive('')
+        #print m
+        m2.optimize(messages=False)
+        #print m
+        self.assertAlmostEqual(m['sasstk.lambda'][0], m2['sstk.lambda'])
+
+    def test_integration_3(self):
+        k = SASST(_lambda=np.array([1.0, 0.5]), _sigma=np.array([1.0, 0.4]),
+                  lambda_buckets={'NP':1, 'N':1}, sigma_buckets={'NP':1, 'N':1})
+        m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
+        m.constrain_positive('')
+        print m
+        print m.predict(self.X)
+        m.optimize(messages=False)
+        print m
+        print m['sasstk.lambda']
+        print m['sasstk.sigma']
+        print m.predict(self.X)
+        #k2 = SST(_lambda=1.0)
+        #m2 = GPy.models.GPRegression(self.X, self.Y, kernel=k2)
+        #m2.constrain_positive('')
+        #print m
+        #m2.optimize(messages=False)
+        #print m
+        #self.assertAlmostEqual(m['sasstk.lambda'][0], m2['sstk.lambda'])
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
