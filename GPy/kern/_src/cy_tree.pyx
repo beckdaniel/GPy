@@ -908,17 +908,17 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef np.ndarray[DTYPE_t, ndim=2] Ks = np.zeros(shape=(len(X), len(X2)))
         #cdef np.ndarray[DTYPE_t, ndim=2] dlambdas = np.zeros(shape=(len(X), len(X2)))
         #cdef np.ndarray[DTYPE_t, ndim=2] dsigmas = np.zeros(shape=(len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=3] dlambdas = np.zeros(shape=(len(self.lambda_buckets), 
+        cdef int lambda_size = len(self._lambda)
+        cdef int sigma_size = len(self._sigma)
+        cdef np.ndarray[DTYPE_t, ndim=3] dlambdas = np.zeros(shape=(lambda_size, 
                                                                     len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=3] dsigmas = np.zeros(shape=(len(self.sigma_buckets),
+        cdef np.ndarray[DTYPE_t, ndim=3] dsigmas = np.zeros(shape=(sigma_size,
                                                                    len(X), len(X2)))
 
         cdef int X_len = len(X)
         cdef int X2_len = len(X2)
         cdef int do_normalize
         cdef int i, j, k
-        cdef int lambda_size = len(self.lambda_buckets)
-        cdef int sigma_size = len(self.sigma_buckets)
         cdef VecNode vecnode2
         cdef double[:] _lambda = self._lambda
         cdef double[:] _sigma = self._sigma
@@ -932,6 +932,10 @@ class SymbolAwareSubsetTreeKernel(object):
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         cdef int num_threads = self.num_threads
         #print "NUM THREADS: %d" % num_threads
+
+        #print Ks
+        #print dlambdas
+        #print dsigmas
         with nogil, parallel(num_threads=num_threads):
             for i in prange(X_len, schedule='dynamic'):
                 #j = 0
@@ -982,6 +986,9 @@ class SymbolAwareSubsetTreeKernel(object):
                         for k in range(sigma_size):
                             dsigmas[k,j,i] = norm_result.dsigma[k]
 
+        #print Ks
+        #print dlambdas
+        #print dsigmas
         return (Ks, dlambdas, dsigmas)
 
 ##############
@@ -1019,6 +1026,14 @@ cdef void print_int_pairs(VecIntPair int_pairs) nogil:
     for int_pair in int_pairs:
         print_int_pair(int_pair)
     printf("]\n")
+
+cdef void print_saresult(SAResult result, int l_size, int s_size) nogil:
+    printf("\nK: %f\n", result.k)
+    cdef int i
+    for i in range(l_size):
+        printf("DLAMBDA %d: %f\n", i, result.dlambda[i])
+    for i in range(s_size):
+        printf("DSIGMA %d: %f\n", i, result.dsigma[i])
 
 cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     """
@@ -1371,6 +1386,7 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
             dsigma_vecmatrix[i][index] = 0
         #print_node(node1)
         #printf("BASE CASE: %s %f\n", root.c_str(), result.k)
+        #print_saresult(result, lambda_size, sigma_size)
         return result
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
@@ -1379,6 +1395,14 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     sum_lambda = 0
     sum_sigma = 0
     sum_sigma_ne = 0
+    cdef double* vec_lambda = <double*> malloc(lambda_size)
+    for i in range(lambda_size):
+        vec_lambda[i] = 0
+    cdef double* vec_sigma = <double*> malloc(sigma_size)
+    for i in range(sigma_size):
+        vec_sigma[i] = 0
+
+    cdef double g = 1
     children1 = node1.second
     children2 = node2.second
     sigma_index = sigma_buckets[root]
@@ -1390,47 +1414,67 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
                               delta_matrix, dlambda_vecmatrix,
                               dsigma_vecmatrix, _lambda, _sigma,
                               lambda_buckets, sigma_buckets)
-            #denom = _sigma[0] + result.k # WRONG HERE
+
             denom = _sigma[sigma_index] + result.k
-            prod *= denom
+            g *= denom
+            for j in range(lambda_size):
+                vec_lambda[j] += result.dlambda[j] / denom
+            for j in range(sigma_size):
+                if j == sigma_index:
+                    vec_sigma[j] += (1 + result.dsigma[j]) / denom
+                else:
+                    vec_sigma[j] += result.dsigma[j] / denom
+            #denom = _sigma[0] + result.k # WRONG HERE
+            #prod *= denom
             #sum_lambda += result.dlambda[0] / denom # WRONG HERE
             #sum_sigma += (1 + result.dsigma[0]) / denom # WRONG HERE
-            sum_lambda += result.dlambda[lambda_index] / denom
-            sum_sigma += (1 + result.dsigma[sigma_index]) / denom
-            sum_sigma_ne += (result.dsigma[sigma_index]) / denom
+            #sum_lambda += result.dlambda[lambda_index] / denom
+            #sum_sigma += (1 + result.dsigma[sigma_index]) / denom
+            #sum_sigma_ne += (result.dsigma[sigma_index]) / denom
         else:
+            # This means that delta = 0. Grads are also = 0.
+            # Still need to update g and vec_sigma properly
+            g *= _sigma[sigma_index]
+            vec_sigma[sigma_index] += 1 / _sigma[sigma_index]
             #prod *= _sigma[0] # WRONG HERE
             #sum_sigma += 1 /_sigma[0] # WRONG HERE
-            prod *= _sigma[sigma_index]
-            sum_sigma += 1 /_sigma[sigma_index]
+            #prod *= _sigma[sigma_index]
+            #sum_sigma += 1 /_sigma[sigma_index]
+
 
     #delta_result = _lambda[0] * prod # WRONG HERE
-    delta_result = _lambda[lambda_index] * prod
+    #delta_result = _lambda[lambda_index] * prod
     #dlambda_result = prod + (delta_result * sum_lambda) # OLD
-    dlambda_result = delta_result * sum_lambda
-    dsigma_result = delta_result * sum_sigma
-    dsigma_result_ne = delta_result * sum_sigma_ne
+    #dlambda_result = delta_result * sum_lambda
+    #dsigma_result = delta_result * sum_sigma
+    #dsigma_result_ne = delta_result * sum_sigma_ne
 
+    delta_result = _lambda[lambda_index] * g
     delta_matrix[index] = delta_result
     result.k = delta_result
     for i in range(lambda_size):
+        dlambda_result = delta_result * vec_lambda[i]
         if i == lambda_index:
-            dlambda_vecmatrix[i][index] = prod + dlambda_result
-            result.dlambda[i] = prod + dlambda_result
-        else:
-            dlambda_vecmatrix[i][index] = dlambda_result
-            result.dlambda[i] = dlambda_result            
+            dlambda_result += g
+        dlambda_vecmatrix[i][index] = dlambda_result
+        result.dlambda[i] = dlambda_result
+            #dlambda_vecmatrix[i][index] = prod + dlambda_result
+            #result.dlambda[i] = prod + dlambda_result
+        #else:
+        #    dlambda_vecmatrix[i][index] = dlambda_result
+        #    result.dlambda[i] = dlambda_result            
     for i in range(sigma_size):
-        if i  == sigma_index:
-            dsigma_vecmatrix[i][index] = dsigma_result
-            result.dsigma[i] = dsigma_result
-        else:
-            dsigma_vecmatrix[i][index] = dsigma_result_ne
-            result.dsigma[i] = dsigma_result_ne
+        dsigma_result = delta_result * vec_sigma[i]
+        dsigma_vecmatrix[i][index] = dsigma_result
+        result.dsigma[i] = dsigma_result
+        #if i  == sigma_index:
+        #    dsigma_vecmatrix[i][index] = dsigma_result
+        #    result.dsigma[i] = dsigma_result
+        #else:
+        #    dsigma_vecmatrix[i][index] = dsigma_result_ne
+        #    result.dsigma[i] = dsigma_result_ne
 
-    #print_node(node1)
-    #print_node(node2)
-    #printf("REC CASE: %s %f\n", root.c_str(), result.k)
+    #print_saresult(result, lambda_size, sigma_size)
     return result
 
 
