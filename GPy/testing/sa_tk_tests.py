@@ -62,7 +62,7 @@ class SASSTKParallelCheckingTests(unittest.TestCase):
         #print k.Kdiag(X)
 
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTKDiagSmallTests(unittest.TestCase):
     """
     Tests for KDiag only, using a small tree.
@@ -185,6 +185,8 @@ class SASSTKKernelTests(unittest.TestCase):
                   lambda_buckets={'AA':1}, sigma_buckets={'AA':1})
         self.assertAlmostEqual(k.K(self.X1, self.X2), 2.2)
 
+
+@unittest.skip("skip")
 class SASSTGradientTests(unittest.TestCase):
     """
     Tests for gradients.
@@ -263,7 +265,7 @@ class SASSTNormTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
 
-
+@unittest.skip("skip")
 class SASSTIntegrationTests(unittest.TestCase):
     """
     Tests for integration into GPs.
