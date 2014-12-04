@@ -681,7 +681,7 @@ class ParSubsetTreeKernel(object):
                                                     X_diag_dsigmas[i], X2_diag_dsigmas[j])
                     else:
                         norm_result = result
-                    
+                                        
                     # Store everything
                     Ks[i,j] = norm_result.k
                     dlambdas[i,j] = norm_result.dlambda
@@ -793,6 +793,9 @@ class SymbolAwareSubsetTreeKernel(object):
         K_vec = np.zeros(shape=(len(X_list),))
         dlambda_mat = np.zeros(shape=(len(X_list), len(self._lambda)))
         dsigma_mat = np.zeros(shape=(len(X_list), len(self._sigma)))
+        #cdef double[len(X_list)] K_vec
+        #cdef double[len(X_list), len(self._lambda)] dlambda_mat
+        #cdef double[len(X_list), len(self._sigma)] dsigma_mat
         for i in range(len(X_list)):
             result = calc_K_sa(X_list[i], X_list[i], self._lambda, self._sigma, 
                                lambda_buckets, sigma_buckets)
@@ -942,19 +945,19 @@ class SymbolAwareSubsetTreeKernel(object):
                                        lambda_buckets, sigma_buckets)
 
                     # Normalization happens here.
-                    if do_normalize:
-                        if symmetric:
-                            norm_result = normalize_sa(norm_result.k, norm_result.dlambda, norm_result.dsigma,       
-                                                       X_diag_Ks[i], X_diag_Ks[j],
-                                                       X_diag_dlambdas[i], X_diag_dlambdas[j],
-                                                       X_diag_dsigmas[i], X_diag_dsigmas[j],
-                                                       lambda_size, sigma_size)
-                        else:
-                            norm_result = normalize_sa(norm_result.k, norm_result.dlambda, norm_result.dsigma,
-                                                       X_diag_Ks[i], X2_diag_Ks[j],
-                                                       X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                                                       X_diag_dsigmas[i], X2_diag_dsigmas[j],
-                                                       lambda_size, sigma_size)
+                    #if do_normalize:
+                    #    if symmetric:
+                    #        norm_result = normalize_sa(norm_result.k, norm_result.dlambda, norm_result.dsigma,       
+                    #                                   X_diag_Ks[i], X_diag_Ks[j],
+                    #                                   X_diag_dlambdas[i], X_diag_dlambdas[j],
+                    #                                   X_diag_dsigmas[i], X_diag_dsigmas[j],
+                    #                                   lambda_size, sigma_size)
+                    #    else:
+                    #        norm_result = normalize_sa(norm_result.k, norm_result.dlambda, norm_result.dsigma,
+                    #                                   X_diag_Ks[i], X2_diag_Ks[j],
+                    #                                   X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                    #                                   X_diag_dsigmas[i], X2_diag_dsigmas[j],
+                    #                                   lambda_size, sigma_size)
                     #else:
                     #    norm_result = result
 
@@ -971,8 +974,8 @@ class SymbolAwareSubsetTreeKernel(object):
                         for k in range(sigma_size):
                             dsigmas[k,j,i] = norm_result.dsigma[k]
 
-        free(norm_result.dlambda)
-        free(norm_result.dsigma)
+        #free(norm_result.dlambda)
+        #free(norm_result.dsigma)
         return (Ks, dlambdas, dsigmas)
 
 ##############
@@ -1227,84 +1230,129 @@ cdef SAResult calc_K_sa(VecNode& vecnode1, VecNode& vecnode2, double[:] _lambda,
     """
     cdef int lambda_size = _lambda.shape[0]
     cdef int sigma_size = _sigma.shape[0]
-
-    cdef double k_total = 0
-    cdef double* dlambda_total = <double*> malloc(lambda_size * sizeof(double))
-    cdef double* dsigma_total = <double*> malloc(sigma_size * sizeof(double))
+    cdef int i, j, k
+    #cdef double k_total = 0
+    #cdef double* dlambda_total = <double*> malloc(lambda_size * sizeof(double))
+    #cdef double* dsigma_total = <double*> malloc(sigma_size * sizeof(double))
+    #cdef double[:] dlambda_total = np.zeros(shape=(len1,))
+    #cdef double[:] dsigma_total = np.zeros(shape=(len1,))
+    #cdef double[lambda_size] dlambda_total
+    #cdef double[sigma_size] dsigma_total
     cdef SAResult result
+    result.k = 0
+    result.dlambda = <double*> malloc(lambda_size * sizeof(double))
+    for i in range(lambda_size):
+        result.dlambda[i] = 0
+    result.dsigma = <double*> malloc(sigma_size * sizeof(double))
+    for i in range(sigma_size):
+        result.dsigma[i] = 0
     cdef VecIntPair node_pairs
     node_pairs = get_node_pairs(vecnode1, vecnode2)
 
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
-    cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))    
-    cdef int i, j
-    cdef int index
+    cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    #cdef double[len1, len2] delta_matrix
+    #cdef double[len1][len2] _delta_matrix
+    #cdef double[:,:] delta_matrix = _delta_matrix
 
-    cdef SAMatrix dlambda_vecmatrix
-    cdef SAMatrix dsigma_vecmatrix
-    cdef double* symbol_matrix
-    for i in range(lambda_size):
-        symbol_matrix = <double*> malloc(len1 * len2 * sizeof(double))
-        dlambda_vecmatrix.push_back(symbol_matrix)
-    for i in range(sigma_size):
-        symbol_matrix = <double*> malloc(len1 * len2 * sizeof(double))
-        dsigma_vecmatrix.push_back(symbol_matrix)
+    cdef int index, index2
+
+    #cdef SAMatrix dlambda_vecmatrix
+    #cdef SAMatrix dsigma_vecmatrix
+    #cdef double* symbol_matrix
+    #cdef double[len1, len2, lambda_size] dlambda_tensor
+    #cdef double[len1, len2, sigma_size] dsigma_tensor
+    #cdef double[:,:,:]  dlambda_tensor, dsigma_tensor
+    #cdef double[len1][len2][lambda_size] dlambda_tensor
+    #cdef double[len1][len2][sigma_size] dsigma_tensor
+    #for i in range(lambda_size):
+    #    symbol_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    #    dlambda_vecmatrix.push_back(symbol_matrix)
+    #for i in range(sigma_size):
+    #    symbol_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    #    dsigma_vecmatrix.push_back(symbol_matrix)
+    cdef double* dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size * sizeof(double))
+    cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size * sizeof(double))
 
     for i in range(len1):
         for j in range(len2):
             index = i * len2 + j
             delta_matrix[index] = 0
-
-    for sid in range(lambda_size):
-        for i in range(len1):
-            for j in range(len2):
-                index = i * len2 + j
-                dlambda_vecmatrix[sid][index] = 0
-
-    for sid in range(sigma_size):
-        for i in range(len1):
-            for j in range(len2):
-                index = i * len2 + j
-                dsigma_vecmatrix[sid][index] = 0
+            for k in range(lambda_size):
+                index2 = index * lambda_size + k
+                dlambda_tensor[index2] = 0
+            for k in range(sigma_size):
+                index2 = index * sigma_size + k
+                dsigma_tensor[index2] = 0
 
 
-    for i in range(lambda_size):
-        dlambda_total[i] = 0
-    for i in range(sigma_size):
-        dsigma_total[i] = 0
 
-    cdef SAResult delta_result
+    #for sid in range(lambda_size):
+    #    for i in range(len1):
+    #        for j in range(len2):
+    #            index = i * len2 + j
+    #            dlambda_vecmatrix[sid][index] = 0
+
+    #for sid in range(sigma_size):
+    #    for i in range(len1):
+    #        for j in range(len2):
+    #            index = i * len2 + j
+    #            dsigma_vecmatrix[sid][index] = 0
+
+
+    #for i in range(lambda_size):
+    #    dlambda_total[i] = 0
+    #for i in range(sigma_size):
+    #    dsigma_total[i] = 0
+
+    #cdef SAResult delta_result
+    #delta_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
+    #delta_result.dsigma = <double*> malloc(sigma_size * sizeof(double))
+
     for int_pair in node_pairs:
-        delta_result = sa_delta(int_pair.first, int_pair.second, 
-                                vecnode1, vecnode2,
-                                delta_matrix, dlambda_vecmatrix,
-                                dsigma_vecmatrix, _lambda, _sigma,
-                                lambda_buckets, sigma_buckets)
-        k_total += delta_result.k
-        for i in range(lambda_size):
-            dlambda_total[i] += delta_result.dlambda[i]
-        for i in range(sigma_size):
-            dsigma_total[i] += delta_result.dsigma[i]
+        #for i in range(lambda_size):
+        #    delta_result.dlambda[i] = 0
+        #for i in range(sigma_size):
+        #    delta_result.dsigma[i] = 0
+        #delta_result = sa_delta(int_pair.first, int_pair.second, 
+        sa_delta(result, int_pair.first, int_pair.second, 
+                 vecnode1, vecnode2,
+                 delta_matrix, dlambda_tensor,
+                 dsigma_tensor, _lambda, _sigma,
+                 lambda_buckets, sigma_buckets)
+        pass
+        #k_total += delta_result.k
+        #result.k += delta_result.k
+        #for i in range(lambda_size):
+            #dlambda_total[i] += delta_result.dlambda[i]
+        #    result.dlambda[i] += delta_result.dlambda[i]
+        #for i in range(sigma_size):
+        #    result.dsigma[i] += delta_result.dsigma[i]
 
-    result.k = k_total
-    result.dlambda = dlambda_total
-    result.dsigma = dsigma_total
+    #free(delta_result.dlambda)
+    #free(delta_result.dsigma)
+
+    #result.k = k_total
+    #result.dlambda = dlambda_total
+    #result.dsigma = dsigma_total
 
     free(delta_matrix)
-    for i in range(lambda_size):
-        free(dlambda_vecmatrix[i])
-    for i in range(sigma_size):
-        free(dsigma_vecmatrix[i])
+    free(dlambda_tensor)
+    free(dsigma_tensor)
+    #for i in range(lambda_size):
+    #    free(dlambda_vecmatrix[i])
+    #for i in range(sigma_size):
+    #    free(dsigma_vecmatrix[i])
 
     return result
 
-cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
-                       double* delta_matrix,
-                       SAMatrix dlambda_vecmatrix,
-                       SAMatrix dsigma_vecmatrix,
-                       double[:] _lambda, double[:] _sigma,
-                       SAStruct& lambda_buckets, SAStruct& sigma_buckets) nogil:
+cdef void sa_delta(SAResult& result, int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
+                   double* delta_matrix,
+                   double* dlambda_tensor,
+                   double* dsigma_tensor,
+                   double[:] _lambda, double[:] _sigma,
+                   SAStruct& lambda_buckets, SAStruct& sigma_buckets) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
@@ -1317,22 +1365,27 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     cdef CNode node1, node2
     cdef int len2 = vecnode2.size()
     cdef int index = id1 * len2 + id2
+    cdef int index2
 
     cdef int lambda_size = _lambda.shape[0]
     cdef int sigma_size = _sigma.shape[0]
-    cdef SAResult result
-    result.dlambda = <double*> malloc(lambda_size * sizeof(double))
-    result.dsigma = <double*> malloc(sigma_size * sizeof(double))
+    #cdef SAResult result
+    #result.dlambda = <double*> malloc(lambda_size * sizeof(double))
+    #result.dsigma = <double*> malloc(sigma_size * sizeof(double))
 
     # RECURSIVE CASE: get value from DP matrix if it was already calculated
     val = delta_matrix[index]
     if val > 0:
-        result.k = val
-        for i in range(lambda_size):
-            result.dlambda[i] = dlambda_vecmatrix[i][index]
-        for i in range(sigma_size):
-            result.dsigma[i] = dsigma_vecmatrix[i][index]
-        return result
+        #result.k = val
+        #for i in range(lambda_size):
+        #    index2 = index * lambda_size + i
+        #    result.dlambda[i] = dlambda_tensor[index2]
+            #result.dlambda[i] = dlambda_vecmatrix[i][index]
+        #for i in range(sigma_size):
+        #    index2 = index * sigma_size + i
+        #    result.dsigma[i] = dsigma_tensor[index2]
+            #result.dsigma[i] = dsigma_vecmatrix[i][index]
+        return# result
 
     # BASE CASE: found a preterminal
     node1 = vecnode1[id1]
@@ -1343,18 +1396,25 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
     lambda_index = lambda_buckets[root]
     if node1.second.empty():
         delta_matrix[index] = _lambda[lambda_index] 
-        result.k = _lambda[lambda_index]
+        #result.k = _lambda[lambda_index]
+        result.k += _lambda[lambda_index]
         for i in range(lambda_size):
+            index2 = index * lambda_size + i
             if i == lambda_index:
-                result.dlambda[i] = 1
-                dlambda_vecmatrix[i][index] = 1
+                #result.dlambda[i] = 1
+                result.dlambda[i] += 1
+                #dlambda_vecmatrix[i][index] = 1
+                dlambda_tensor[index2] = 1
             else:
-                result.dlambda[i] = 0
-                dlambda_vecmatrix[i][index] = 0
+                #result.dlambda[i] = 0
+                #dlambda_vecmatrix[i][index] = 0
+                dlambda_tensor[index2] = 0
         for i in range(sigma_size):
-            result.dsigma[i] = 0
-            dsigma_vecmatrix[i][index] = 0
-        return result
+            index2 = index * sigma_size + i
+            #result.dsigma[i] = 0
+            #dsigma_vecmatrix[i][index] = 0
+            dsigma_tensor[index2] = 0
+        return# result
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
     node2 = vecnode2[id2]
@@ -1377,10 +1437,11 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
         ch1 = children1[i]
         ch2 = children2[i]
         if vecnode1[ch1].first == vecnode2[ch2].first:
-            result = sa_delta(ch1, ch2, vecnode1, vecnode2,
-                              delta_matrix, dlambda_vecmatrix,
-                              dsigma_vecmatrix, _lambda, _sigma,
-                              lambda_buckets, sigma_buckets)
+            #result = sa_delta(ch1, ch2, vecnode1, vecnode2,
+            sa_delta(result, ch1, ch2, vecnode1, vecnode2,
+                     delta_matrix, dlambda_tensor,
+                     dsigma_tensor, _lambda, _sigma,
+                     lambda_buckets, sigma_buckets)
 
             denom = _sigma[sigma_index] + result.k
             g *= denom
@@ -1397,20 +1458,29 @@ cdef SAResult sa_delta(int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
 
     delta_result = _lambda[lambda_index] * g
     delta_matrix[index] = delta_result
-    result.k = delta_result
+    #result.k = delta_result
+    result.k += delta_result
     for i in range(lambda_size):
+        index2 = index * lambda_size + i
         dlambda_result = delta_result * vec_lambda[i]
         if i == lambda_index:
             dlambda_result += g
-        dlambda_vecmatrix[i][index] = dlambda_result
-        result.dlambda[i] = dlambda_result
+        #dlambda_vecmatrix[i][index] = dlambda_result
+        dlambda_tensor[index2] = dlambda_result
+        #result.dlambda[i] = dlambda_result
+        result.dlambda[i] += dlambda_result
      
     for i in range(sigma_size):
+        index2 = index * sigma_size + i
         dsigma_result = delta_result * vec_sigma[i]
-        dsigma_vecmatrix[i][index] = dsigma_result
-        result.dsigma[i] = dsigma_result
+        #dsigma_vecmatrix[i][index] = dsigma_result
+        dsigma_tensor[index2] = dsigma_result
+        #result.dsigma[i] = dsigma_result
+        result.dsigma[i] += dsigma_result
 
-    return result
+    free(vec_lambda)
+    free(vec_sigma)
+    return# result
 
 
 cdef SAResult normalize_sa(double K_result, double* dlambda, double* dsigma, double diag_Ks_i, 
@@ -1423,8 +1493,8 @@ cdef SAResult normalize_sa(double K_result, double* dlambda, double* dsigma, dou
     cdef double norm, sqrt_nrorm, K_norm, diff_lambda, dlambda_norm, diff_sigma, dsigma_norm
     cdef SAResult result
     cdef int i
-    result.dlambda = <double*> malloc(lambda_size)
-    result.dsigma = <double*> malloc(sigma_size)
+    #result.dlambda = <double*> malloc(lambda_size)
+    #result.dsigma = <double*> malloc(sigma_size)
 
     norm = diag_Ks_i * diag_Ks_j
     sqrt_norm = sqrt(norm)
