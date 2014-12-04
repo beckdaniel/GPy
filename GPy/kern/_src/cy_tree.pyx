@@ -918,7 +918,7 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef VecNode vecnode2
         cdef double[:] _lambda = self._lambda
         cdef double[:] _sigma = self._sigma
-        cdef SAResult result, norm_result
+        cdef SAResult norm_result#, norm_result
         if self.normalize:
             do_normalize = 1
         else:
@@ -928,7 +928,6 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef int num_threads = self.num_threads
         with nogil, parallel(num_threads=num_threads):
             for i in prange(X_len, schedule='dynamic'):
-                #j = 0
                 for j in range(X2_len):
                     if symmetric:
                         if i < j:
@@ -939,25 +938,25 @@ class SymbolAwareSubsetTreeKernel(object):
                         
                     vecnode = X_list[i]
                     vecnode2 = X2_list[j]
-                    result = calc_K_sa(vecnode, vecnode2, _lambda, _sigma,
+                    norm_result = calc_K_sa(vecnode, vecnode2, _lambda, _sigma,
                                        lambda_buckets, sigma_buckets)
 
                     # Normalization happens here.
                     if do_normalize:
                         if symmetric:
-                            norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,               
+                            norm_result = normalize_sa(norm_result.k, norm_result.dlambda, norm_result.dsigma,       
                                                        X_diag_Ks[i], X_diag_Ks[j],
                                                        X_diag_dlambdas[i], X_diag_dlambdas[j],
                                                        X_diag_dsigmas[i], X_diag_dsigmas[j],
                                                        lambda_size, sigma_size)
                         else:
-                            norm_result = normalize_sa(result.k, result.dlambda, result.dsigma,
+                            norm_result = normalize_sa(norm_result.k, norm_result.dlambda, norm_result.dsigma,
                                                        X_diag_Ks[i], X2_diag_Ks[j],
                                                        X_diag_dlambdas[i], X2_diag_dlambdas[j],
                                                        X_diag_dsigmas[i], X2_diag_dsigmas[j],
                                                        lambda_size, sigma_size)
-                    else:
-                        norm_result = result
+                    #else:
+                    #    norm_result = result
 
                     # Store everything
                     Ks[i,j] = norm_result.k
