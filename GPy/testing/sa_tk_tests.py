@@ -195,7 +195,7 @@ class SASSTKKernelTests(unittest.TestCase):
         self.assertAlmostEqual(k.K(self.X1, self.X2), 2.2)
 
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTGradientTests(unittest.TestCase):
     """
     Tests for gradients.
@@ -207,7 +207,7 @@ class SASSTGradientTests(unittest.TestCase):
         self.X1 = np.array([[self.tree1]], dtype=object)
         self.X2 = np.array([[self.tree2]], dtype=object)
 
-    @unittest.skip("skip")
+    #@unittest.skip("skip")
     def test_grad_1(self):
         k = SASST(normalize=False, _lambda=np.array([1.0]))
         result = k.K(self.X1, self.X2)
@@ -231,7 +231,7 @@ class SASSTGradientTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTNormTests(unittest.TestCase):
     """
     Tests for the normalized version
@@ -245,36 +245,44 @@ class SASSTNormTests(unittest.TestCase):
     def test_grad_1(self):
         k = SASST(normalize=True, _lambda=np.array([1.0]))
         result = k.K(self.X1, self.X2)
-        #print result
-        #print k.dlambda
-        #print k.dsigma
-        #k2 = SASST(normalize=False, _lambda=np.array([1.0]))
-        #result2 = k2.K(self.X1)
-        #print result2
-        #print k2.dlambda
-        #print k2.dsigma
-        #result3 = k2.K(self.X1, self.X2)
-        #print result3
 
         self.assertAlmostEqual(result, 0.6)
         self.assertAlmostEqual(k.dlambda, -0.2)
         self.assertAlmostEqual(k.dsigma, 0.12)
+
+    def test_grad_2(self):
+        k = SASST(normalize=True, _lambda=np.array([1.0, 0.5]))
+        result = k.K(self.X1, self.X2)
+
+        self.assertAlmostEqual(result, 0.6)
+        self.assertAlmostEqual(k.dlambda[0], -0.2)
+        self.assertAlmostEqual(k.dsigma, 0.12)
+
+    def test_grad_4(self):
+        k = SASST(normalize=True, _lambda=np.array([1.0, 0.5]), _sigma=np.array([1.0, 0.4]))
+        result = k.K(self.X1, self.X2)
+        k2 = SST(normalize=True, _lambda=1.0)
+        result2 = k2.K(self.X1, self.X2)
+
+        self.assertAlmostEqual(result, result2)
+        self.assertAlmostEqual(k.dlambda[0], k2.dlambda)
+        self.assertAlmostEqual(k.dsigma[0], k2.dsigma)
     
     @unittest.skip("need to do the maths for this test")
-    def test_grad_2(self):
+    def test_grad_3(self):
         k = SASST(normalize=True, _lambda=np.array([1.0, 0.4]), _sigma=np.array([1.0, 0.2]),
                   lambda_buckets={'AA':1}, sigma_buckets={'AA':1})
         result = k.K(self.X1, self.X2)
-        print result
-        print k.dlambda
-        print k.dsigma
+        #print result
+        #print k.dlambda
+        #print k.dsigma
         self.assertAlmostEqual(result, 1.88)
         self.assertAlmostEqual(k.dlambda[0], 1.24)
         self.assertAlmostEqual(k.dlambda[1], 3)
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTIntegrationTests(unittest.TestCase):
     """
     Tests for integration into GPs.
@@ -288,30 +296,43 @@ class SASSTIntegrationTests(unittest.TestCase):
                           dtype=object)
         self.Y = np.array([[(a+10)*5] for a in range(5)])
 
+    def test_integration_grad_1(self):
+        k = SASST(normalize=True, _lambda=np.array([1.0, 0.5]), _sigma=np.array([1.0, 0.4]))
+        result = k.K(self.X)
+        k2 = SST(normalize=True, _lambda=1.0)
+        result2 = k2.K(self.X)
+        #print result
+        #print result2
+
+        self.assertTrue((result == result2).all())
+        #self.assertAlmostEqual(k.dlambda[0], k2.dlambda)
+        #self.assertAlmostEqual(k.dsigma[0], k2.dsigma)
+
     def test_integration_1(self):
         k = SASST(_lambda=np.array([1.0]))
         m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
         m.constrain_positive('')
-        print m
+        #print m
         m.optimize(messages=False)
-        print m
+        #print m
 
     def test_integration_2(self):
-        k = SASST(_lambda=np.array([1.0, 0.5]))
+        k = SASST(normalize=False, _lambda=np.array([1.0, 0.5]))
         m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
         m.constrain_positive('')
         #print m
         m.optimize(messages=False)
         #print m
         #print m['sasstk.lambda']
-        k2 = SST(_lambda=1.0)
+        k2 = SST(normalize=False, _lambda=1.0)
         m2 = GPy.models.GPRegression(self.X, self.Y, kernel=k2)
         m2.constrain_positive('')
-        #print m
+        #print m2
         m2.optimize(messages=False)
-        #print m
+        #print m2
         self.assertAlmostEqual(m['sasstk.lambda'][0], m2['sstk.lambda'])
 
+    @unittest.skip("skip")
     def test_integration_3(self):
         k = SASST(_lambda=np.array([1.0, 0.5]), _sigma=np.array([1.0, 0.4]),
                   lambda_buckets={'NP':1, 'N':1}, sigma_buckets={'NP':1, 'N':1})
