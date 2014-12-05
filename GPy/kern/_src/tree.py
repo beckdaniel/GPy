@@ -6,6 +6,7 @@ import numpy as np
 from collections import defaultdict
 import sys
 import cy_tree
+import cy_sa_tree
 import nltk
 
 MAX_NODES = 300
@@ -93,7 +94,7 @@ class SymbolAwareSubsetTreeKernel(Kern):
         self._lambda = Param('lambda', _lambda)
         self._sigma = Param('sigma', _sigma)
         self.add_parameters(self._lambda, self._sigma)
-        self.kernel = cy_tree.SymbolAwareSubsetTreeKernel(_lambda, _sigma, lambda_buckets, sigma_buckets,
+        self.kernel = cy_sa_tree.SymbolAwareSubsetTreeKernel(_lambda, _sigma, lambda_buckets, sigma_buckets,
                                                           normalize, num_threads=num_threads, parallel=parallel)
         
     def _get_params(self):

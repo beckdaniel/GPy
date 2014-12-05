@@ -43,6 +43,11 @@ setup(name = 'GPy',
                                          extra_compile_args=['-fopenmp','-std=c++0x'],
                                          extra_link_args=['-fopenmp','-std=c++0x'],
                                          language="c++",
-                                         include_dirs=[np.get_include()])]),
+                                         include_dirs=[np.get_include()]),
+                               Extension("cy_sa_tree", ["GPy/kern/_src/cy_sa_tree.pyx"],
+                                         extra_compile_args=['-fopenmp','-std=c++0x'],
+                                         extra_link_args=['-fopenmp','-std=c++0x'],
+                                         language="c++",
+                                         include_dirs=[np.get_include()]) ]),
       zip_safe = False
       )
