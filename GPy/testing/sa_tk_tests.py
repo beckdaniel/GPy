@@ -105,7 +105,7 @@ class SASSTKDiagSmallTests(unittest.TestCase):
     def test_Kdiag_buckets_3(self):
         k = SASST(normalize=False, _lambda=np.array([1, 0.6, 0.2, 1]), _sigma=np.array([1.0]),
                   lambda_buckets={'AA':1, 'B': 2, 'S': 3})
-        for i in range(5000):
+        for i in range(500):
             k.Kdiag(self.X)
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.72)
 
@@ -157,7 +157,7 @@ class SASSTKDiagSmallSigmaTests(unittest.TestCase):
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.39)
 
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTKKernelTests(unittest.TestCase):
     """
     Tests for K, on a small set of trees
@@ -169,22 +169,29 @@ class SASSTKKernelTests(unittest.TestCase):
         self.X1 = np.array([[self.tree1]], dtype=object)
         self.X2 = np.array([[self.tree2]], dtype=object)
 
+    #@unittest.skip("skip")
     def test_K_1(self):
         k = SASST(normalize=False, _lambda=np.array([1.0]))
         self.assertAlmostEqual(k.K(self.X1, self.X2), 6)
 
+    #@unittest.skip("skip")
     def test_K_2(self):
-        k = SASST(normalize=False, _lambda=np.array([1.0]), _sigma=np.array([0.2]))
+        k = SASST(normalize=False, _lambda=np.array([1.0, 1.0]), _sigma=np.array([0.2]))
         self.assertAlmostEqual(k.K(self.X1, self.X2), 2.48)
 
+    #@unittest.skip("skip")
     def test_K_3(self):
         k = SASST(normalize=False, _lambda=np.array([1.0, 0.5]), _sigma=np.array([0.2]),
                   lambda_buckets={'AA':1})
         self.assertAlmostEqual(k.K(self.X1, self.X2), 0.96)
 
+        
     def test_K_4(self):
         k = SASST(normalize=False, _lambda=np.array([1.0, 0.5]), _sigma=np.array([1.0, 0.2]),
                   lambda_buckets={'AA':1}, sigma_buckets={'AA':1})
+        #print k.K(self.X1, self.X2)
+        #print k.dlambda
+        #print k.dsigma
         self.assertAlmostEqual(k.K(self.X1, self.X2), 2.2)
 
 
@@ -224,7 +231,7 @@ class SASSTGradientTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
 
-
+@unittest.skip("skip")
 class SASSTNormTests(unittest.TestCase):
     """
     Tests for the normalized version

@@ -111,6 +111,8 @@ class SymbolAwareSubsetTreeKernel(Kern):
         self.kernel._lambda = self._lambda
         self.kernel._sigma = self._sigma
         result, dl, ds = self.kernel.K(X, X2)
+        #print "RESULT IN PYTHON: ",
+        #print result
         #print dl
         self.dlambda = dl
         #print self.dlambda
