@@ -105,10 +105,12 @@ class SASSTKDiagSmallTests(unittest.TestCase):
     def test_Kdiag_buckets_3(self):
         k = SASST(normalize=False, _lambda=np.array([1, 0.6, 0.2, 1]), _sigma=np.array([1.0]),
                   lambda_buckets={'AA':1, 'B': 2, 'S': 3})
+        for i in range(5000):
+            k.Kdiag(self.X)
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.72)
 
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTKDiagSmallSigmaTests(unittest.TestCase):
     """
     Tests for KDiag only for sigma_buckets, using a small tree.
