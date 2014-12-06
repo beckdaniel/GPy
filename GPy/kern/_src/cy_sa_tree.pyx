@@ -33,7 +33,7 @@ ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
 ctypedef pair[int, int] IntPair
 ctypedef vector[IntPair] VecIntPair
-ctypedef map[string, int] SAStruct
+ctypedef map[string, int] BucketMap
 ctypedef vector[double*] SAMatrix
 ctypedef struct SAResult:
     double k
@@ -81,10 +81,10 @@ class SymbolAwareSubsetTreeKernel(object):
         #self.parallel = parallel
 
     def _dict_to_map(self, dic):
-        cdef SAStruct result_map
+        cdef BucketMap bucket_map
         for item in dic:
-            result_map[item] = dic[item]
-        return result_map
+            bucket_map[item] = dic[item]
+        return bucket_map
 
     def _gen_node_list(self, tree_repr):
         """
@@ -93,15 +93,15 @@ class SymbolAwareSubsetTreeKernel(object):
         calculating K.
         It also returns a nodes dict for fast node access.
         """
-        tree = nltk.tree.Tree.fromstring(tree_repr)
-        c = 0
-        cdef list node_list = []
-        self._get_node2(tree, node_list)
-        node_list.sort(key=lambda Node x: x.production)
         cdef Node node
+        cdef list ch_ids
+        cdef list node_list = []
+        
+        tree = nltk.tree.Tree.fromstring(tree_repr)
+        self._get_node(tree, node_list)
+        node_list.sort(key=lambda Node x: x.production)
         node_dict = dict([(node.node_id, node) for node in node_list])
         final_list = []
-        cdef list ch_ids
         for node in node_list:
             if node.children_ids == None:
                 final_list.append((node.production, None))
@@ -114,20 +114,21 @@ class SymbolAwareSubsetTreeKernel(object):
                 final_list.append((node.production, ch_ids))
         return final_list
 
-    def _get_node2(self, tree, node_list):
+    def _get_node(self, tree, node_list):
         """
         Recursive method for generating the node lists.
         """
         cdef Node node
-        cdef string cprod
-        if type(tree) == str:
+        cdef string production
+        
+        if type(tree) == str: # leaf
             return -1
-        if len(tree) == 0:
+        if len(tree) == 0: # leaf, but non string
             return -2
         prod_list = [tree.label()]
         children = []
         for ch in tree:
-            ch_id = self._get_node2(ch, node_list)
+            ch_id = self._get_node(ch, node_list)
             if ch_id == -1:
                 prod_list.append(ch)
             elif ch_id == -2:
@@ -136,49 +137,12 @@ class SymbolAwareSubsetTreeKernel(object):
                 prod_list.append(ch.label())
                 children.append(ch_id)
         node_id = len(node_list)
-        prod = ' '.join(prod_list)
-        cprod = prod
+        production = ' '.join(prod_list)
         if children == []:
             children = None
-        node = Node(cprod, node_id, children)
+        node = Node(production, node_id, children)
         node_list.append(node)
         return node_id
-
-    def _diag_calculations(self, X_list):
-        """
-        Calculate the K(x,x) values first because
-        they are used in normalization.
-        """
-        cdef SAResult result
-        cdef SAStruct lambda_buckets = self._dict_to_map(self.lambda_buckets)
-        cdef SAStruct sigma_buckets = self._dict_to_map(self.sigma_buckets)
-        cdef int lambda_size = len(self._lambda)
-        cdef int sigma_size = len(self._sigma)
-
-        
-        K_vec = np.zeros(shape=(len(X_list),))
-        dlambda_mat = np.zeros(shape=(len(X_list), len(self._lambda)))
-        dsigma_mat = np.zeros(shape=(len(X_list), len(self._sigma)))
-
-        result.dlambda = <double*> malloc(len(self._lambda) * sizeof(double))
-        result.dsigma = <double*> malloc(len(self._sigma) * sizeof(double))
-        for i in range(len(X_list)):
-            #result.k = 0
-            #for j in range(lambda_size):
-            #    result.dlambda[j] = 0
-            #for j in range(sigma_size):
-            #    result.dsigma[j] = 0
-            calc_K_sa(result, X_list[i], X_list[i], self._lambda, self._sigma, 
-                      lambda_buckets, sigma_buckets)
-            K_vec[i] = result.k
-            for j in range(len(self._lambda)):
-                dlambda_mat[i][j] = result.dlambda[j]
-            for j in range(len(self._sigma)):
-                dsigma_mat[i][j] = result.dsigma[j]
-        
-        free(result.dlambda)
-        free(result.dsigma)
-        return (K_vec, dlambda_mat, dsigma_mat)
 
     def _build_cache(self, X):
         """
@@ -191,12 +155,16 @@ class SymbolAwareSubsetTreeKernel(object):
             if t_repr not in self._tree_cache:
                 self._tree_cache[t_repr] = self._gen_node_list(t_repr)
 
-    def Kdiag(self, X):
-        cdef vector[VecNode] X_list
+    def _convert_input(self, X):
+        """
+        Convert an input vector (a Python object) to a 
+        STL Vector of Nodes (a C++ object). This is to enable
+        their use inside parallel code.
+        """
+        cdef vector[VecNode] X_cpp
         cdef VecNode vecnode
         cdef CNode cnode
-
-        self._build_cache(X)
+        
         for tree in X:
             node_list = self._tree_cache[tree[0]]
             vecnode.clear()
@@ -207,9 +175,51 @@ class SymbolAwareSubsetTreeKernel(object):
                     for ch in node[1]:
                         cnode.second.push_back(ch)
                 vecnode.push_back(cnode)
-            X_list.push_back(vecnode)
-        X_diag_Ks, _, _ = self._diag_calculations(X_list)
+            X_cpp.push_back(vecnode)
+        return X_cpp
+                
+    def Kdiag(self, X):
+        """
+        Obtain the Gram matrix diagonal, calculating
+        the kernel between each input and itself.
+        """
+        # To ensure all inputs are cached.
+        self._build_cache(X)
+        # Convert the python input into a C++ one.
+        cdef vector[VecNode] X_cpp
+        X_cpp = self._convert_input(X)
+        X_diag_Ks, _, _ = self._diag_calculations(X_cpp)
         return X_diag_Ks
+    
+    def _diag_calculations(self, X):
+        """
+        Calculate the K(x,x) values first because
+        they are used in normalization.
+        """
+        cdef SAResult result
+        cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
+        cdef BucketMap sigma_buckets = self._dict_to_map(self.sigma_buckets)
+        cdef int lambda_size = len(self._lambda)
+        cdef int sigma_size = len(self._sigma)
+
+        K_vec = np.zeros(shape=(len(X),))
+        dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
+        dsigma_mat = np.zeros(shape=(len(X), len(self._sigma)))
+
+        result.dlambda = <double*> malloc(len(self._lambda) * sizeof(double))
+        result.dsigma = <double*> malloc(len(self._sigma) * sizeof(double))
+        for i in range(len(X)):
+            calc_K_sa(result, X[i], X[i], self._lambda, self._sigma, 
+                      lambda_buckets, sigma_buckets)
+            K_vec[i] = result.k
+            for j in range(len(self._lambda)):
+                dlambda_mat[i][j] = result.dlambda[j]
+            for j in range(len(self._sigma)):
+                dsigma_mat[i][j] = result.dsigma[j]
+        
+        free(result.dlambda)
+        free(result.dsigma)
+        return (K_vec, dlambda_mat, dsigma_mat)
 
     @cython.boundscheck(False)
     def K(self, X, X2):
@@ -229,8 +239,8 @@ class SymbolAwareSubsetTreeKernel(object):
         else:
             symmetric = False
             self._build_cache(X2)
-        cdef SAStruct lambda_buckets = self._dict_to_map(self.lambda_buckets)
-        cdef SAStruct sigma_buckets = self._dict_to_map(self.sigma_buckets)
+        cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
+        cdef BucketMap sigma_buckets = self._dict_to_map(self.sigma_buckets)
 
         
         # Caches are python dicts that assign a node_list with a string.
@@ -405,7 +415,7 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     return int_pairs
 
 cdef void calc_K_sa(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, double[:] _lambda, double[:] _sigma, 
-                    SAStruct& lambda_buckets, SAStruct& sigma_buckets) nogil:
+                    BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -476,7 +486,7 @@ cdef SAResult sa_delta(SAResult& result, SAResult& pair_result, int id1, int id2
                        double* dlambda_tensor,
                        double* dsigma_tensor,
                        double[:] _lambda, double[:] _sigma,
-                       SAStruct& lambda_buckets, SAStruct& sigma_buckets) nogil:
+                       BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
