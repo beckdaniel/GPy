@@ -256,66 +256,50 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef int lambda_size = len(self._lambda)
         cdef int sigma_size = len(self._sigma)
         cdef np.ndarray[DTYPE_t, ndim=2] Ks = np.zeros(shape=(len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=3] dlambdas = np.zeros(shape=(lambda_size, 
-                                                                    len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=3] dsigmas = np.zeros(shape=(sigma_size,
-                                                                   len(X), len(X2)))
+        cdef np.ndarray[DTYPE_t, ndim=3] dlambdas
+        cdef np.ndarray[DTYPE_t, ndim=3] dsigmas
+        dlambdas = np.zeros(shape=(lambda_size, len(X), len(X2)))
+        dsigmas = np.zeros(shape=(sigma_size, len(X), len(X2)))
 
-        cdef int X_len = len(X)
-        cdef int X2_len = len(X2)
-        cdef int do_normalize
-        cdef int i, j, k
-        cdef VecNode vecnode2
+        cdef int normalize, i, j, k
+        cdef int num_threads = self.num_threads
+        cdef VecNode vecnode, vecnode2
         cdef double[:] _lambda = self._lambda
         cdef double[:] _sigma = self._sigma
-        cdef SAResult result#, norm_result
-        if self.normalize:
-            do_normalize = 1
-        else:
-            do_normalize = 0
-        #import ipdb
-        #ipdb.set_trace()
+        cdef SAResult result
+        normalize = self.normalize
+
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
-        cdef int num_threads = self.num_threads
         with nogil:#, parallel(num_threads=num_threads):
             #for i in prange(X_len):
             #for i in prange(X_len, schedule='dynamic'):
-            for i in range(X_len):
+            for i in range(X_cpp.size()):
                 result.dlambda = <double*> malloc(lambda_size * sizeof(double))                    
                 result.dsigma = <double*> malloc(sigma_size * sizeof(double))
-                for j in range(X2_len):
+                for j in range(X2_cpp.size()):
                     if gram:
                         if i < j:
                             continue
-                        if i == j and do_normalize:
+                        if i == j and normalize:
                             Ks[i,j] = 1
                             continue
                         
                     vecnode = X_cpp[i]
                     vecnode2 = X2_cpp[j]
                     result.k = 0
-                    
                     for k in range(lambda_size):
                         result.dlambda[k] = 0
-                    
                     for k in range(sigma_size):
                         result.dsigma[k] = 0
                     calc_K_sa(result, vecnode, vecnode2, _lambda, _sigma,
                               lambda_buckets, sigma_buckets)
-                    # Normalization happens here.
-                    if do_normalize:
-                        if gram:
-                            normalize_sa(result,
-                                         X_diag_Ks[i], X_diag_Ks[j],
-                                         X_diag_dlambdas[i], X_diag_dlambdas[j],
-                                         X_diag_dsigmas[i], X_diag_dsigmas[j],
-                                         lambda_size, sigma_size)
-                        else:
-                            normalize_sa(result,
-                                         X_diag_Ks[i], X2_diag_Ks[j],
-                                         X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                                         X_diag_dsigmas[i], X2_diag_dsigmas[j],
-                                         lambda_size, sigma_size)
+                    
+                    if normalize:
+                        normalize_sa(result,
+                                     X_diag_Ks[i], X2_diag_Ks[j],
+                                     X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                     X_diag_dsigmas[i], X2_diag_dsigmas[j],
+                                     lambda_size, sigma_size)
 
                     # Store everything
                     Ks[i,j] = result.k
@@ -329,8 +313,7 @@ class SymbolAwareSubsetTreeKernel(object):
                             dlambdas[k,j,i] = result.dlambda[k]
                         for k in range(sigma_size):
                             dsigmas[k,j,i] = result.dsigma[k]
-
-                    
+                   
                 free(result.dsigma)
                 free(result.dlambda)
         return (Ks, dlambdas, dsigmas)
@@ -578,22 +561,19 @@ cdef SAResult sa_delta(SAResult& result, SAResult& pair_result, int id1, int id2
     return result
 
 
-cdef void normalize_sa(SAResult& result, double diag_Ks_i, 
-                       double diag_Ks_j, double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
+cdef void normalize_sa(SAResult& result, double diag_Ks_i, double diag_Ks_j, 
+                       double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
                        double[:] diag_dsigmas_i, double[:] diag_dsigmas_j,
                        int lambda_size, int sigma_size) nogil:
     """
-    Normalize the result from SSTK, including derivatives.
+    Normalize the result from SSTK, including gradients.
     """
-    cdef double norm, sqrt_nrorm, K_norm, diff_lambda, dlambda_norm, diff_sigma, dsigma_norm
-    #cdef SAResult result
+    cdef double norm, sqrt_nrorm, K_norm, diff_lambda 
+    cdef double dlambda_norm, diff_sigma, dsigma_norm
     cdef int i
-    #result.dlambda = <double*> malloc(lambda_size)
-    #result.dsigma = <double*> malloc(sigma_size)
 
     norm = diag_Ks_i * diag_Ks_j
     sqrt_norm = sqrt(norm)
-    #K_norm = K_result / sqrt_norm
     K_norm = result.k / sqrt_norm
     result.k = K_norm
 
@@ -610,7 +590,5 @@ cdef void normalize_sa(SAResult& result, double diag_Ks_i,
         diff_sigma /= 2 * norm
         result.dsigma[i] = ((result.dsigma[i] / sqrt_norm) -
                             (K_norm * diff_sigma))
-
-    return# result
 
 #endif //CY_SA_TREE_H

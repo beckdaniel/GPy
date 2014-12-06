@@ -15,7 +15,7 @@ import datetime
 
 np.set_printoptions(suppress=True)
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTKParallelCheckingTests(unittest.TestCase):
     """
     Tests for the symbol-aware SSTK Parallel version.
