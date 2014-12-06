@@ -210,8 +210,8 @@ class SymbolAwareSubsetTreeKernel(object):
         result.dlambda = <double*> malloc(len(self._lambda) * sizeof(double))
         result.dsigma = <double*> malloc(len(self._sigma) * sizeof(double))
         for i in range(len(X)):
-            calc_K_sa(result, X[i], X[i], self._lambda, self._sigma, 
-                      lambda_buckets, sigma_buckets)
+            calc_K(result, X[i], X[i], self._lambda, self._sigma, 
+                   lambda_buckets, sigma_buckets)
             K_vec[i] = result.k
             for j in range(len(self._lambda)):
                 dlambda_mat[i][j] = result.dlambda[j]
@@ -291,15 +291,15 @@ class SymbolAwareSubsetTreeKernel(object):
                         result.dlambda[k] = 0
                     for k in range(sigma_size):
                         result.dsigma[k] = 0
-                    calc_K_sa(result, vecnode, vecnode2, _lambda, _sigma,
-                              lambda_buckets, sigma_buckets)
+                    calc_K(result, vecnode, vecnode2, _lambda, _sigma,
+                           lambda_buckets, sigma_buckets)
                     
                     if normalize:
-                        normalize_sa(result,
-                                     X_diag_Ks[i], X2_diag_Ks[j],
-                                     X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                                     X_diag_dsigmas[i], X2_diag_dsigmas[j],
-                                     lambda_size, sigma_size)
+                        _normalize(result,
+                                   X_diag_Ks[i], X2_diag_Ks[j],
+                                   X_diag_dlambdas[i], X2_diag_dlambdas[j],
+                                   X_diag_dsigmas[i], X2_diag_dsigmas[j],
+                                   lambda_size, sigma_size)
 
                     # Store everything
                     Ks[i,j] = result.k
@@ -360,8 +360,8 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
                 n2 = vecnode2[i2]
     return int_pairs
 
-cdef void calc_K_sa(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, double[:] _lambda, double[:] _sigma, 
-                    BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
+cdef void calc_K(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, double[:] _lambda, double[:] _sigma, 
+                 BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -403,22 +403,9 @@ cdef void calc_K_sa(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, doub
     pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
     pair_result.dsigma = <double*> malloc(sigma_size * sizeof(double))
     for int_pair in node_pairs:
-        #break
-        #pair_result.k = 0
-        #for i in range(lambda_size):
-        #    pair_result.dlambda[i] = 0
-        #for i in range(sigma_size):
-        #    pair_result.dsigma[i] = 0
-        sa_delta(result, pair_result, int_pair.first, int_pair.second, vecnode1, vecnode2,
-                 delta_matrix, dlambda_tensor, dsigma_tensor, _lambda, _sigma,
-                 lambda_buckets, sigma_buckets)
-        #result.k += pair_result.k
-        #for i in range(lambda_size):
-        #    result.dlambda[i] += pair_result.dlambda[i]
-        #for i in range(sigma_size):
-        #    result.dsigma[i] += pair_result.dsigma[i]
-
-    #printf("\nRESULT: %f\n", result.k)
+        delta(result, pair_result, int_pair.first, int_pair.second, 
+              vecnode1, vecnode2, delta_matrix, dlambda_tensor, dsigma_tensor,
+              _lambda, _sigma, lambda_buckets, sigma_buckets)
     free(delta_matrix)
     free(dlambda_tensor)
     free(dsigma_tensor)
@@ -427,12 +414,11 @@ cdef void calc_K_sa(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, doub
     return
 
 
-cdef SAResult sa_delta(SAResult& result, SAResult& pair_result, int id1, int id2, VecNode& vecnode1, VecNode& vecnode2,
-                       double* delta_matrix,
-                       double* dlambda_tensor,
-                       double* dsigma_tensor,
-                       double[:] _lambda, double[:] _sigma,
-                       BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
+cdef void delta(SAResult& result, SAResult& pair_result, int id1, int id2,
+                VecNode& vecnode1, VecNode& vecnode2, double* delta_matrix,
+                double* dlambda_tensor, double* dsigma_tensor,
+                double[:] _lambda, double[:] _sigma,
+                BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
@@ -465,7 +451,7 @@ cdef SAResult sa_delta(SAResult& result, SAResult& pair_result, int id1, int id2
         for i in range(sigma_size):
             index2 = index * sigma_size + i
             pair_result.dsigma[i] = dsigma_tensor[index2]
-        return result
+        return
 
     # BASE CASE: found a preterminal
     node1 = vecnode1[id1]
@@ -491,7 +477,7 @@ cdef SAResult sa_delta(SAResult& result, SAResult& pair_result, int id1, int id2
             index2 = index * sigma_size + i
             pair_result.dsigma[i] = 0
             dsigma_tensor[index2] = 0
-        return result
+        return
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
     node2 = vecnode2[id2]
@@ -516,7 +502,7 @@ cdef SAResult sa_delta(SAResult& result, SAResult& pair_result, int id1, int id2
         ch2 = children2[i]
         if vecnode1[ch1].first == vecnode2[ch2].first:
             #result = sa_delta(ch1, ch2, vecnode1, vecnode2,
-            sa_delta(result, pair_result, ch1, ch2, vecnode1, vecnode2,
+            delta(result, pair_result, ch1, ch2, vecnode1, vecnode2,
                      delta_matrix, dlambda_tensor,
                      dsigma_tensor, _lambda, _sigma,
                      lambda_buckets, sigma_buckets)
@@ -558,13 +544,12 @@ cdef SAResult sa_delta(SAResult& result, SAResult& pair_result, int id1, int id2
     #free(ch_result.dsigma)
     free(vec_lambda)
     free(vec_sigma)
-    return result
 
 
-cdef void normalize_sa(SAResult& result, double diag_Ks_i, double diag_Ks_j, 
-                       double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
-                       double[:] diag_dsigmas_i, double[:] diag_dsigmas_j,
-                       int lambda_size, int sigma_size) nogil:
+cdef void _normalize(SAResult& result, double diag_Ks_i, double diag_Ks_j, 
+                     double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
+                     double[:] diag_dsigmas_i, double[:] diag_dsigmas_j,
+                     int lambda_size, int sigma_size) nogil:
     """
     Normalize the result from SSTK, including gradients.
     """
@@ -576,14 +561,12 @@ cdef void normalize_sa(SAResult& result, double diag_Ks_i, double diag_Ks_j,
     sqrt_norm = sqrt(norm)
     K_norm = result.k / sqrt_norm
     result.k = K_norm
-
     for i in range(lambda_size):
         diff_lambda = ((diag_dlambdas_i[i] * diag_Ks_j) +
                        (diag_Ks_i * diag_dlambdas_j[i]))
         diff_lambda /= 2 * norm
         result.dlambda[i] = ((result.dlambda[i] / sqrt_norm) -
                              (K_norm * diff_lambda))
-
     for i in range(sigma_size):
         diff_sigma = ((diag_dsigmas_i[i] * diag_Ks_j) +
                       (diag_Ks_i * diag_dsigmas_j[i]))
