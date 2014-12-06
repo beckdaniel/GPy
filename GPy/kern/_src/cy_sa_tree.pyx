@@ -255,11 +255,9 @@ class SymbolAwareSubsetTreeKernel(object):
         # Gradients are calculated at the same time as K.
         cdef int lambda_size = len(self._lambda)
         cdef int sigma_size = len(self._sigma)
-        cdef np.ndarray[DTYPE_t, ndim=2] Ks = np.zeros(shape=(len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=3] dlambdas = np.zeros(shape=(lambda_size, 
-                                                                    len(X), len(X2)))
-        cdef np.ndarray[DTYPE_t, ndim=3] dsigmas = np.zeros(shape=(sigma_size,
-                                                                   len(X), len(X2)))
+        cdef double[:,:] Ks = np.zeros(shape=(len(X), len(X2)))
+        cdef double[:,:,:] dlambdas = np.zeros(shape=(lambda_size, len(X), len(X2)))
+        cdef double[:,:,:] dsigmas = np.zeros(shape=(sigma_size, len(X), len(X2)))
 
         cdef int X_len = len(X)
         cdef int X2_len = len(X2)
