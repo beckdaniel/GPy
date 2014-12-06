@@ -159,7 +159,7 @@ class SymbolAwareSubsetTreeKernel(object):
         """
         Convert an input vector (a Python object) to a 
         STL Vector of Nodes (a C++ object). This is to enable
-        their use inside parallel code.
+        their use inside no-GIL code, to enable parallelism.
         """
         cdef vector[VecNode] X_cpp
         cdef VecNode vecnode
@@ -193,14 +193,15 @@ class SymbolAwareSubsetTreeKernel(object):
     
     def _diag_calculations(self, X):
         """
-        Calculate the K(x,x) values first because
-        they are used in normalization.
+        Calculate the kernel between elements
+        of X and themselves. Used in Kdiag but also
+        in K when normalization is enabled.
         """
         cdef SAResult result
+        # We need to convert the buckets into C++ maps because
+        # calc_K is called without the GIL.
         cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
         cdef BucketMap sigma_buckets = self._dict_to_map(self.sigma_buckets)
-        cdef int lambda_size = len(self._lambda)
-        cdef int sigma_size = len(self._sigma)
 
         K_vec = np.zeros(shape=(len(X),))
         dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
@@ -222,77 +223,39 @@ class SymbolAwareSubsetTreeKernel(object):
         return (K_vec, dlambda_mat, dsigma_mat)
 
     @cython.boundscheck(False)
-    def K(self, X, X2):
+    def K(self, X, X2=None):
         """
-        The method that calls the SSTK for each tree pair. Some shortcuts are used
-        when X2 == None (when calculating the Gram matrix for X).
-        IMPORTANT: this is the normalized version.
-
-        The final goal is to be able to deal only with C objects inside the main
-        gram matrix loop.
+        Obtain the kernel evaluations between two input vectors.
+        If X2 is None, we assume the Gram matrix calculation between
+        X and itself.
         """
-        # First, as normal, we build the cache.
+        # First we build the cache and check if we calculating the Gram matrix.
         self._build_cache(X)
         if X2 == None:
-            symmetric = True
+            gram = True
             X2 = X
         else:
-            symmetric = False
+            gram = False
             self._build_cache(X2)
+
+        # We have to convert a bunch of stuff to C++ objects
+        # since the actual kernel computation happens without the GIL.
         cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
         cdef BucketMap sigma_buckets = self._dict_to_map(self.sigma_buckets)
-
-        
-        # Caches are python dicts that assign a node_list with a string.
-        # We have to convert these node_lists to C++ lists, so we can use them
-        # inside the nogil loop.
-        cdef vector[VecNode] X_list
-        cdef vector[VecNode] X2_list
-        cdef VecNode vecnode
-        cdef CNode cnode
-        for tree in X:
-            node_list = self._tree_cache[tree[0]]
-            vecnode.clear()
-            for node in node_list:
-                cnode.first = node[0]
-                cnode.second.clear()
-                if node[1] != None:
-                    for ch in node[1]:
-                        cnode.second.push_back(ch)
-                vecnode.push_back(cnode)
-            X_list.push_back(vecnode)
-        if symmetric:
-            X2_list = X_list
-        else:
-            for tree in X2:
-                node_list = self._tree_cache[tree[0]]
-                vecnode.clear()
-                for node in node_list:
-                    cnode.first = node[0]
-                    cnode.second.clear()
-                    if node[1] != None:
-                        for ch in node[1]:
-                            cnode.second.push_back(ch)
-                    vecnode.push_back(cnode)
-                X2_list.push_back(vecnode)
-
-        cdef double[:] X_diag_Ks, X2_diag_Ks
-        cdef double[:,:] X_diag_dlambdas, X_diag_dsigmas, X2_diag_dlambdas, X2_diag_dsigmas
+        cdef vector[VecNode] X_cpp = self._convert_input(X)
+        cdef vector[VecNode] X2_cpp = self._convert_input(X2)
 
         # Start the diag values for normalization
+        cdef double[:] X_diag_Ks, X2_diag_Ks
+        cdef double[:,:] X_diag_dlambdas, X_diag_dsigmas, X2_diag_dlambdas, X2_diag_dsigmas
         if self.normalize:
-            X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_list)
-            if not symmetric:
-                X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2_list)
+            X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_cpp)
+            X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2_cpp)
             
-        # Initialize the derivatives here 
-        # because we are going to calculate them at the same time as K.
-        # It is a bit ugly but way more efficient. We store the derivatives
-        # and just return the stored values when dK_dtheta is called.
-        cdef np.ndarray[DTYPE_t, ndim=2] Ks = np.zeros(shape=(len(X), len(X2)))
+        # Gradients are calculated at the same time as K.
         cdef int lambda_size = len(self._lambda)
         cdef int sigma_size = len(self._sigma)
-        #cdef int sigma_size = 1
+        cdef np.ndarray[DTYPE_t, ndim=2] Ks = np.zeros(shape=(len(X), len(X2)))
         cdef np.ndarray[DTYPE_t, ndim=3] dlambdas = np.zeros(shape=(lambda_size, 
                                                                     len(X), len(X2)))
         cdef np.ndarray[DTYPE_t, ndim=3] dsigmas = np.zeros(shape=(sigma_size,
@@ -321,15 +284,15 @@ class SymbolAwareSubsetTreeKernel(object):
                 result.dlambda = <double*> malloc(lambda_size * sizeof(double))                    
                 result.dsigma = <double*> malloc(sigma_size * sizeof(double))
                 for j in range(X2_len):
-                    if symmetric:
+                    if gram:
                         if i < j:
                             continue
                         if i == j and do_normalize:
                             Ks[i,j] = 1
                             continue
                         
-                    vecnode = X_list[i]
-                    vecnode2 = X2_list[j]
+                    vecnode = X_cpp[i]
+                    vecnode2 = X2_cpp[j]
                     result.k = 0
                     
                     for k in range(lambda_size):
@@ -341,7 +304,7 @@ class SymbolAwareSubsetTreeKernel(object):
                               lambda_buckets, sigma_buckets)
                     # Normalization happens here.
                     if do_normalize:
-                        if symmetric:
+                        if gram:
                             normalize_sa(result,
                                          X_diag_Ks[i], X_diag_Ks[j],
                                          X_diag_dlambdas[i], X_diag_dlambdas[j],
@@ -360,7 +323,7 @@ class SymbolAwareSubsetTreeKernel(object):
                         dlambdas[k,i,j] = result.dlambda[k]
                     for k in range(sigma_size):
                         dsigmas[k,i,j] = result.dsigma[k]
-                    if symmetric:
+                    if gram:
                         Ks[j,i] = result.k
                         for k in range(lambda_size):
                             dlambdas[k,j,i] = result.dlambda[k]
