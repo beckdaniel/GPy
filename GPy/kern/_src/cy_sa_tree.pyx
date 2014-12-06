@@ -318,6 +318,9 @@ class SymbolAwareSubsetTreeKernel(object):
                 free(result.dlambda)
         return (Ks, dlambdas, dsigmas)
 
+######################
+# EXTERNAL METHODS
+######################
 
 cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     """
@@ -330,7 +333,8 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
     cdef IntPair tup
-    cdef int reset2
+    cdef int reset
+    
     while True:
         if (i1 >= len1) or (i2 >= len2):
             return int_pairs
@@ -342,25 +346,26 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
             i1 += 1
         else:
             while n1.first == n2.first:
-                reset2 = i2
+                reset = i2
                 while n1.first == n2.first:
                     tup.first = i1
                     tup.second = i2
                     int_pairs.push_back(tup)
                     i2 += 1
                     if i2 >= len2:
-                        #return int_pairs
                         break
                     n2 = vecnode2[i2]
                 i1 += 1
                 if i1 >= len1:
                     return int_pairs
-                i2 = reset2
+                i2 = reset
                 n1 = vecnode1[i1]
                 n2 = vecnode2[i2]
     return int_pairs
 
-cdef void calc_K(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, double[:] _lambda, double[:] _sigma, 
+
+cdef void calc_K(SAResult& result, VecNode& vecnode1, VecNode& vecnode2,
+                 double[:] _lambda, double[:] _sigma, 
                  BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
@@ -368,26 +373,21 @@ cdef void calc_K(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, double[
     """
     cdef int lambda_size = _lambda.shape[0]
     cdef int sigma_size = _sigma.shape[0]
-    cdef int i, j, k
-    #cdef SAResult result
-    result.k = 0
-    #result.dlambda = <double*> malloc(lambda_size * sizeof(double))
-    for i in range(lambda_size):
-        result.dlambda[i] = 0
-    #result.dsigma = <double*> malloc(sigma_size * sizeof(double))
-    for i in range(sigma_size):
-        result.dsigma[i] = 0
-    cdef VecIntPair node_pairs
-    node_pairs = get_node_pairs(vecnode1, vecnode2)
-
+    cdef int i, j, k, index, index2
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
     cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
-
-    cdef int index, index2
     cdef double* dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size * sizeof(double))
     cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size * sizeof(double))
-
+    cdef VecIntPair node_pairs
+    cdef SAResult pair_result
+    
+    node_pairs = get_node_pairs(vecnode1, vecnode2)
+    result.k = 0
+    for i in range(lambda_size):
+        result.dlambda[i] = 0
+    for i in range(sigma_size):
+        result.dsigma[i] = 0
     for i in range(len1):
         for j in range(len2):
             index = i * len2 + j
@@ -398,13 +398,11 @@ cdef void calc_K(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, double[
             for k in range(sigma_size):
                 index2 = index * sigma_size + k
                 dsigma_tensor[index2] = 0
-
-    cdef SAResult pair_result
     pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
     pair_result.dsigma = <double*> malloc(sigma_size * sizeof(double))
     for int_pair in node_pairs:
-        delta(result, pair_result, int_pair.first, int_pair.second, 
-              vecnode1, vecnode2, delta_matrix, dlambda_tensor, dsigma_tensor,
+        delta(result, pair_result, int_pair, vecnode1, vecnode2,
+              delta_matrix, dlambda_tensor, dsigma_tensor,
               _lambda, _sigma, lambda_buckets, sigma_buckets)
     free(delta_matrix)
     free(dlambda_tensor)
@@ -414,7 +412,7 @@ cdef void calc_K(SAResult& result, VecNode& vecnode1, VecNode& vecnode2, double[
     return
 
 
-cdef void delta(SAResult& result, SAResult& pair_result, int id1, int id2,
+cdef void delta(SAResult& result, SAResult& pair_result, IntPair int_pair,
                 VecNode& vecnode1, VecNode& vecnode2, double* delta_matrix,
                 double* dlambda_tensor, double* dsigma_tensor,
                 double[:] _lambda, double[:] _sigma,
@@ -425,10 +423,12 @@ cdef void delta(SAResult& result, SAResult& pair_result, int id1, int id2,
     """
     cdef int ch1, ch2, i
     cdef double val, prod, 
-    cdef double sum_lambda, sum_sigma, denom, sum_sigma_ne
-    cdef double delta_result, dlambda_result, dsigma_result, dsigma_result_ne
+    cdef double sum_lambda, sum_sigma, denom
+    cdef double delta_result, dlambda_result, dsigma_result
     cdef IntList children1, children2
     cdef CNode node1, node2
+    cdef int id1 = int_pair.first
+    cdef int id2 = int_pair.second
     cdef int len2 = vecnode2.size()
     cdef int index = id1 * len2 + id2
     cdef int index2
@@ -493,16 +493,16 @@ cdef void delta(SAResult& result, SAResult& pair_result, int id1, int id2,
         vec_sigma[i] = 0
 
     cdef double g = 1
+    cdef IntPair ch_pair
     children1 = node1.second
     children2 = node2.second
     sigma_index = sigma_buckets[root]
     #cdef SAResult ch_result
     for i in range(children1.size()):
-        ch1 = children1[i]
-        ch2 = children2[i]
-        if vecnode1[ch1].first == vecnode2[ch2].first:
-            #result = sa_delta(ch1, ch2, vecnode1, vecnode2,
-            delta(result, pair_result, ch1, ch2, vecnode1, vecnode2,
+        ch_pair.first = children1[i]
+        ch_pair.second = children2[i]
+        if vecnode1[ch_pair.first].first == vecnode2[ch_pair.second].first:
+            delta(result, pair_result, ch_pair, vecnode1, vecnode2,
                      delta_matrix, dlambda_tensor,
                      dsigma_tensor, _lambda, _sigma,
                      lambda_buckets, sigma_buckets)
