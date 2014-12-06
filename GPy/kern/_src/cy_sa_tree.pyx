@@ -421,33 +421,28 @@ cdef void delta(SAResult& result, SAResult& pair_result, IntPair int_pair,
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
     """
-    cdef int ch1, ch2, i
-    cdef double val, prod, 
-    cdef double sum_lambda, sum_sigma, denom
+    cdef double val, prod, g, sum_lambda, sum_sigma, denom
     cdef double delta_result, dlambda_result, dsigma_result
     cdef IntList children1, children2
     cdef CNode node1, node2
-    cdef int id1 = int_pair.first
-    cdef int id2 = int_pair.second
-    cdef int len2 = vecnode2.size()
-    cdef int index = id1 * len2 + id2
-    cdef int index2
-    #cdef SAResult result
-    #result.dlambda = <double*> malloc(lambda_size * sizeof(double))
-    #result.dsigma = <double*> malloc(sigma_size * sizeof(double))
-
+    cdef int id1, id2, len2, index, index2, i, space
+    cdef int lambda_index, sigma_index
     cdef int lambda_size = _lambda.shape[0]
     cdef int sigma_size = _sigma.shape[0]
+    cdef IntPair ch_pair
+    cdef string production, root
 
     # RECURSIVE CASE: get value from DP matrix if it was already calculated
+    id1 = int_pair.first
+    id2 = int_pair.second
+    len2 = vecnode2.size()
+    index = id1 * len2 + id2
     val = delta_matrix[index]
     if val > 0:
         pair_result.k = val
-        #result.k += val
         for i in range(lambda_size):
             index2 = index * lambda_size + i
             pair_result.dlambda[i] = dlambda_tensor[index2]
-            #result.dlambda[i] += dlambda_tensor[index2]
         for i in range(sigma_size):
             index2 = index * sigma_size + i
             pair_result.dsigma[i] = dsigma_tensor[index2]
@@ -455,10 +450,9 @@ cdef void delta(SAResult& result, SAResult& pair_result, IntPair int_pair,
 
     # BASE CASE: found a preterminal
     node1 = vecnode1[id1]
-    cdef string production = node1.first
-    cdef int space = production.find(SPACE)
-    cdef string root = production.substr(0, space)
-    cdef int lambda_index, sigma_index
+    production = node1.first
+    space = production.find(SPACE)
+    root = production.substr(0, space)
     lambda_index = lambda_buckets[root]
     if node1.second.empty():
         delta_matrix[index] = _lambda[lambda_index] 
@@ -484,29 +478,23 @@ cdef void delta(SAResult& result, SAResult& pair_result, IntPair int_pair,
     prod = 1
     sum_lambda = 0
     sum_sigma = 0
-    sum_sigma_ne = 0
+    g = 1
     cdef double* vec_lambda = <double*> malloc(lambda_size * sizeof(double))
     for i in range(lambda_size):
         vec_lambda[i] = 0
     cdef double* vec_sigma = <double*> malloc(sigma_size * sizeof(double))
     for i in range(sigma_size):
         vec_sigma[i] = 0
-
-    cdef double g = 1
-    cdef IntPair ch_pair
     children1 = node1.second
     children2 = node2.second
     sigma_index = sigma_buckets[root]
-    #cdef SAResult ch_result
     for i in range(children1.size()):
         ch_pair.first = children1[i]
         ch_pair.second = children2[i]
         if vecnode1[ch_pair.first].first == vecnode2[ch_pair.second].first:
             delta(result, pair_result, ch_pair, vecnode1, vecnode2,
-                     delta_matrix, dlambda_tensor,
-                     dsigma_tensor, _lambda, _sigma,
-                     lambda_buckets, sigma_buckets)
-
+                  delta_matrix, dlambda_tensor, dsigma_tensor, _lambda,
+                  _sigma, lambda_buckets, sigma_buckets)
             denom = _sigma[sigma_index] + pair_result.k
             g *= denom
             for j in range(lambda_size):
@@ -540,8 +528,6 @@ cdef void delta(SAResult& result, SAResult& pair_result, IntPair int_pair,
         pair_result.dsigma[i] = dsigma_result
         result.dsigma[i] += dsigma_result
 
-    #free(ch_result.dlambda)
-    #free(ch_result.dsigma)
     free(vec_lambda)
     free(vec_sigma)
 
