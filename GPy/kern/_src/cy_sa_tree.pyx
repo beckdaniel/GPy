@@ -206,15 +206,16 @@ class SymbolAwareSubsetTreeKernel(object):
         K_vec = np.zeros(shape=(len(X),))
         dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
         dsigma_mat = np.zeros(shape=(len(X), len(self._sigma)))
-        cdef double K_result = 0
+        cdef double[:] K_vec_view = K_vec
+        #cdef double K_result = 0
         
         #result.dlambda = <double*> malloc(len(self._lambda) * sizeof(double))
         #result.dsigma = <double*> malloc(len(self._sigma) * sizeof(double))
         for i in range(len(X)):
             calc_K(X[i], X[i], self._lambda, self._sigma, 
-                   lambda_buckets, sigma_buckets, K_result,
+                   lambda_buckets, sigma_buckets, K_vec_view[i],
                    dlambda_mat[i], dsigma_mat[i])
-            K_vec[i] = K_result
+            #K_vec[i] = K_result
             #for j in range(len(self._lambda)):
             #    dlambda_mat[i][j] = result.dlambda[j]
             #for j in range(len(self._sigma)):
@@ -273,8 +274,7 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:] _sigma = self._sigma
         #cdef SAResult result
         normalize = self.normalize
-        cdef double K_result = 0
-
+        
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         with nogil:#, parallel(num_threads=num_threads):
             #for i in prange(X_len):
@@ -301,8 +301,8 @@ class SymbolAwareSubsetTreeKernel(object):
                     #       lambda_buckets, sigma_buckets)
                     calc_K(vecnode, vecnode2, _lambda, _sigma,
                            lambda_buckets, sigma_buckets,
-                           K_result, dlambdas_view[i][j], dsigmas_view[i][j])
-                    Ks_view[i,j] = K_result
+                           Ks_view[i,j], dlambdas_view[i,j], dsigmas_view[i,j])
+
                     #if normalize:
                     #    _normalize(result,
                     #               X_diag_Ks[i], X2_diag_Ks[j],
