@@ -17,6 +17,7 @@ from libc.stdlib cimport malloc, free
 cimport cython
 from cython cimport view
 
+
 cdef extern from "math.h" nogil:
     double sqrt(double x)
 
@@ -465,7 +466,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     if node1.second.empty():
         delta_matrix[index] = _lambda[lambda_index] 
         pair_result.k = _lambda[lambda_index]
-        #result.k += _lambda[lambda_index]
         (&K_result)[0] = (&K_result)[0] + _lambda[lambda_index]
         for i in range(lambda_size):
             index2 = index * lambda_size + i
