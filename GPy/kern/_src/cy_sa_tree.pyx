@@ -393,17 +393,10 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
                                                   * sizeof(double))
     cdef VecIntPair node_pairs
-    cdef SAResult pair_result#, pair_result
-    #result.k = 0
-    #result.dlambda = <double*> malloc(lambda_size * sizeof(double))
-    #result.dsigma = <double*> malloc(sigma_size * sizeof(double))
+    cdef SAResult pair_result
     pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
     pair_result.dsigma = <double*> malloc(sigma_size * sizeof(double))
 
-    #for i in range(lambda_size):
-    #    result.dlambda[i] = 0
-    #for i in range(sigma_size):
-    #    result.dsigma[i] = 0
     for i in range(len1):
         for j in range(len2):
             index = i * len2 + j
@@ -422,21 +415,11 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
               delta_matrix, dlambda_tensor, dsigma_tensor,
               _lambda, _sigma, lambda_buckets, sigma_buckets)
     
-    #(&K_result)[0] = result.k
-    #for i in range(lambda_size):
-    #    dlambdas[i] = result.dlambda[i]
-    #for i in range(sigma_size):
-    #    dsigmas[i] = result.dsigma[i]
-
-        
     free(delta_matrix)
     free(dlambda_tensor)
     free(dsigma_tensor)
     free(pair_result.dlambda)
     free(pair_result.dsigma)
-    #free(result.dlambda)
-    #free(result.dsigma)
-    return
 
 
 cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
@@ -492,7 +475,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
             if i == lambda_index:
                 pair_result.dlambda[i] = 1
                 dlambda_tensor[index2] = 1
-                #result.dlambda[i] += 1
                 dlambdas[i] += 1
             else:
                 pair_result.dlambda[i] = 0
@@ -542,7 +524,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     delta_result = _lambda[lambda_index] * g
     delta_matrix[index] = delta_result
     pair_result.k = delta_result
-    #result.k += delta_result
     (&K_result)[0] = (&K_result)[0] + delta_result
     for i in range(lambda_size):
         index2 = index * lambda_size + i
@@ -551,7 +532,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
             dlambda_result += g
         dlambda_tensor[index2] = dlambda_result
         pair_result.dlambda[i] = dlambda_result
-        #result.dlambda[i] += dlambda_result
         dlambdas[i] += dlambda_result
      
     for i in range(sigma_size):
@@ -559,7 +539,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         dsigma_result = delta_result * vec_sigma[i]
         dsigma_tensor[index2] = dsigma_result
         pair_result.dsigma[i] = dsigma_result
-        #result.dsigma[i] += dsigma_result
         dsigmas[i] += dsigma_result
 
     free(vec_lambda)
