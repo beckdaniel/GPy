@@ -281,8 +281,6 @@ class SymbolAwareSubsetTreeKernel(object):
             #for i in prange(X_len):
             #for i in prange(X_len, schedule='dynamic'):
             for i in range(X_cpp.size()):
-                #result.dlambda = <double*> malloc(lambda_size * sizeof(double))                    
-                #result.dsigma = <double*> malloc(sigma_size * sizeof(double))
                 for j in range(X2_cpp.size()):
                     if gram:
                         if i < j:
@@ -293,13 +291,6 @@ class SymbolAwareSubsetTreeKernel(object):
                         
                     vecnode = X_cpp[i]
                     vecnode2 = X2_cpp[j]
-                    #result.k = 0
-                    #for k in range(lambda_size):
-                    #    result.dlambda[k] = 0
-                    #for k in range(sigma_size):
-                    #    result.dsigma[k] = 0
-                    #calc_K(result, vecnode, vecnode2, _lambda, _sigma,
-                    #       lambda_buckets, sigma_buckets)
                     calc_K(vecnode, vecnode2, _lambda, _sigma,
                            lambda_buckets, sigma_buckets,
                            Ks_view[i,j], dlambdas_view[i,j], dsigmas_view[i,j])
@@ -317,12 +308,12 @@ class SymbolAwareSubsetTreeKernel(object):
                     #    dlambdas[k,i,j] = result.dlambda[k]
                     #for k in range(sigma_size):
                     #    dsigmas[k,i,j] = result.dsigma[k]
-                    #if gram:
-                    #    Ks[j,i] = result.k
-                    #    for k in range(lambda_size):
-                    #        dlambdas[k,j,i] = result.dlambda[k]
-                    #    for k in range(sigma_size):
-                    #        dsigmas[k,j,i] = result.dsigma[k]
+                    if gram:
+                        Ks[j,i] = Ks[i,j]
+                        for k in range(lambda_size):
+                            dlambdas[j,i,k] = dlambdas[i,j,k]
+                        for k in range(sigma_size):
+                            dsigmas[j,i,k] = dsigmas[i,j,k]
                    
                 #free(result.dsigma)
                 #free(result.dlambda)
