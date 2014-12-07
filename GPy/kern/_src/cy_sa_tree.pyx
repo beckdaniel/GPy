@@ -278,9 +278,9 @@ class SymbolAwareSubsetTreeKernel(object):
         
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         with nogil:#, parallel(num_threads=num_threads):
-            #for i in prange(X_len):
+            for i in prange(X_cpp.size()):
             #for i in prange(X_len, schedule='dynamic'):
-            for i in range(X_cpp.size()):
+            #for i in range(X_cpp.size()):
                 for j in range(X2_cpp.size()):
                     K_wrapper(X_cpp, X2_cpp, i, j, _lambda, _sigma,
                               lambda_buckets, sigma_buckets, Ks_view, 
