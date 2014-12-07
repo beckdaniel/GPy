@@ -39,8 +39,10 @@ ctypedef map[string, int] BucketMap
 ctypedef vector[double*] SAMatrix
 ctypedef struct SAResult:
     double k
-    double* dlambda
-    double* dsigma
+    Vector dlambda
+    Vector dsigma
+    #double* dlambda
+    #double* dsigma
 cdef string SPACE = " "
 
 cdef class Node(object):
@@ -390,10 +392,15 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
                                                    * sizeof(double))
     cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
                                                   * sizeof(double))
+    #cdef Vector delta_matrix = Vector(len1 * len2)
+    #cdef Vector dlambda_tensor = Vector(len1 * len2 * lambda_size)
+    #cdef Vector dsigma_tensor = Vector(len1 * len2 * lambda_size)
     cdef VecIntPair node_pairs
     cdef SAResult pair_result
-    pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
-    pair_result.dsigma = <double*> malloc(sigma_size * sizeof(double))
+    #pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
+    #pair_result.dsigma = <double*> malloc(sigma_size * sizeof(double))
+    pair_result.dlambda = Vector(lambda_size)
+    pair_result.dsigma = Vector(sigma_size)
 
     for i in range(len1):
         for j in range(len2):
@@ -416,8 +423,8 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     free(delta_matrix)
     free(dlambda_tensor)
     free(dsigma_tensor)
-    free(pair_result.dlambda)
-    free(pair_result.dsigma)
+    #free(pair_result.dlambda)
+    #free(pair_result.dsigma)
 
 
 cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
