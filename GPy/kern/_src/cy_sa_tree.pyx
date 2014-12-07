@@ -387,14 +387,14 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     cdef int i, j, k, index, index2
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
-    cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
-    cdef double* dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size
-                                                   * sizeof(double))
-    cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
-                                                  * sizeof(double))
-    #cdef Vector delta_matrix = Vector(len1 * len2)
-    #cdef Vector dlambda_tensor = Vector(len1 * len2 * lambda_size)
-    #cdef Vector dsigma_tensor = Vector(len1 * len2 * lambda_size)
+    #cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    #cdef double* dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size
+    #                                               * sizeof(double))
+    #cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
+    #                                              * sizeof(double))
+    cdef Vector delta_matrix = Vector(len1 * len2)
+    cdef Vector dlambda_tensor = Vector(len1 * len2 * lambda_size)
+    cdef Vector dsigma_tensor = Vector(len1 * len2 * lambda_size)
     cdef VecIntPair node_pairs
     cdef SAResult pair_result
     #pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
@@ -420,17 +420,17 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
               delta_matrix, dlambda_tensor, dsigma_tensor,
               _lambda, _sigma, lambda_buckets, sigma_buckets)
     
-    free(delta_matrix)
-    free(dlambda_tensor)
-    free(dsigma_tensor)
+    #free(delta_matrix)
+    #free(dlambda_tensor)
+    #free(dsigma_tensor)
     #free(pair_result.dlambda)
     #free(pair_result.dsigma)
 
 
 cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
                 SAResult& pair_result, IntPair int_pair,
-                VecNode& vecnode1, VecNode& vecnode2, double* delta_matrix,
-                double* dlambda_tensor, double* dsigma_tensor,
+                VecNode& vecnode1, VecNode& vecnode2, Vector& delta_matrix,
+                Vector& dlambda_tensor, Vector& dsigma_tensor,
                 double[:] _lambda, double[:] _sigma,
                 BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
     """
