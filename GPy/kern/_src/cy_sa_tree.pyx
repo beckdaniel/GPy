@@ -274,11 +274,6 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef VecNode vecnode, vecnode2
         cdef double[:] _lambda = self._lambda
         cdef double[:] _sigma = self._sigma
-        #cdef SAResult result
-        #if self.normalize:
-        #    normalize = 1
-        #else:
-        #    normalize = 0
         normalize = self.normalize
         
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
@@ -287,49 +282,16 @@ class SymbolAwareSubsetTreeKernel(object):
             #for i in prange(X_len, schedule='dynamic'):
             for i in range(X_cpp.size()):
                 for j in range(X2_cpp.size()):
-                    #if gram:
-                    #    if i < j:
-                    #        continue
-                    #    if i == j and normalize:
-                    #        Ks[i,j] = 1
-                    #        continue
-                        
-                    #vecnode = X_cpp[i]
-                    #vecnode2 = X2_cpp[j]
-                    #calc_K(vecnode, vecnode2, _lambda, _sigma,
-                    #       lambda_buckets, sigma_buckets,
-                    #       Ks_view[i,j], dlambdas_view[i,j], dsigmas_view[i,j])
-
                     K_wrapper(X_cpp, X2_cpp, i, j, _lambda, _sigma,
                               lambda_buckets, sigma_buckets, Ks_view, 
-                              dlambdas_view,
-                              dsigmas_view, gram, normalize, X_diag_Ks[i],
-                              X2_diag_Ks[j], X_diag_dlambdas[i],
+                              dlambdas_view, dsigmas_view, gram, normalize, 
+                              X_diag_Ks[i], X2_diag_Ks[j], X_diag_dlambdas[i],
                               X2_diag_dlambdas[j], X_diag_dsigmas[i],
                               X2_diag_dsigmas[j]) 
                     
-                    #if normalize:
-                    #    _normalize(result,
-                    #               X_diag_Ks[i], X2_diag_Ks[j],
-                    #               X_diag_dlambdas[i], X2_diag_dlambdas[j],
-                    #               X_diag_dsigmas[i], X2_diag_dsigmas[j],
-                    #               lambda_size, sigma_size)
-
-                    # Store everything
-                    #Ks[i,j] = result.k
-                    #for k in range(lambda_size):
-                    #    dlambdas[k,i,j] = result.dlambda[k]
-                    #for k in range(sigma_size):
-                    #    dsigmas[k,i,j] = result.dsigma[k]
-                    #if gram:
-                    #    Ks[j,i] = Ks[i,j]
-                    #    for k in range(lambda_size):
-                    #        dlambdas[j,i,k] = dlambdas[i,j,k]
-                    #    for k in range(sigma_size):
-                    #        dsigmas[j,i,k] = dsigmas[i,j,k]
-                   
         return (Ks, dlambdas, dsigmas)
 
+    
 ######################
 # EXTERNAL METHODS
 ######################
@@ -386,8 +348,7 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
                     double[:] X2_diag_dsigmas_j) nogil:
     """
     Wrapper around K calculation.
-    """
-    cdef int k    
+    """ 
     if gram:
         if i < j:
             return
@@ -403,15 +364,13 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
         _normalize(Ks[i,j], dlambdas[i,j], dsigmas[i,j],
                    X_diag_Ks_i, X2_diag_Ks_j,
                    X_diag_dlambdas_i, X2_diag_dlambdas_j,
-                   X_diag_dsigmas_i, X2_diag_dsigmas_j)
-    
+                   X_diag_dsigmas_i, X2_diag_dsigmas_j)    
     if gram:
         Ks[j,i] = Ks[i,j]
-        for k in range(_lambda.shape[0]):
-            dlambdas[j,i,k] = dlambdas[i,j,k]
-        for k in range(_sigma.shape[0]):
-            dsigmas[j,i,k] = dsigmas[i,j,k]
-                   
+        dlambdas[j,i] = dlambdas[i,j]
+        dsigmas[j,i] = dsigmas[i,j]
+
+            
 cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
                  double[:] _lambda, double[:] _sigma, 
                  BucketMap& lambda_buckets, BucketMap& sigma_buckets,
