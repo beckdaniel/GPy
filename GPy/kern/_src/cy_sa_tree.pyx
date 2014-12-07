@@ -27,7 +27,7 @@ cdef extern from "stdio.h":
 DTYPE = np.double
 ctypedef np.double_t DTYPE_t
 
-
+ctypedef vector[double] Vector
 ctypedef vector[int] IntList
 ctypedef pair[string, IntList] CNode
 ctypedef pair[CNode, CNode] NodePair
@@ -488,12 +488,8 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     sum_lambda = 0
     sum_sigma = 0
     g = 1
-    cdef double* vec_lambda = <double*> malloc(lambda_size * sizeof(double))
-    for i in range(lambda_size):
-        vec_lambda[i] = 0
-    cdef double* vec_sigma = <double*> malloc(sigma_size * sizeof(double))
-    for i in range(sigma_size):
-        vec_sigma[i] = 0
+    cdef Vector vec_lambda = Vector(lambda_size)
+    cdef Vector vec_sigma = Vector(sigma_size)
     children1 = node1.second
     children2 = node2.second
     sigma_index = sigma_buckets[root]
@@ -538,9 +534,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         pair_result.dsigma[i] = dsigma_result
         dsigmas[i] += dsigma_result
 
-    free(vec_lambda)
-    free(vec_sigma)
-
 
 cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
                      double diag_Ks_i, double diag_Ks_j, 
@@ -558,21 +551,17 @@ cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
     norm = diag_Ks_i * diag_Ks_j
     sqrt_norm = sqrt(norm)
     K_norm = (&K_result)[0] / sqrt_norm
-    #result.k = K_norm
     (&K_result)[0] = K_norm
     for i in range(lambda_size):
         diff_lambda = ((diag_dlambdas_i[i] * diag_Ks_j) +
                        (diag_Ks_i * diag_dlambdas_j[i]))
         diff_lambda /= 2 * norm
-        #result.dlambda[i] = ((result.dlambda[i] / sqrt_norm) -
-        #                     (K_norm * diff_lambda))
         dlambdas[i] = ((dlambdas[i] / sqrt_norm) - (K_norm * diff_lambda))
     for i in range(sigma_size):
         diff_sigma = ((diag_dsigmas_i[i] * diag_Ks_j) +
                       (diag_Ks_i * diag_dsigmas_j[i]))
         diff_sigma /= 2 * norm
-        #result.dsigma[i] = ((result.dsigma[i] / sqrt_norm) -
-        #                    (K_norm * diff_sigma))
         dsigmas[i] = ((dsigmas[i] / sqrt_norm) - (K_norm * diff_sigma))
 
+        
 #endif //CY_SA_TREE_H
