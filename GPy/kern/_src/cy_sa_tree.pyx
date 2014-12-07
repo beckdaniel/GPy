@@ -207,23 +207,26 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
         cdef BucketMap sigma_buckets = self._dict_to_map(self.sigma_buckets)
 
-        K_vec = np.zeros(shape=(len(X),))
-        dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
-        dsigma_mat = np.zeros(shape=(len(X), len(self._sigma)))
-        cdef double[:] K_vec_view = K_vec
+        cdef np.ndarray[DTYPE_t, ndim=1] K_vec = np.zeros(shape=(len(X),))
+        cdef np.ndarray[DTYPE_t, ndim=2] dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
+        cdef np.ndarray[DTYPE_t, ndim=2] dsigma_mat = np.zeros(shape=(len(X), len(self._sigma)))
+        #cdef double[:] K_vec_view = K_vec
         #cdef double K_result = 0
         
         #result.dlambda = <double*> malloc(len(self._lambda) * sizeof(double))
         #result.dsigma = <double*> malloc(len(self._sigma) * sizeof(double))
+        cdef SAResult result
         for i in range(len(X)):
-            calc_K(X[i], X[i], self._lambda, self._sigma, 
-                   lambda_buckets, sigma_buckets, K_vec_view[i],
-                   dlambda_mat[i], dsigma_mat[i])
-            #K_vec[i] = K_result
-            #for j in range(len(self._lambda)):
-            #    dlambda_mat[i][j] = result.dlambda[j]
-            #for j in range(len(self._sigma)):
-            #    dsigma_mat[i][j] = result.dsigma[j]
+            result.k = 0
+            result.dlambda = Vector(len(self._lambda))
+            result.dsigma = Vector(len(self._sigma))
+            calc_K(result, X[i], X[i], self._lambda, self._sigma, 
+                   lambda_buckets, sigma_buckets)
+            K_vec[i] = result.k
+            for j in range(len(self._lambda)):
+                dlambda_mat[i][j] = result.dlambda[j]
+            for j in range(len(self._sigma)):
+                dsigma_mat[i][j] = result.dsigma[j]
         
         #free(result.dlambda)
         #free(result.dsigma)
@@ -256,6 +259,9 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:] X_diag_Ks, X2_diag_Ks
         cdef double[:,:] X_diag_dlambdas, X_diag_dsigmas
         cdef double[:,:] X2_diag_dlambdas, X2_diag_dsigmas
+        #cdef np.ndarray[DTYPE_t, ndim=1] X_diag_Ks, X2_diag_Ks
+        #cdef np.ndarray[DTYPE_t, ndim=2] X_diag_dlambdas, X_diag_dsigmas
+        #cdef np.ndarray[DTYPE_t, ndim=2] X2_diag_dlambdas, X2_diag_dsigmas
         #if self.normalize:
         X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_cpp)
         X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2_cpp)
@@ -268,9 +274,9 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef np.ndarray[DTYPE_t, ndim=3] dsigmas
         dlambdas = np.zeros(shape=(len(X), len(X2), lambda_size))
         dsigmas = np.zeros(shape=(len(X), len(X2), sigma_size))
-        cdef double[:,:] Ks_view = Ks
-        cdef double[:,:,:] dlambdas_view = dlambdas
-        cdef double[:,:,:] dsigmas_view = dsigmas
+        #cdef double[:,:] Ks_view
+        #cdef double[:,:,:] dlambdas_view
+        #cdef double[:,:,:] dsigmas_view
 
         cdef int normalize, i, j, k
         cdef int num_threads = self.num_threads
@@ -278,6 +284,7 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:] _lambda = self._lambda
         cdef double[:] _sigma = self._sigma
         normalize = self.normalize
+        cdef SAResult result
         
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         with nogil:#, parallel(num_threads=num_threads):
@@ -285,13 +292,24 @@ class SymbolAwareSubsetTreeKernel(object):
             #for i in prange(X_len, schedule='dynamic'):
             #for i in range(X_cpp.size()):
                 for j in range(X2_cpp.size()):
-                    K_wrapper(X_cpp, X2_cpp, i, j, _lambda, _sigma,
-                              lambda_buckets, sigma_buckets, Ks_view, 
-                              dlambdas_view, dsigmas_view, gram, normalize, 
+                    K_wrapper(result, X_cpp, X2_cpp, i, j, _lambda, _sigma,
+                              lambda_buckets, sigma_buckets, gram, normalize, 
                               X_diag_Ks[i], X2_diag_Ks[j], X_diag_dlambdas[i],
                               X2_diag_dlambdas[j], X_diag_dsigmas[i],
-                              X2_diag_dsigmas[j]) 
-                    
+                              X2_diag_dsigmas[j])
+                    Ks[i,j] = result.k
+                    for k in range(_lambda.shape[0]):
+                        dlambdas[i,j,k] = result.dlambda[k]
+                    for k in range(_sigma.shape[0]):
+                        dsigmas[i,j,k] = result.dsigma[k]
+
+                    if gram:
+                        Ks[j,i] = Ks[i,j]
+                        for k in range(_lambda.shape[0]):
+                            dlambdas[j,i,k] = dlambdas[i,j,k]
+                        for k in range(_sigma.shape[0]):
+                            dsigmas[j,i,k] = dsigmas[i,j,k]
+                        
         return (Ks, dlambdas, dsigmas)
 
     
@@ -341,43 +359,40 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     return int_pairs
 
 
-cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
-                    int j, double[:] _lambda, double[:] _sigma,
+cdef void K_wrapper(SAResult& result, VecVecNode& X_cpp, VecVecNode& X2_cpp, 
+                    int i, int j, double[:] _lambda, double[:] _sigma,
                     BucketMap& lambda_buckets, BucketMap& sigma_buckets,
-                    double[:,:] Ks, double[:,:,:] dlambdas, double[:,:,:] dsigmas,
                     int gram, int normalize, double X_diag_Ks_i,
                     double X2_diag_Ks_j, double[:] X_diag_dlambdas_i,
                     double[:] X2_diag_dlambdas_j, double[:] X_diag_dsigmas_i,
                     double[:] X2_diag_dsigmas_j) nogil:
     """
     Wrapper around K calculation.
-    """ 
+    """
+    result.k = 0
+    result.dlambda = Vector(_lambda.shape[0])
+    result.dsigma = Vector(_sigma.shape[0])
     if gram:
         if i < j:
             return
         if i == j and normalize:
-            Ks[i,j] = 1
+            result.k = 1
             return
     vecnode = X_cpp[i]
     vecnode2 = X2_cpp[j]
-    calc_K(vecnode, vecnode2, _lambda, _sigma, lambda_buckets, 
-           sigma_buckets, Ks[i,j], dlambdas[i,j], dsigmas[i,j])
+    calc_K(result, vecnode, vecnode2, _lambda, _sigma, lambda_buckets, 
+           sigma_buckets)
 
     if normalize == 1:
-        _normalize(Ks[i,j], dlambdas[i,j], dsigmas[i,j],
-                   X_diag_Ks_i, X2_diag_Ks_j,
+        _normalize(result, X_diag_Ks_i, X2_diag_Ks_j,
                    X_diag_dlambdas_i, X2_diag_dlambdas_j,
                    X_diag_dsigmas_i, X2_diag_dsigmas_j)    
-    if gram:
-        Ks[j,i] = Ks[i,j]
-        dlambdas[j,i] = dlambdas[i,j]
-        dsigmas[j,i] = dsigmas[i,j]
+
 
             
-cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
+cdef void calc_K(SAResult& result, VecNode& vecnode1, VecNode& vecnode2,
                  double[:] _lambda, double[:] _sigma, 
-                 BucketMap& lambda_buckets, BucketMap& sigma_buckets,
-                 double &K_result, double[:] dlambdas, double[:] dsigmas) nogil:
+                 BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -415,7 +430,7 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
 
     node_pairs = get_node_pairs(vecnode1, vecnode2)
     for int_pair in node_pairs:
-        delta(K_result, dlambdas, dsigmas,
+        delta(result,
               pair_result, int_pair, vecnode1, vecnode2,
               delta_matrix, dlambda_tensor, dsigma_tensor,
               _lambda, _sigma, lambda_buckets, sigma_buckets)
@@ -427,7 +442,7 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     #free(pair_result.dsigma)
 
 
-cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
+cdef void delta(SAResult& result,
                 SAResult& pair_result, IntPair int_pair,
                 VecNode& vecnode1, VecNode& vecnode2, Vector& delta_matrix,
                 Vector& dlambda_tensor, Vector& dsigma_tensor,
@@ -473,13 +488,15 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     if node1.second.empty():
         delta_matrix[index] = _lambda[lambda_index] 
         pair_result.k = _lambda[lambda_index]
-        (&K_result)[0] = (&K_result)[0] + _lambda[lambda_index]
+        #(&K_result)[0] = (&K_result)[0] + _lambda[lambda_index]
+        result.k += _lambda[lambda_index]
         for i in range(lambda_size):
             index2 = index * lambda_size + i
             if i == lambda_index:
                 pair_result.dlambda[i] = 1
                 dlambda_tensor[index2] = 1
-                dlambdas[i] += 1
+                #dlambdas[i] += 1
+                result.dlambda[i] += 1
             else:
                 pair_result.dlambda[i] = 0
                 dlambda_tensor[index2] = 0
@@ -504,7 +521,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         ch_pair.first = children1[i]
         ch_pair.second = children2[i]
         if vecnode1[ch_pair.first].first == vecnode2[ch_pair.second].first:
-            delta(K_result, dlambdas, dsigmas,
+            delta(result,
                   pair_result, ch_pair, vecnode1, vecnode2,
                   delta_matrix, dlambda_tensor, dsigma_tensor, _lambda,
                   _sigma, lambda_buckets, sigma_buckets)
@@ -524,7 +541,8 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     delta_result = _lambda[lambda_index] * g
     delta_matrix[index] = delta_result
     pair_result.k = delta_result
-    (&K_result)[0] = (&K_result)[0] + delta_result
+    #(&K_result)[0] = (&K_result)[0] + delta_result
+    result.k += delta_result
     for i in range(lambda_size):
         index2 = index * lambda_size + i
         dlambda_result = delta_result * vec_lambda[i]
@@ -532,17 +550,19 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
             dlambda_result += g
         dlambda_tensor[index2] = dlambda_result
         pair_result.dlambda[i] = dlambda_result
-        dlambdas[i] += dlambda_result
+        #dlambdas[i] += dlambda_result
+        result.dlambda[i] += dlambda_result
      
     for i in range(sigma_size):
         index2 = index * sigma_size + i
         dsigma_result = delta_result * vec_sigma[i]
         dsigma_tensor[index2] = dsigma_result
         pair_result.dsigma[i] = dsigma_result
-        dsigmas[i] += dsigma_result
+        #dsigmas[i] += dsigma_result
+        result.dsigma[i] += dsigma_result
 
 
-cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
+cdef void _normalize(SAResult& result,
                      double diag_Ks_i, double diag_Ks_j, 
                      double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
                      double[:] diag_dsigmas_i, double[:] diag_dsigmas_j) nogil:
@@ -552,23 +572,29 @@ cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
     cdef double norm, sqrt_nrorm, K_norm, diff_lambda 
     cdef double dlambda_norm, diff_sigma, dsigma_norm
     cdef int i
-    cdef int lambda_size = dlambdas.shape[0]
-    cdef int sigma_size = dsigmas.shape[0]
+    #cdef int lambda_size = dlambdas.shape[0]
+    #cdef int sigma_size = dsigmas.shape[0]
+    cdef int lambda_size = result.dlambda.size()
+    cdef int sigma_size = result.dsigma.size()
 
     norm = diag_Ks_i * diag_Ks_j
     sqrt_norm = sqrt(norm)
-    K_norm = (&K_result)[0] / sqrt_norm
-    (&K_result)[0] = K_norm
+    #K_norm = (&K_result)[0] / sqrt_norm
+    #(&K_result)[0] = K_norm
+    K_norm = result.k / sqrt_norm
+    result.k = K_norm
     for i in range(lambda_size):
         diff_lambda = ((diag_dlambdas_i[i] * diag_Ks_j) +
                        (diag_Ks_i * diag_dlambdas_j[i]))
         diff_lambda /= 2 * norm
-        dlambdas[i] = ((dlambdas[i] / sqrt_norm) - (K_norm * diff_lambda))
+        #dlambdas[i] = ((dlambdas[i] / sqrt_norm) - (K_norm * diff_lambda))
+        result.dlambda[i] = ((result.dlambda[i] / sqrt_norm) - (K_norm * diff_lambda))
     for i in range(sigma_size):
         diff_sigma = ((diag_dsigmas_i[i] * diag_Ks_j) +
                       (diag_Ks_i * diag_dsigmas_j[i]))
         diff_sigma /= 2 * norm
-        dsigmas[i] = ((dsigmas[i] / sqrt_norm) - (K_norm * diff_sigma))
+        #dsigmas[i] = ((dsigmas[i] / sqrt_norm) - (K_norm * diff_sigma))
+        result.dsigma[i] = ((result.dsigma[i] / sqrt_norm) - (K_norm * diff_sigma))
 
         
 #endif //CY_SA_TREE_H
