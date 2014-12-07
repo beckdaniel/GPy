@@ -130,17 +130,13 @@ class SymbolAwareSubsetTreeKernel(Kern):
                 np.sum(self.dsigma * dL_dK)]
 
     def update_gradients_full(self, dL_dK, X, X2):
-        #print self._lambda
-        #print self._sigma
-        #print len(self._lambda)
-        #print self.dlambda
-        #print self.dsigma
-        #a = np.array([np.sum(self.dlambda[i] * dL_dK) for i in range(len(self._lambda))])
-        #print a
-        self._lambda.gradient = np.array([np.sum(self.dlambda[i] * dL_dK) for i in range(len(self._lambda))])
-        self._sigma.gradient = np.array([np.sum(self.dsigma[i] * dL_dK) for i in range(len(self._sigma))])
-        #print self._lambda.gradient
-        #print self._sigma.gradient
+        #print self._lambda.gradient.shape
+        #print self.dlambda.shape
+        self._lambda.gradient = np.array([np.sum(self.dlambda[:,:,i] * dL_dK)
+                                          for i in range(len(self._lambda))])
+        self._sigma.gradient = np.array([np.sum(self.dsigma[:,:,i] * dL_dK)
+                                         for i in range(len(self._sigma))])
+
 
 
 ####################################
