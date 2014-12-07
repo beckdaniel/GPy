@@ -226,10 +226,10 @@ class SASSTGradientTests(unittest.TestCase):
         #print k.dlambda
         #print k.dsigma
         self.assertAlmostEqual(result, 1.88)
-        self.assertAlmostEqual(k.dlambda[0], 1.24)
-        self.assertAlmostEqual(k.dlambda[1], 3)
-        self.assertAlmostEqual(k.dsigma[0], 2.24)
-        self.assertAlmostEqual(k.dsigma[1], 0.8)
+        self.assertAlmostEqual(k.dlambda[0,0,0], 1.24)
+        self.assertAlmostEqual(k.dlambda[0,0,1], 3)
+        self.assertAlmostEqual(k.dsigma[0,0,0], 2.24)
+        self.assertAlmostEqual(k.dsigma[0,0,1], 0.8)
 
 #@unittest.skip("skip")
 class SASSTNormTests(unittest.TestCase):
@@ -255,7 +255,7 @@ class SASSTNormTests(unittest.TestCase):
         result = k.K(self.X1, self.X2)
 
         self.assertAlmostEqual(result, 0.6)
-        self.assertAlmostEqual(k.dlambda[0], -0.2)
+        self.assertAlmostEqual(k.dlambda[0,0,0], -0.2)
         self.assertAlmostEqual(k.dsigma, 0.12)
 
     def test_grad_4(self):
@@ -265,8 +265,8 @@ class SASSTNormTests(unittest.TestCase):
         result2 = k2.K(self.X1, self.X2)
 
         self.assertAlmostEqual(result, result2)
-        self.assertAlmostEqual(k.dlambda[0], k2.dlambda)
-        self.assertAlmostEqual(k.dsigma[0], k2.dsigma)
+        self.assertAlmostEqual(k.dlambda[0,0,0], k2.dlambda)
+        self.assertAlmostEqual(k.dsigma[0,0,0], k2.dsigma)
     
     @unittest.skip("need to do the maths for this test")
     def test_grad_3(self):
