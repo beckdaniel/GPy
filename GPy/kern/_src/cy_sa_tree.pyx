@@ -74,7 +74,6 @@ class SymbolAwareSubsetTreeKernel(object):
     def __init__(self, _lambda=np.array([0.5]), _sigma=np.array([1.0]),
                  lambda_buckets={}, sigma_buckets={}, normalize=True, num_threads=1,
                  parallel=True):
-        #super(SymbolAwareSubsetTreeKernel, self).__init__(_lambda, _sigma, normalize, num_threads)
         self._lambda = _lambda
         self._sigma = _sigma
         self.lambda_buckets = lambda_buckets
@@ -201,7 +200,6 @@ class SymbolAwareSubsetTreeKernel(object):
         of X and themselves. Used in Kdiag but also
         in K when normalization is enabled.
         """
-        #cdef SAResult result
         # We need to convert the buckets into C++ maps because
         # calc_K is called without the GIL.
         cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
@@ -211,22 +209,10 @@ class SymbolAwareSubsetTreeKernel(object):
         dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
         dsigma_mat = np.zeros(shape=(len(X), len(self._sigma)))
         cdef double[:] K_vec_view = K_vec
-        #cdef double K_result = 0
-        
-        #result.dlambda = <double*> malloc(len(self._lambda) * sizeof(double))
-        #result.dsigma = <double*> malloc(len(self._sigma) * sizeof(double))
         for i in range(len(X)):
             calc_K(X[i], X[i], self._lambda, self._sigma, 
                    lambda_buckets, sigma_buckets, K_vec_view[i],
                    dlambda_mat[i], dsigma_mat[i])
-            #K_vec[i] = K_result
-            #for j in range(len(self._lambda)):
-            #    dlambda_mat[i][j] = result.dlambda[j]
-            #for j in range(len(self._sigma)):
-            #    dsigma_mat[i][j] = result.dsigma[j]
-        
-        #free(result.dlambda)
-        #free(result.dsigma)
         return (K_vec, dlambda_mat, dsigma_mat)
 
     @cython.boundscheck(False)
@@ -256,7 +242,6 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:] X_diag_Ks, X2_diag_Ks
         cdef double[:,:] X_diag_dlambdas, X_diag_dsigmas
         cdef double[:,:] X2_diag_dlambdas, X2_diag_dsigmas
-        #if self.normalize:
         X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_cpp)
         X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2_cpp)
             
@@ -281,10 +266,8 @@ class SymbolAwareSubsetTreeKernel(object):
         
         #openmp.OMP_STACKSIZE = "1G"
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
-        with nogil:#, parallel(num_threads=num_threads):
-            for i in prange(X_cpp.size(), num_threads=5):
-            #for i in prange(X_len, schedule='dynamic'):
-            #for i in range(X_cpp.size()):
+        with nogil, parallel(num_threads=num_threads):
+            for i in prange(X_cpp.size(), schedule='dynamic'):
                 for j in range(X2_cpp.size()):
                     K_wrapper(X_cpp, X2_cpp, i, j, _lambda, _sigma,
                               lambda_buckets, sigma_buckets, Ks_view, 
@@ -363,7 +346,6 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
     vecnode2 = X2_cpp[j]
     calc_K(vecnode, vecnode2, _lambda, _sigma, lambda_buckets, 
            sigma_buckets, Ks[i,j], dlambdas[i,j], dsigmas[i,j])
-
     if normalize == 1:
         _normalize(Ks[i,j], dlambdas[i,j], dsigmas[i,j],
                    X_diag_Ks_i, X2_diag_Ks_j,
@@ -466,7 +448,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     production = node1.first
     space = production.find(SPACE)
     root = production.substr(0, space)
-    #lambda_index = lambda_buckets[root]
     bucket_it = lambda_buckets.find(root)
     if bucket_it == lambda_buckets.end():
         lambda_index = 0
@@ -490,7 +471,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
             pair_result.dsigma[i] = 0
             dsigma_tensor[index2] = 0
         return
-    #return
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
     node2 = vecnode2[id2]
@@ -506,13 +486,11 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         vec_sigma[i] = 0
     children1 = node1.second
     children2 = node2.second
-    #sigma_index = sigma_buckets[root]
-    #sigma_index = 0
     bucket_it = sigma_buckets.find(root)
     if bucket_it == sigma_buckets.end():
         sigma_index = 0
     else:
-        sigma_index = lambda_buckets[root]
+        sigma_index = sigma_buckets[root]
 
     for i in range(children1.size()):
         ch_pair.first = children1[i]
@@ -575,21 +553,16 @@ cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
     norm = diag_Ks_i * diag_Ks_j
     sqrt_norm = sqrt(norm)
     K_norm = (&K_result)[0] / sqrt_norm
-    #result.k = K_norm
     (&K_result)[0] = K_norm
     for i in range(lambda_size):
         diff_lambda = ((diag_dlambdas_i[i] * diag_Ks_j) +
                        (diag_Ks_i * diag_dlambdas_j[i]))
         diff_lambda /= 2 * norm
-        #result.dlambda[i] = ((result.dlambda[i] / sqrt_norm) -
-        #                     (K_norm * diff_lambda))
         dlambdas[i] = ((dlambdas[i] / sqrt_norm) - (K_norm * diff_lambda))
     for i in range(sigma_size):
         diff_sigma = ((diag_dsigmas_i[i] * diag_Ks_j) +
                       (diag_Ks_i * diag_dsigmas_j[i]))
         diff_sigma /= 2 * norm
-        #result.dsigma[i] = ((result.dsigma[i] / sqrt_norm) -
-        #                    (K_norm * diff_sigma))
         dsigmas[i] = ((dsigmas[i] / sqrt_norm) - (K_norm * diff_sigma))
 
 #endif //CY_SA_TREE_H

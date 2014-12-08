@@ -45,7 +45,7 @@ class SASSTKParallelCheckingTests(unittest.TestCase):
         k = SASST()
         #print k.kernel._gen_node_list(tree)
 
-    @unittest.skip("skip")
+    #@unittest.skip("skip")
     def test_when_leaves_are_trees_3(self):
         tree = '(NN (appos (NNP (poss Nicole (POS (possessive \'s)))) dad (VP is cool)))'
         tree2 = '(NN (appos (NNP (poss Nicole (POS (possessive \'s)))) mom (VP is cool)))'
@@ -157,7 +157,7 @@ class SASSTKDiagSmallSigmaTests(unittest.TestCase):
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.39)
 
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTKKernelTests(unittest.TestCase):
     """
     Tests for K, on a small set of trees
@@ -195,7 +195,7 @@ class SASSTKKernelTests(unittest.TestCase):
         self.assertAlmostEqual(k.K(self.X1, self.X2), 2.2)
 
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTGradientTests(unittest.TestCase):
     """
     Tests for gradients.
@@ -231,7 +231,7 @@ class SASSTGradientTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0,0,0], 2.24)
         self.assertAlmostEqual(k.dsigma[0,0,1], 0.8)
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTNormTests(unittest.TestCase):
     """
     Tests for the normalized version
@@ -282,7 +282,7 @@ class SASSTNormTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
 
-@unittest.skip("skip")
+#@unittest.skip("skip")
 class SASSTIntegrationTests(unittest.TestCase):
     """
     Tests for integration into GPs.
