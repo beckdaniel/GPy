@@ -157,7 +157,7 @@ class SASSTKDiagSmallSigmaTests(unittest.TestCase):
         self.assertAlmostEqual(k.Kdiag(self.X)[0], 2.39)
 
 
-#@unittest.skip("skip")
+@unittest.skip("skip")
 class SASSTKKernelTests(unittest.TestCase):
     """
     Tests for K, on a small set of trees
@@ -195,7 +195,7 @@ class SASSTKKernelTests(unittest.TestCase):
         self.assertAlmostEqual(k.K(self.X1, self.X2), 2.2)
 
 
-#@unittest.skip("skip")
+@unittest.skip("skip")
 class SASSTGradientTests(unittest.TestCase):
     """
     Tests for gradients.
@@ -231,7 +231,7 @@ class SASSTGradientTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0,0,0], 2.24)
         self.assertAlmostEqual(k.dsigma[0,0,1], 0.8)
 
-#@unittest.skip("skip")
+@unittest.skip("skip")
 class SASSTNormTests(unittest.TestCase):
     """
     Tests for the normalized version
@@ -282,7 +282,7 @@ class SASSTNormTests(unittest.TestCase):
         self.assertAlmostEqual(k.dsigma[0], 2.24)
         self.assertAlmostEqual(k.dsigma[1], 0.8)
 
-#@unittest.skip("skip")
+@unittest.skip("skip")
 class SASSTIntegrationTests(unittest.TestCase):
     """
     Tests for integration into GPs.
@@ -353,7 +353,7 @@ class SASSTIntegrationTests(unittest.TestCase):
         #print m
         #self.assertAlmostEqual(m['sasstk.lambda'][0], m2['sstk.lambda'])
 
-
+#@unittest.skip("skip")
 class SASSTKProfilingTests(unittest.TestCase):
 
     def setUp(self):
@@ -368,7 +368,7 @@ class SASSTKProfilingTests(unittest.TestCase):
     def test_prof_1(self):
         k = SASST(normalize=False, _lambda=np.array([1.0]))
         start_time = datetime.datetime.now()
-        for i in range(5000):
+        for i in range(10000):
             k.K(self.X)
         end_time = datetime.datetime.now()
         print end_time - start_time

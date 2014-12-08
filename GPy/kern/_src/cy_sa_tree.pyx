@@ -443,6 +443,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     cdef int sigma_size = _sigma.shape[0]
     cdef IntPair ch_pair
     cdef string production, root
+    cdef map[string, int].iterator bucket_it
 
     # RECURSIVE CASE: get value from DP matrix if it was already calculated
     id1 = int_pair.first
@@ -465,7 +466,12 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     production = node1.first
     space = production.find(SPACE)
     root = production.substr(0, space)
-    lambda_index = lambda_buckets[root]
+    #lambda_index = lambda_buckets[root]
+    bucket_it = lambda_buckets.find(root)
+    if bucket_it == lambda_buckets.end():
+        lambda_index = 0
+    else:
+        lambda_index = lambda_buckets[root]
     if node1.second.empty():
         delta_matrix[index] = _lambda[lambda_index] 
         pair_result.k = _lambda[lambda_index]
@@ -484,6 +490,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
             pair_result.dsigma[i] = 0
             dsigma_tensor[index2] = 0
         return
+    #return
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
     node2 = vecnode2[id2]
@@ -499,7 +506,14 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         vec_sigma[i] = 0
     children1 = node1.second
     children2 = node2.second
-    sigma_index = sigma_buckets[root]
+    #sigma_index = sigma_buckets[root]
+    #sigma_index = 0
+    bucket_it = sigma_buckets.find(root)
+    if bucket_it == sigma_buckets.end():
+        sigma_index = 0
+    else:
+        sigma_index = lambda_buckets[root]
+
     for i in range(children1.size()):
         ch_pair.first = children1[i]
         ch_pair.second = children2[i]
