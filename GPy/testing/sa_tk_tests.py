@@ -353,6 +353,26 @@ class SASSTIntegrationTests(unittest.TestCase):
         #print m
         #self.assertAlmostEqual(m['sasstk.lambda'][0], m2['sstk.lambda'])
 
+
+class SASSTKProfilingTests(unittest.TestCase):
+
+    def setUp(self):
+        self.X = np.array([['(S (NP ns) (VP v))'],
+                           ['(S (NP n) (VP v))'],
+                           ['(S (NP (N a)) (VP (V c)))'],
+                           ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                           ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                          dtype=object)
+        self.Y = np.array([[(a+10)*5] for a in range(5)])
+
+    def test_prof_1(self):
+        k = SASST(normalize=False, _lambda=np.array([1.0]))
+        start_time = datetime.datetime.now()
+        for i in range(5000):
+            k.K(self.X)
+        end_time = datetime.datetime.now()
+        print end_time - start_time
+
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
     unittest.main()

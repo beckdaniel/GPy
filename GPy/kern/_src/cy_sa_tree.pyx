@@ -6,6 +6,7 @@ import nltk
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange, parallel
+from cython.parallel cimport parallel
 from collections import defaultdict
 from libcpp.string cimport string
 from libcpp.map cimport map
@@ -16,6 +17,7 @@ from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 cimport cython
 from cython cimport view
+cimport openmp
 
 
 cdef extern from "math.h" nogil:
@@ -277,9 +279,10 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:] _sigma = self._sigma
         normalize = self.normalize
         
+        #openmp.OMP_STACKSIZE = "1G"
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         with nogil:#, parallel(num_threads=num_threads):
-            for i in prange(X_cpp.size()):
+            for i in prange(X_cpp.size(), num_threads=5):
             #for i in prange(X_len, schedule='dynamic'):
             #for i in range(X_cpp.size()):
                 for j in range(X2_cpp.size()):
