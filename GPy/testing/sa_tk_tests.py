@@ -368,10 +368,34 @@ class SASSTKProfilingTests(unittest.TestCase):
     def test_prof_1(self):
         k = SASST(normalize=False, _lambda=np.array([1.0]), num_threads=8)
         start_time = datetime.datetime.now()
-        for i in range(10000):
+        for i in range(100):
             k.K(self.X)
         end_time = datetime.datetime.now()
         print end_time - start_time
+
+
+class SymbolsDictTests(unittest.TestCase):
+
+    def setUp(self):
+        self.X = np.array([['(S (NP ns) (VP v))'],
+                           ['(S (NP n) (VP v))'],
+                           ['(S (NP (N a)) (VP (V c)))'],
+                           ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                           ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                          dtype=object)
+
+    def test_get_symbols_dict_1(self):
+        expected = {'ADJ': 1,
+                    'ADV': 2,
+                    'Det': 3,
+                    'N': 4,
+                    'NP': 5,
+                    'S': 6,
+                    'V': 7,
+                    'VP': 8}
+        result = SASST().get_symbols_dict(self.X)
+        self.assertEqual(result, expected)
+
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."

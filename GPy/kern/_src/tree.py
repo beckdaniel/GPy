@@ -12,7 +12,6 @@ import nltk
 MAX_NODES = 300
 
 
-####################################
 
 class SubsetTreeKernel(Kern):
     """
@@ -137,6 +136,24 @@ class SymbolAwareSubsetTreeKernel(Kern):
         self._sigma.gradient = np.array([np.sum(self.dsigma[:,:,i] * dL_dK)
                                          for i in range(len(self._sigma))])
 
+    ####################################
+    # Helper function to easily obtain
+    # symbols from an input
+    ####################################
+    @staticmethod
+    def get_symbols_dict(X):
+        sym_set = set()
+        sym_dict = {}
+        for tree_repr in X:
+            tree = nltk.Tree.fromstring(tree_repr[0])
+            for prod in tree.productions():
+                symbol = str(prod.lhs())
+                sym_set.add(symbol)
+        sym_list = list(sym_set)
+        sym_list.sort()
+        for symbol in sym_list:
+            sym_dict[symbol] = len(sym_dict) + 1
+        return sym_dict
 
 
 ####################################
