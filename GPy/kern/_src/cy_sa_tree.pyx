@@ -7,7 +7,7 @@ import numpy as np
 cimport numpy as np
 from cython.parallel import prange, parallel
 from libcpp.string cimport string
-from libcpp.map cimport map
+#from libcpp.map cimport map
 from libcpp.pair cimport pair
 from libcpp.list cimport list as clist
 from libcpp.vector cimport vector
@@ -32,12 +32,10 @@ ctypedef pair[string, string] StrPair
 ctypedef pair[int, int] IntPair
 ctypedef pair[string, IntList] NodeInf
 ctypedef pair[NodeInf, IntPair] CNode
-#ctypedef pair[StrPair, IntList] CNode
 ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
 ctypedef vector[VecNode] VecVecNode
 ctypedef vector[IntPair] VecIntPair
-ctypedef map[string, int] BucketMap
 ctypedef vector[double*] SAMatrix
 ctypedef struct SAResult:
     double k
@@ -82,12 +80,6 @@ class SymbolAwareSubsetTreeKernel(object):
         self.normalize = normalize
         self.num_threads = num_threads
         #self.parallel = parallel
-
-    def _dict_to_map(self, dic):
-        cdef BucketMap bucket_map
-        for item in dic:
-            bucket_map[item] = dic[item]
-        return bucket_map
 
     def _gen_node_list(self, tree_repr):
         """
@@ -183,12 +175,8 @@ class SymbolAwareSubsetTreeKernel(object):
                     cnode.second.second = 0
                 cnode.first.first = node[0]
                 cnode.first.second.clear()
-                #cnode.first.first = node[0].split()[0]
-                #cnode.first.second = node[0]
-                #cnode.second.clear()
                 if node[1] != None:
                     for ch in node[1]:
-                        #cnode.second.push_back(ch)
                         cnode.first.second.push_back(ch)
                 vecnode.push_back(cnode)
             X_cpp.push_back(vecnode)
@@ -213,18 +201,13 @@ class SymbolAwareSubsetTreeKernel(object):
         of X and themselves. Used in Kdiag but also
         in K when normalization is enabled.
         """
-        # We need to convert the buckets into C++ maps because
-        # calc_K is called without the GIL.
-        cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
-        cdef BucketMap sigma_buckets = self._dict_to_map(self.sigma_buckets)
-
         K_vec = np.zeros(shape=(len(X),))
         dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
         dsigma_mat = np.zeros(shape=(len(X), len(self._sigma)))
         cdef double[:] K_vec_view = K_vec
         for i in range(len(X)):
             calc_K(X[i], X[i], self._lambda, self._sigma, 
-                   lambda_buckets, sigma_buckets, K_vec_view[i],
+                   K_vec_view[i],
                    dlambda_mat[i], dsigma_mat[i])
         return (K_vec, dlambda_mat, dsigma_mat)
 
@@ -246,8 +229,6 @@ class SymbolAwareSubsetTreeKernel(object):
 
         # We have to convert a bunch of stuff to C++ objects
         # since the actual kernel computation happens without the GIL.
-        cdef BucketMap lambda_buckets = self._dict_to_map(self.lambda_buckets)
-        cdef BucketMap sigma_buckets = self._dict_to_map(self.sigma_buckets)
         cdef VecVecNode X_cpp = self._convert_input(X)
         cdef VecVecNode X2_cpp = self._convert_input(X2)
 
@@ -282,12 +263,9 @@ class SymbolAwareSubsetTreeKernel(object):
             for i in prange(X_cpp.size(), schedule='dynamic'):
                 for j in range(X2_cpp.size()):
                     K_wrapper(X_cpp, X2_cpp, i, j, _lambda, _sigma,
-                              lambda_buckets, sigma_buckets, Ks_view, 
-                              dlambdas_view, dsigmas_view, gram, normalize, 
+                              Ks_view, dlambdas_view, dsigmas_view, gram, normalize, 
                               X_diag_Ks[i], X2_diag_Ks[j], X_diag_dlambdas[i],
-                              X2_diag_dlambdas[j], X_diag_dsigmas[i],
-                              X2_diag_dsigmas[j]) 
-                    
+                              X2_diag_dlambdas[j], X_diag_dsigmas[i], X2_diag_dsigmas[j]) 
         return (Ks, dlambdas, dsigmas)
 
     
@@ -313,17 +291,13 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
             return int_pairs
         n1 = vecnode1[i1]
         n2 = vecnode2[i2]
-        #if n1.first.second > n2.first.second:
         if n1.first.first > n2.first.first:
             i2 += 1
-        #elif n1.first.second < n2.first.second:
         elif n1.first.first < n2.first.first:
             i1 += 1
         else:
-            #while n1.first.second == n2.first.second:
             while n1.first.first == n2.first.first:
                 reset = i2
-                #while n1.first.second == n2.first.second:
                 while n1.first.first == n2.first.first:
                     tup.first = i1
                     tup.second = i2
@@ -343,7 +317,6 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
 
 cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
                     int j, double[:] _lambda, double[:] _sigma,
-                    BucketMap& lambda_buckets, BucketMap& sigma_buckets,
                     double[:,:] Ks, double[:,:,:] dlambdas, double[:,:,:] dsigmas,
                     int gram, int normalize, double X_diag_Ks_i,
                     double X2_diag_Ks_j, double[:] X_diag_dlambdas_i,
@@ -360,13 +333,12 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
             return
     vecnode = X_cpp[i]
     vecnode2 = X2_cpp[j]
-    calc_K(vecnode, vecnode2, _lambda, _sigma, lambda_buckets, 
-           sigma_buckets, Ks[i,j], dlambdas[i,j], dsigmas[i,j])
+    calc_K(vecnode, vecnode2, _lambda, _sigma,
+           Ks[i,j], dlambdas[i,j], dsigmas[i,j])
     if normalize == 1:
         _normalize(Ks[i,j], dlambdas[i,j], dsigmas[i,j],
-                   X_diag_Ks_i, X2_diag_Ks_j,
-                   X_diag_dlambdas_i, X2_diag_dlambdas_j,
-                   X_diag_dsigmas_i, X2_diag_dsigmas_j)    
+                   X_diag_Ks_i, X2_diag_Ks_j, X_diag_dlambdas_i,
+                   X2_diag_dlambdas_j, X_diag_dsigmas_i, X2_diag_dsigmas_j)    
     if gram:
         Ks[j,i] = Ks[i,j]
         dlambdas[j,i] = dlambdas[i,j]
@@ -375,7 +347,6 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
             
 cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
                  double[:] _lambda, double[:] _sigma, 
-                 BucketMap& lambda_buckets, BucketMap& sigma_buckets,
                  double &K_result, double[:] dlambdas, double[:] dsigmas) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
@@ -409,10 +380,8 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
 
     node_pairs = get_node_pairs(vecnode1, vecnode2)
     for int_pair in node_pairs:
-        delta(K_result, dlambdas, dsigmas,
-              pair_result, int_pair, vecnode1, vecnode2,
-              delta_matrix, dlambda_tensor, dsigma_tensor,
-              _lambda, _sigma, lambda_buckets, sigma_buckets)
+        delta(K_result, dlambdas, dsigmas, pair_result, int_pair, vecnode1, vecnode2,
+              delta_matrix, dlambda_tensor, dsigma_tensor, _lambda, _sigma)
     
     free(delta_matrix)
     free(dlambda_tensor)
@@ -425,8 +394,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
                 SAResult& pair_result, IntPair int_pair,
                 VecNode& vecnode1, VecNode& vecnode2, double* delta_matrix,
                 double* dlambda_tensor, double* dsigma_tensor,
-                double[:] _lambda, double[:] _sigma,
-                BucketMap& lambda_buckets, BucketMap& sigma_buckets) nogil:
+                double[:] _lambda, double[:] _sigma) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
@@ -441,7 +409,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     cdef int sigma_size = _sigma.shape[0]
     cdef IntPair ch_pair
     cdef string production, root
-    cdef map[string, int].iterator bucket_it
 
     # RECURSIVE CASE: get value from DP matrix if it was already calculated
     id1 = int_pair.first
@@ -461,14 +428,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
 
     # BASE CASE: found a preterminal
     node1 = vecnode1[id1]
-    #root = node1.first.first
-    #bucket_it = lambda_buckets.find(root)
-    #if bucket_it == lambda_buckets.end():
-    #    lambda_index = 0
-    #else:
-    #    lambda_index = lambda_buckets[root]
     lambda_index = node1.second.first
-    #if node1.second.empty():
     if node1.first.second.empty():
         delta_matrix[index] = _lambda[lambda_index] 
         pair_result.k = _lambda[lambda_index]
@@ -500,26 +460,17 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     cdef double* vec_sigma = <double*> malloc(sigma_size * sizeof(double))
     for i in range(sigma_size):
         vec_sigma[i] = 0
-    #children1 = node1.second
-    #children2 = node2.second
     children1 = node1.first.second
     children2 = node2.first.second
-    #bucket_it = sigma_buckets.find(root)
-    #if bucket_it == sigma_buckets.end():
-    #    sigma_index = 0
-    #else:
-    #    sigma_index = sigma_buckets[root]
     sigma_index = node1.second.second
-
     for i in range(children1.size()):
         ch_pair.first = children1[i]
         ch_pair.second = children2[i]
-        #if vecnode1[ch_pair.first].first.second == vecnode2[ch_pair.second].first.second:
         if vecnode1[ch_pair.first].first.first == vecnode2[ch_pair.second].first.first:
             delta(K_result, dlambdas, dsigmas,
                   pair_result, ch_pair, vecnode1, vecnode2,
                   delta_matrix, dlambda_tensor, dsigma_tensor, _lambda,
-                  _sigma, lambda_buckets, sigma_buckets)
+                  _sigma)
             denom = _sigma[sigma_index] + pair_result.k
             g *= denom
             for j in range(lambda_size):
