@@ -141,14 +141,15 @@ class SymbolAwareSubsetTreeKernel(Kern):
     # symbols from an input
     ####################################
     @staticmethod
-    def get_symbols_dict(X):
+    def get_symbols_dict(X, no_pos=False):
         sym_set = set()
         sym_dict = {}
         for tree_repr in X:
             tree = nltk.Tree.fromstring(tree_repr[0])
             for prod in tree.productions():
                 symbol = str(prod.lhs())
-                sym_set.add(symbol)
+                if not (no_pos and type(prod.rhs()[0]) == str):
+                    sym_set.add(symbol)
         sym_list = list(sym_set)
         sym_list.sort()
         for symbol in sym_list:

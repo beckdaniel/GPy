@@ -396,6 +396,13 @@ class SymbolsDictTests(unittest.TestCase):
         result = SASST().get_symbols_dict(self.X)
         self.assertEqual(result, expected)
 
+    def test_get_symbols_dict_2(self):
+        expected = {'NP': 1,
+                    'S': 2,
+                    'VP': 3}
+        result = SASST().get_symbols_dict(self.X, no_pos=True)
+        self.assertEqual(result, expected)
+
 
 if __name__ == "__main__":
     print "Running unit tests, please be (very) patient..."
