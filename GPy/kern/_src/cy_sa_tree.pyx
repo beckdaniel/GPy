@@ -29,11 +29,13 @@ ctypedef np.double_t DTYPE_t
 
 ctypedef vector[int] IntList
 ctypedef pair[string, string] StrPair
-ctypedef pair[StrPair, IntList] CNode
+ctypedef pair[int, int] IntPair
+ctypedef pair[string, IntList] NodeInf
+ctypedef pair[NodeInf, IntPair] CNode
+#ctypedef pair[StrPair, IntList] CNode
 ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
 ctypedef vector[VecNode] VecVecNode
-ctypedef pair[int, int] IntPair
 ctypedef vector[IntPair] VecIntPair
 ctypedef map[string, int] BucketMap
 ctypedef vector[double*] SAMatrix
@@ -170,12 +172,24 @@ class SymbolAwareSubsetTreeKernel(object):
             node_list = self._tree_cache[tree[0]]
             vecnode.clear()
             for node in node_list:
-                cnode.first.first = node[0].split()[0]
-                cnode.first.second = node[0]
-                cnode.second.clear()
+                root = node[0].split()[0]
+                if root in self.lambda_buckets:
+                    cnode.second.first = self.lambda_buckets[root]
+                else:
+                    cnode.second.first = 0
+                if root in self.sigma_buckets:
+                    cnode.second.second = self.sigma_buckets[root]
+                else:
+                    cnode.second.second = 0
+                cnode.first.first = node[0]
+                cnode.first.second.clear()
+                #cnode.first.first = node[0].split()[0]
+                #cnode.first.second = node[0]
+                #cnode.second.clear()
                 if node[1] != None:
                     for ch in node[1]:
-                        cnode.second.push_back(ch)
+                        #cnode.second.push_back(ch)
+                        cnode.first.second.push_back(ch)
                 vecnode.push_back(cnode)
             X_cpp.push_back(vecnode)
         return X_cpp
@@ -299,14 +313,18 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
             return int_pairs
         n1 = vecnode1[i1]
         n2 = vecnode2[i2]
-        if n1.first.second > n2.first.second:
+        #if n1.first.second > n2.first.second:
+        if n1.first.first > n2.first.first:
             i2 += 1
-        elif n1.first.second < n2.first.second:
+        #elif n1.first.second < n2.first.second:
+        elif n1.first.first < n2.first.first:
             i1 += 1
         else:
-            while n1.first.second == n2.first.second:
+            #while n1.first.second == n2.first.second:
+            while n1.first.first == n2.first.first:
                 reset = i2
-                while n1.first.second == n2.first.second:
+                #while n1.first.second == n2.first.second:
+                while n1.first.first == n2.first.first:
                     tup.first = i1
                     tup.second = i2
                     int_pairs.push_back(tup)
@@ -443,13 +461,15 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
 
     # BASE CASE: found a preterminal
     node1 = vecnode1[id1]
-    root = node1.first.first
-    bucket_it = lambda_buckets.find(root)
-    if bucket_it == lambda_buckets.end():
-        lambda_index = 0
-    else:
-        lambda_index = lambda_buckets[root]
-    if node1.second.empty():
+    #root = node1.first.first
+    #bucket_it = lambda_buckets.find(root)
+    #if bucket_it == lambda_buckets.end():
+    #    lambda_index = 0
+    #else:
+    #    lambda_index = lambda_buckets[root]
+    lambda_index = node1.second.first
+    #if node1.second.empty():
+    if node1.first.second.empty():
         delta_matrix[index] = _lambda[lambda_index] 
         pair_result.k = _lambda[lambda_index]
         (&K_result)[0] = (&K_result)[0] + _lambda[lambda_index]
@@ -480,18 +500,22 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     cdef double* vec_sigma = <double*> malloc(sigma_size * sizeof(double))
     for i in range(sigma_size):
         vec_sigma[i] = 0
-    children1 = node1.second
-    children2 = node2.second
-    bucket_it = sigma_buckets.find(root)
-    if bucket_it == sigma_buckets.end():
-        sigma_index = 0
-    else:
-        sigma_index = sigma_buckets[root]
+    #children1 = node1.second
+    #children2 = node2.second
+    children1 = node1.first.second
+    children2 = node2.first.second
+    #bucket_it = sigma_buckets.find(root)
+    #if bucket_it == sigma_buckets.end():
+    #    sigma_index = 0
+    #else:
+    #    sigma_index = sigma_buckets[root]
+    sigma_index = node1.second.second
 
     for i in range(children1.size()):
         ch_pair.first = children1[i]
         ch_pair.second = children2[i]
-        if vecnode1[ch_pair.first].first.second == vecnode2[ch_pair.second].first.second:
+        #if vecnode1[ch_pair.first].first.second == vecnode2[ch_pair.second].first.second:
+        if vecnode1[ch_pair.first].first.first == vecnode2[ch_pair.second].first.first:
             delta(K_result, dlambdas, dsigmas,
                   pair_result, ch_pair, vecnode1, vecnode2,
                   delta_matrix, dlambda_tensor, dsigma_tensor, _lambda,
