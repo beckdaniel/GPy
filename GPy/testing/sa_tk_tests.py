@@ -366,7 +366,7 @@ class SASSTKProfilingTests(unittest.TestCase):
         self.Y = np.array([[(a+10)*5] for a in range(5)])
 
     def test_prof_1(self):
-        k = SASST(normalize=False, _lambda=np.array([1.0]))
+        k = SASST(normalize=False, _lambda=np.array([1.0]), num_threads=8)
         start_time = datetime.datetime.now()
         for i in range(10000):
             k.K(self.X)

@@ -6,8 +6,6 @@ import nltk
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange, parallel
-from cython.parallel cimport parallel
-from collections import defaultdict
 from libcpp.string cimport string
 from libcpp.map cimport map
 from libcpp.pair cimport pair
@@ -17,7 +15,6 @@ from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
 cimport cython
 from cython cimport view
-cimport openmp
 
 
 cdef extern from "math.h" nogil:
@@ -31,7 +28,8 @@ ctypedef np.double_t DTYPE_t
 
 
 ctypedef vector[int] IntList
-ctypedef pair[string, IntList] CNode
+ctypedef pair[string, string] StrPair
+ctypedef pair[StrPair, IntList] CNode
 ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
 ctypedef vector[VecNode] VecVecNode
@@ -43,7 +41,7 @@ ctypedef struct SAResult:
     double k
     double* dlambda
     double* dsigma
-cdef string SPACE = " "
+
 
 cdef class Node(object):
     """
@@ -172,7 +170,8 @@ class SymbolAwareSubsetTreeKernel(object):
             node_list = self._tree_cache[tree[0]]
             vecnode.clear()
             for node in node_list:
-                cnode.first = node[0]
+                cnode.first.first = node[0].split()[0]
+                cnode.first.second = node[0]
                 cnode.second.clear()
                 if node[1] != None:
                     for ch in node[1]:
@@ -264,7 +263,6 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:] _sigma = self._sigma
         normalize = self.normalize
         
-        #openmp.OMP_STACKSIZE = "1G"
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         with nogil, parallel(num_threads=num_threads):
             for i in prange(X_cpp.size(), schedule='dynamic'):
@@ -301,14 +299,14 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
             return int_pairs
         n1 = vecnode1[i1]
         n2 = vecnode2[i2]
-        if n1.first > n2.first:
+        if n1.first.second > n2.first.second:
             i2 += 1
-        elif n1.first < n2.first:
+        elif n1.first.second < n2.first.second:
             i1 += 1
         else:
-            while n1.first == n2.first:
+            while n1.first.second == n2.first.second:
                 reset = i2
-                while n1.first == n2.first:
+                while n1.first.second == n2.first.second:
                     tup.first = i1
                     tup.second = i2
                     int_pairs.push_back(tup)
@@ -445,9 +443,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
 
     # BASE CASE: found a preterminal
     node1 = vecnode1[id1]
-    production = node1.first
-    space = production.find(SPACE)
-    root = production.substr(0, space)
+    root = node1.first.first
     bucket_it = lambda_buckets.find(root)
     if bucket_it == lambda_buckets.end():
         lambda_index = 0
@@ -495,7 +491,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     for i in range(children1.size()):
         ch_pair.first = children1[i]
         ch_pair.second = children2[i]
-        if vecnode1[ch_pair.first].first == vecnode2[ch_pair.second].first:
+        if vecnode1[ch_pair.first].first.second == vecnode2[ch_pair.second].first.second:
             delta(K_result, dlambdas, dsigmas,
                   pair_result, ch_pair, vecnode1, vecnode2,
                   delta_matrix, dlambda_tensor, dsigma_tensor, _lambda,
