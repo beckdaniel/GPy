@@ -40,8 +40,6 @@ ctypedef vector[Vector] Matrix
 ctypedef vector[Matrix] Tensor
 ctypedef struct SAResult:
     double k
-    #double* dlambda
-    #double* dsigma
     Vector dlambda
     Vector dsigma
 
@@ -214,6 +212,7 @@ class SymbolAwareSubsetTreeKernel(object):
                    dlambda_mat[i], dsigma_mat[i])
         return (K_vec, dlambda_mat, dsigma_mat)
 
+    @cython.wraparound(False)
     @cython.boundscheck(False)
     def K(self, X, X2=None):
         """
@@ -276,6 +275,9 @@ class SymbolAwareSubsetTreeKernel(object):
 # EXTERNAL METHODS
 ######################
 
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     """
     The node pair detection method devised by Moschitti (2006).
@@ -318,6 +320,8 @@ cdef VecIntPair get_node_pairs(VecNode& vecnode1, VecNode& vecnode2) nogil:
     return int_pairs
 
 
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
                     int j, double[:] _lambda, double[:] _sigma,
                     double[:,:] Ks, double[:,:,:] dlambdas, double[:,:,:] dsigmas,
@@ -347,7 +351,9 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
         dlambdas[j,i] = dlambdas[i,j]
         dsigmas[j,i] = dsigmas[i,j]
 
-            
+
+@cython.wraparound(False)
+@cython.boundscheck(False)            
 cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
                  double[:] _lambda, double[:] _sigma, 
                  double &K_result, double[:] dlambdas, double[:] dsigmas) nogil:
@@ -369,8 +375,6 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
 
     cdef VecIntPair node_pairs
     cdef SAResult pair_result
-    #pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
-    #pair_result.dsigma = <double*> malloc(sigma_size * sizeof(double))
     pair_result.dlambda = Vector(lambda_size)
     pair_result.dsigma = Vector(sigma_size)
 
@@ -395,10 +399,10 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     free(delta_matrix)
     free(dlambda_tensor)
     free(dsigma_tensor)
-    #free(pair_result.dlambda)
-    #free(pair_result.dsigma)
 
 
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
                 SAResult& pair_result, IntPair int_pair,
                 VecNode& vecnode1, VecNode& vecnode2, double* delta_matrix,
@@ -516,6 +520,8 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         dsigmas[i] += dsigma_result
 
 
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
                      double diag_Ks_i, double diag_Ks_j, 
                      double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
