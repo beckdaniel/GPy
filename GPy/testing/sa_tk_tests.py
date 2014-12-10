@@ -353,7 +353,7 @@ class SASSTIntegrationTests(unittest.TestCase):
         #print m
         #self.assertAlmostEqual(m['sasstk.lambda'][0], m2['sstk.lambda'])
 
-#@unittest.skip("skip")
+@unittest.skip("skip")
 class SASSTKProfilingTests(unittest.TestCase):
 
     def setUp(self):
@@ -416,6 +416,95 @@ class SASSTKProfilingTests(unittest.TestCase):
         #print end_time - start_time
 
 
+class SamplingTests(unittest.TestCase):
+
+    def setUp(self):
+        TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
+        self.TREES = 1000
+        with open(TREES_TRAIN) as f:
+            self.X = np.array([[line] for line in f.readlines()], dtype=object)[:self.TREES]
+
+    #@unittest.skip("skip")
+    def test_sampling_1(self):
+        L = np.array([0.1])
+        S = np.array([1])
+        k = SASST(num_threads=8, _lambda=L, _sigma=S)
+        k['lambda'].constrain_bounded(1e-8,1)
+        #k['lambda'].constrain_fixed(0.1)
+        k['sigma'].constrain_bounded(1e-4,10)
+        #k['sigma'].constrain_fixed(1)
+        print k
+        var = 1e-2
+        print var
+        cov = k.K(self.X) + var * np.eye(self.TREES)
+        #print cov
+        f = np.random.multivariate_normal(np.zeros(self.TREES), cov)
+        y = f[:, None]
+        m = GPy.models.GPRegression(self.X, y, kernel=k)
+        m['.*variance.*'] = var
+        print ''
+        print 'GP PRIOR THAT ORIGINATED THE SAMPLES:'
+        print m
+        print 'LOG LIKELIHOOD: ',
+        print m.log_likelihood()
+        orig_ll = m.log_likelihood()
+        #m['sasstk.lambda'].constrain_bounded(1e-8,1)
+        #m['sasstk.sigma'].constrain_bounded(1e-4,10)
+        #m['.*variance.*'].constrain_fixed(1e-2)
+        m.randomize()
+        print '\nNEW GP BEFORE OPTIMIZATION:'
+        print m
+        print 'LOG LIKELIHOOD: ',
+        print m.log_likelihood()
+
+        m.optimize(messages=False)
+        print '\nNEW GP AFTER OPTIMIZATION:'
+        print m
+        print 'LOG LIKELIHOOD: ',
+        print m.log_likelihood()
+        print 'SAMPLING GP LOG LIKELIHOOD: ',
+        print orig_ll
+
+
+    @unittest.skip("skip")
+    def test_sampling_2(self):
+        l_buckets = SASST().get_symbols_dict(self.X)
+        s_buckets = SASST().get_symbols_dict(self.X, no_pos=True)
+        L = np.array([0.5] * (len(l_buckets) + 1))
+        #S = np.array([1.0] * (len(s_buckets) + 1))
+        #L = np.array([0.1])
+        S = np.array([1])
+        k = SASST(num_threads=8, _lambda=L, _sigma=S, lambda_buckets=l_buckets)
+        k['lambda'].constrain_bounded(1e-8,1)
+        #k['lambda'].constrain_fixed(0.1)
+        #k['sigma'].constrain_bounded(1e-4,10)
+        k['sigma'].constrain_fixed(1)
+        print k
+        var = 1e-2
+        print var
+        cov = k.K(self.X) + var * np.eye(self.TREES)
+        #print cov
+        f = np.random.multivariate_normal(np.zeros(self.TREES), cov)
+        y = f[:, None]
+        m = GPy.models.GPRegression(self.X, y, kernel=k)
+        m['.*variance.*'] = var
+        print ''
+        print m
+        print m.log_likelihood()
+        print m['sasstk.lambda']
+        #m['sasstk.lambda'].constrain_bounded(1e-8,1)
+        #m['sasstk.sigma'].constrain_bounded(1e-4,10)
+        m['.*variance.*'].constrain_fixed(1e-2)
+        m.randomize()
+        print m
+        print m['sasstk.lambda']
+        print m.log_likelihood()
+        m.optimize(messages=False)
+        print m
+        print m['sasstk.lambda']
+        print m.log_likelihood()
+
+
 
 class SymbolsDictTests(unittest.TestCase):
 
@@ -445,6 +534,9 @@ class SymbolsDictTests(unittest.TestCase):
                     'VP': 3}
         result = SASST().get_symbols_dict(self.X, no_pos=True)
         self.assertEqual(result, expected)
+
+
+
 
 
 if __name__ == "__main__":
