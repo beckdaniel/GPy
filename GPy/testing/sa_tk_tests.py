@@ -361,9 +361,24 @@ class SASSTKProfilingTests(unittest.TestCase):
                            ['(S (NP n) (VP v))'],
                            ['(S (NP (N a)) (VP (V c)))'],
                            ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                           ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
+                           ['(S (NP ns) (VP v))'],
+                           ['(S (NP n) (VP v))'],
+                           ['(S (NP (N a)) (VP (V c)))'],
+                           ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                           ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
+                           ['(S (NP ns) (VP v))'],
+                           ['(S (NP n) (VP v))'],
+                           ['(S (NP (N a)) (VP (V c)))'],
+                           ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                           ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))'],
+                           ['(S (NP ns) (VP v))'],
+                           ['(S (NP n) (VP v))'],
+                           ['(S (NP (N a)) (VP (V c)))'],
+                           ['(S (NP (Det a) (N b)) (VP (V c)))'],
                            ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                           dtype=object)
-        self.Y = np.array([[(a+10)*5] for a in range(5)])
+        self.Y = np.array([[(a+10)*5] for a in range(20)])
 
     def test_prof_1(self):
         k = SASST(normalize=False, _lambda=np.array([1.0]), num_threads=8)
@@ -372,6 +387,34 @@ class SASSTKProfilingTests(unittest.TestCase):
             k.K(self.X)
         end_time = datetime.datetime.now()
         print end_time - start_time
+
+    def test_prof_2(self):
+        #start_time = datetime.datetime.now()
+        import cProfile, StringIO, pstats
+        TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
+        TREES = 500
+        with open(TREES_TRAIN) as f:
+            X = np.array([[line] for line in f.readlines()], dtype=object)[:TREES]
+        l_buckets = SASST().get_symbols_dict(self.X)
+        s_buckets = SASST().get_symbols_dict(self.X, no_pos=True)
+        L = np.array([0.5] * (len(l_buckets) + 1))
+        S = np.array([1.0] * (len(s_buckets) + 1))
+        k = SASST(normalize=False, _lambda=L, _sigma=S, num_threads=8,
+                  lambda_buckets=l_buckets, sigma_buckets=s_buckets)
+        #k = SASST(normalize=False, _lambda=np.array([1.0]), num_threads=8)
+        pr = cProfile.Profile()
+        pr.enable()
+        for i in range(20):
+            k.K(X)
+        pr.disable()
+        s = StringIO.StringIO()
+        sortby = 'cumulative'
+        ps = pstats.Stats(pr, stream=s).strip_dirs().sort_stats(sortby)
+        ps.print_stats(20)
+        print s.getvalue()
+        #end_time = datetime.datetime.now()
+        #print end_time - start_time
+
 
 
 class SymbolsDictTests(unittest.TestCase):

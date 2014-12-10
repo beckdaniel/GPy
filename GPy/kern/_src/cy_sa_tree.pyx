@@ -1,14 +1,13 @@
 #ifndef CY_SA_TREE_H
 #define CY_SA_TREE_H
 # distutils: language = c++
-# cython: profile=False
+# cython: profile=True
 import nltk
 import numpy as np
 cimport numpy as np
 from cython.parallel import prange, parallel
 from libcpp.string cimport string
 from libcpp.pair cimport pair
-from libcpp.list cimport list as clist
 from libcpp.vector cimport vector
 from libc.stdio cimport printf
 from libc.stdlib cimport malloc, free
@@ -151,38 +150,6 @@ class SymbolAwareSubsetTreeKernel(object):
             if t_repr not in self._tree_cache:
                 self._tree_cache[t_repr] = self._gen_node_list(t_repr)
 
-    def _convert_input(self, X):
-        """
-        Convert an input vector (a Python object) to a 
-        STL Vector of Nodes (a C++ object). This is to enable
-        their use inside no-GIL code, to enable parallelism.
-        """
-        cdef vector[VecNode] X_cpp
-        cdef VecNode vecnode
-        cdef CNode cnode
-        
-        for tree in X:
-            node_list = self._tree_cache[tree[0]]
-            vecnode.clear()
-            for node in node_list:
-                root = node[0].split()[0]
-                if root in self.lambda_buckets:
-                    cnode.second.first = self.lambda_buckets[root]
-                else:
-                    cnode.second.first = 0
-                if root in self.sigma_buckets:
-                    cnode.second.second = self.sigma_buckets[root]
-                else:
-                    cnode.second.second = 0
-                cnode.first.first = node[0]
-                cnode.first.second.clear()
-                if node[1] != None:
-                    for ch in node[1]:
-                        cnode.first.second.push_back(ch)
-                vecnode.push_back(cnode)
-            X_cpp.push_back(vecnode)
-        return X_cpp
-                
     def Kdiag(self, X):
         """
         Obtain the Gram matrix diagonal, calculating
@@ -190,10 +157,7 @@ class SymbolAwareSubsetTreeKernel(object):
         """
         # To ensure all inputs are cached.
         self._build_cache(X)
-        # Convert the python input into a C++ one.
-        cdef vector[VecNode] X_cpp
-        X_cpp = self._convert_input(X)
-        X_diag_Ks, _, _ = self._diag_calculations(X_cpp)
+        X_diag_Ks, _, _ = self._diag_calculations(X)
         return X_diag_Ks
     
     def _diag_calculations(self, X):
@@ -202,14 +166,20 @@ class SymbolAwareSubsetTreeKernel(object):
         of X and themselves. Used in Kdiag but also
         in K when normalization is enabled.
         """
+        # Convert the python input into a C++ one.
+        cdef VecVecNode X_cpp
+        X_cpp = convert_input(X, self._tree_cache,
+                              self.lambda_buckets, self.sigma_buckets)
         K_vec = np.zeros(shape=(len(X),))
         dlambda_mat = np.zeros(shape=(len(X), len(self._lambda)))
         dsigma_mat = np.zeros(shape=(len(X), len(self._sigma)))
         cdef double[:] K_vec_view = K_vec
+        cdef double[:,:] dlambda_view = dlambda_mat
+        cdef double[:,:] dsigma_view = dsigma_mat
         for i in range(len(X)):
-            calc_K(X[i], X[i], self._lambda, self._sigma, 
-                   K_vec_view[i],
-                   dlambda_mat[i], dsigma_mat[i])
+                calc_K(X_cpp[i], X_cpp[i], self._lambda, self._sigma, 
+                       K_vec_view[i],
+                       dlambda_view[i], dsigma_view[i])
         return (K_vec, dlambda_mat, dsigma_mat)
 
     @cython.wraparound(False)
@@ -231,15 +201,17 @@ class SymbolAwareSubsetTreeKernel(object):
 
         # We have to convert a bunch of stuff to C++ objects
         # since the actual kernel computation happens without the GIL.
-        cdef VecVecNode X_cpp = self._convert_input(X)
-        cdef VecVecNode X2_cpp = self._convert_input(X2)
+        cdef VecVecNode X_cpp = convert_input(X, self._tree_cache,
+                                              self.lambda_buckets, self.sigma_buckets)
+        cdef VecVecNode X2_cpp = convert_input(X2, self._tree_cache,
+                                              self.lambda_buckets, self.sigma_buckets)
 
         # Start the diag values for normalization
         cdef double[:] X_diag_Ks, X2_diag_Ks
         cdef double[:,:] X_diag_dlambdas, X_diag_dsigmas
         cdef double[:,:] X2_diag_dlambdas, X2_diag_dsigmas
-        X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X_cpp)
-        X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2_cpp)
+        X_diag_Ks, X_diag_dlambdas, X_diag_dsigmas = self._diag_calculations(X)
+        X2_diag_Ks, X2_diag_dlambdas, X2_diag_dsigmas = self._diag_calculations(X2)
             
         # Gradients are calculated at the same time as K.
         cdef int lambda_size = len(self._lambda)
@@ -274,6 +246,39 @@ class SymbolAwareSubsetTreeKernel(object):
 ######################
 # EXTERNAL METHODS
 ######################
+
+
+cdef VecVecNode convert_input(X, dict tree_cache, dict lambda_buckets, dict sigma_buckets):
+    """
+    Convert an input vector (a Python object) to a 
+    STL Vector of Nodes (a C++ object). This is to enable
+    their use inside no-GIL code, to enable parallelism.
+    """
+    cdef VecVecNode X_cpp
+    cdef VecNode vecnode
+    cdef CNode cnode
+        
+    for tree in X:
+        node_list = tree_cache[tree[0]]
+        vecnode.clear()
+        for node in node_list:
+            root = node[0].split()[0]
+            if root in lambda_buckets:
+                cnode.second.first = lambda_buckets[root]
+            else:
+                cnode.second.first = 0
+            if root in sigma_buckets:
+                cnode.second.second = sigma_buckets[root]
+            else:
+                cnode.second.second = 0
+            cnode.first.first = node[0]
+            cnode.first.second.clear()
+            if node[1] != None:
+                for ch in node[1]:
+                    cnode.first.second.push_back(ch)
+            vecnode.push_back(cnode)
+        X_cpp.push_back(vecnode)
+    return X_cpp
 
 
 @cython.wraparound(False)
@@ -401,6 +406,7 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     free(dsigma_tensor)
 
 
+@cython.cdivision(True)
 @cython.wraparound(False)
 @cython.boundscheck(False)
 cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
