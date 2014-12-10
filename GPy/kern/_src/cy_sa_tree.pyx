@@ -7,7 +7,6 @@ import numpy as np
 cimport numpy as np
 from cython.parallel import prange, parallel
 from libcpp.string cimport string
-#from libcpp.map cimport map
 from libcpp.pair cimport pair
 from libcpp.list cimport list as clist
 from libcpp.vector cimport vector
@@ -36,7 +35,9 @@ ctypedef pair[CNode, CNode] NodePair
 ctypedef vector[CNode] VecNode
 ctypedef vector[VecNode] VecVecNode
 ctypedef vector[IntPair] VecIntPair
-ctypedef vector[double*] SAMatrix
+ctypedef vector[double] Vector
+ctypedef vector[Vector] Matrix
+ctypedef vector[Matrix] Tensor
 ctypedef struct SAResult:
     double k
     double* dlambda
@@ -357,11 +358,17 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     cdef int i, j, k, index, index2
     cdef int len1 = vecnode1.size()
     cdef int len2 = vecnode2.size()
+    #cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
+    #cdef double* dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size
+    #                                               * sizeof(double))
+    #cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
+    #                                              * sizeof(double))
     cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
     cdef double* dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size
                                                    * sizeof(double))
     cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
                                                   * sizeof(double))
+
     cdef VecIntPair node_pairs
     cdef SAResult pair_result
     pair_result.dlambda = <double*> malloc(lambda_size * sizeof(double))
@@ -399,7 +406,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
     """
-    cdef double val, prod, g, sum_lambda, sum_sigma, denom
+    cdef double val, g, denom
     cdef double delta_result, dlambda_result, dsigma_result
     cdef IntList children1, children2
     cdef CNode node1, node2
@@ -454,12 +461,13 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     sum_lambda = 0
     sum_sigma = 0
     g = 1
-    cdef double* vec_lambda = <double*> malloc(lambda_size * sizeof(double))
+    cdef Vector vec_lambda = Vector(lambda_size)
     for i in range(lambda_size):
-        vec_lambda[i] = 0
-    cdef double* vec_sigma = <double*> malloc(sigma_size * sizeof(double))
+        vec_lambda.push_back(0)
+    cdef Vector vec_sigma = Vector(sigma_size)
     for i in range(sigma_size):
-        vec_sigma[i] = 0
+        vec_sigma.push_back(0)
+    
     children1 = node1.first.second
     children2 = node2.first.second
     sigma_index = node1.second.second
@@ -503,9 +511,6 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         dsigma_tensor[index2] = dsigma_result
         pair_result.dsigma[i] = dsigma_result
         dsigmas[i] += dsigma_result
-
-    free(vec_lambda)
-    free(vec_sigma)
 
 
 cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
