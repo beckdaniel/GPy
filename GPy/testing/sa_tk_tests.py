@@ -506,7 +506,7 @@ class SamplingTests(unittest.TestCase):
 
 
 
-class SymbolsDictTests(unittest.TestCase):
+class HelperMethodsTests(unittest.TestCase):
 
     def setUp(self):
         self.X = np.array([['(S (N ns) (V v))'],
@@ -542,7 +542,18 @@ class SymbolsDictTests(unittest.TestCase):
         result = SASST().get_symbols_dict(self.X, mode="simple")
         self.assertEqual(result, expected)
 
-
+    def test_mask_symbols_1(self):
+        expected = np.array([['(X (X ns) (X v))'],
+                             ['(X (X n) (X v))'],
+                             ['(X (X (X a)) (X (X c)))'],
+                             ['(X (X (X a) (X b)) (X (X c)))'],
+                             ['(X (X (X colorless) (X ideas)) (X (X sleep) (X furiously)))']],
+                            dtype=object)
+        result = SASST().mask_symbols(self.X)
+        print result
+        print expected
+        for t1, t2 in zip(result, expected):
+            self.assertEqual(t1, t2)
 
 
 

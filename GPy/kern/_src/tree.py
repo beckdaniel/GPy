@@ -167,6 +167,16 @@ class SymbolAwareSubsetTreeKernel(Kern):
                 sym_dict[symbol] = len(sym_dict) + 1
         return sym_dict
 
+    @staticmethod
+    def mask_symbols(X, mode="all"):
+        for i, tree_repr in enumerate(X):
+            tree = nltk.Tree.fromstring(tree_repr[0])
+            for pos in tree.treepositions():
+                if type(tree[pos]) != str:
+                    tree[pos].set_label('X')
+            X[i] = str(tree)
+        return X
+
 
 ####################################
 
