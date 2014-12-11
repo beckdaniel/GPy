@@ -170,11 +170,13 @@ class SymbolAwareSubsetTreeKernel(Kern):
     @staticmethod
     def mask_symbols(X, mode="all"):
         for i, tree_repr in enumerate(X):
-            tree = nltk.Tree.fromstring(tree_repr[0])
+            tree = nltk.Tree.fromstring(unicode(tree_repr[0], encoding='utf-8'))#, read_leaf=unicode)
             for pos in tree.treepositions():
-                if type(tree[pos]) != str:
+                if type(tree[pos]) != unicode:
                     tree[pos].set_label('X')
-            X[i] = str(tree)
+            #print X[i][0]
+            #print repr(tree)
+            X[i][0] = unicode(tree)
         return X
 
 

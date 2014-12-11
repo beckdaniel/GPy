@@ -50,7 +50,7 @@ cdef class Node(object):
     (the "Fast Tree Kernel" of Moschitti (2006))
     """
 
-    cdef string production
+    cdef basestring production
     cdef int node_id
     cdef list children_ids
 
@@ -114,9 +114,9 @@ class SymbolAwareSubsetTreeKernel(object):
         Recursive method for generating the node lists.
         """
         cdef Node node
-        cdef string production
+        cdef basestring production
         
-        if type(tree) == str: # leaf
+        if type(tree) == str or type(tree) == unicode: # leaf
             return -1
         if len(tree) == 0: # leaf, but non string
             return -2
@@ -272,7 +272,7 @@ cdef VecVecNode convert_input(X, dict tree_cache, dict lambda_buckets, dict sigm
                 cnode.second.second = sigma_buckets[root]
             else:
                 cnode.second.second = 0
-            cnode.first.first = node[0]
+            cnode.first.first = node[0].encode('utf-8')
             cnode.first.second.clear()
             if node[1] != None:
                 for ch in node[1]:
