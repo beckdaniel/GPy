@@ -419,7 +419,7 @@ class SASSTKProfilingTests(unittest.TestCase):
 class SamplingTests(unittest.TestCase):
 
     def setUp(self):
-        TREES_TRAIN = 'GPy/testing/tk_toy/trees2.tsv'
+        TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
         self.TREES = 100
         with open(TREES_TRAIN) as f:
             self.X = np.array([[line] for line in f.readlines()], dtype=object)[:self.TREES]
