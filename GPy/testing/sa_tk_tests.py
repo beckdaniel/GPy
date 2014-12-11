@@ -424,7 +424,7 @@ class SamplingTests(unittest.TestCase):
         with open(TREES_TRAIN) as f:
             self.X = np.array([[line] for line in f.readlines()], dtype=object)[:self.TREES]
 
-    #@unittest.skip("skip")
+    @unittest.skip("skip")
     def test_sampling_1(self):
         L = np.array([0.1])
         S = np.array([1])
@@ -509,22 +509,22 @@ class SamplingTests(unittest.TestCase):
 class SymbolsDictTests(unittest.TestCase):
 
     def setUp(self):
-        self.X = np.array([['(S (NP ns) (VP v))'],
-                           ['(S (NP n) (VP v))'],
+        self.X = np.array([['(S (N ns) (V v))'],
+                           ['(S (N n) (V v))'],
                            ['(S (NP (N a)) (VP (V c)))'],
                            ['(S (NP (Det a) (N b)) (VP (V c)))'],
                            ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
                           dtype=object)
 
     def test_get_symbols_dict_1(self):
-        expected = {'ADJ': 1,
-                    'ADV': 2,
-                    'Det': 3,
-                    'N': 4,
-                    'NP': 5,
-                    'S': 6,
-                    'V': 7,
-                    'VP': 8}
+        expected = {'ADJ': 4,
+                    'ADV': 5,
+                    'Det': 6,
+                    'N': 7,
+                    'NP': 1,
+                    'S': 2,
+                    'V': 8,
+                    'VP': 3}
         result = SASST().get_symbols_dict(self.X)
         self.assertEqual(result, expected)
 
@@ -532,7 +532,14 @@ class SymbolsDictTests(unittest.TestCase):
         expected = {'NP': 1,
                     'S': 2,
                     'VP': 3}
-        result = SASST().get_symbols_dict(self.X, no_pos=True)
+        result = SASST().get_symbols_dict(self.X, mode="nopos")
+        self.assertEqual(result, expected)
+
+    def test_get_symbols_dict_3(self):
+        expected = {'NP': 1,
+                    'S': 1,
+                    'VP': 1}
+        result = SASST().get_symbols_dict(self.X, mode="simple")
         self.assertEqual(result, expected)
 
 

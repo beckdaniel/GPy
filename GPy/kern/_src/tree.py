@@ -137,23 +137,34 @@ class SymbolAwareSubsetTreeKernel(Kern):
                                          for i in range(len(self._sigma))])
 
     ####################################
-    # Helper function to easily obtain
+    # Helper functions to easily obtain
     # symbols from an input
     ####################################
     @staticmethod
-    def get_symbols_dict(X, no_pos=False):
+    def get_symbols_dict(X, mode="all"):
         sym_set = set()
         sym_dict = {}
+        pos_set = set()
         for tree_repr in X:
             tree = nltk.Tree.fromstring(tree_repr[0])
             for prod in tree.productions():
                 symbol = str(prod.lhs())
-                if not (no_pos and type(prod.rhs()[0]) == str):
+                if type(prod.rhs()[0]) == str:
+                    pos_set.add(symbol)
+                else:
                     sym_set.add(symbol)
         sym_list = list(sym_set)
         sym_list.sort()
+        pos_list = list(pos_set)
+        pos_list.sort()
         for symbol in sym_list:
-            sym_dict[symbol] = len(sym_dict) + 1
+            if mode == "all" or mode == "nopos":
+                sym_dict[symbol] = len(sym_dict) + 1
+            elif mode == "simple":
+                sym_dict[symbol] = 1
+        if mode == "all":
+            for symbol in pos_list:
+                sym_dict[symbol] = len(sym_dict) + 1
         return sym_dict
 
 
