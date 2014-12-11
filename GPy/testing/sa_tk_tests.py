@@ -504,6 +504,7 @@ class SamplingTests(unittest.TestCase):
         print m['sasstk.lambda']
         print m.log_likelihood()
 
+
     def test_sampling_mask_1(self):
         L = np.array([0.1])
         S = np.array([1])
@@ -591,8 +592,21 @@ class HelperMethodsTests(unittest.TestCase):
                              ['(X (X (X colorless) (X ideas)) (X (X sleep) (X furiously)))']],
                             dtype=object)
         result = SASST().mask_symbols(self.X)
-        print result
-        print expected
+        #print result
+        #print expected
+        for t1, t2 in zip(result, expected):
+            self.assertEqual(t1, t2)
+
+    def test_mask_symbols_1(self):
+        expected = np.array([['(X (X X) (X X))'],
+                             ['(X (X X) (X X))'],
+                             ['(X (X (X X)) (X (X X)))'],
+                             ['(X (X (X X) (X X)) (X (X X)))'],
+                             ['(X (X (X X) (X X)) (X (X X) (X X)))']],
+                            dtype=object)
+        result = SASST().mask_symbols(self.X, mode="all")
+        #print result
+        #print expected
         for t1, t2 in zip(result, expected):
             self.assertEqual(t1, t2)
 

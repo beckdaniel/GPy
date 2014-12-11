@@ -168,12 +168,14 @@ class SymbolAwareSubsetTreeKernel(Kern):
         return sym_dict
 
     @staticmethod
-    def mask_symbols(X, mode="all"):
+    def mask_symbols(X, mode="symbols"):
         for i, tree_repr in enumerate(X):
-            tree = nltk.Tree.fromstring(unicode(tree_repr[0], encoding='utf-8'))#, read_leaf=unicode)
+            tree = nltk.Tree.fromstring(unicode(tree_repr[0], encoding='utf-8'))
             for pos in tree.treepositions():
                 if type(tree[pos]) != unicode:
                     tree[pos].set_label('X')
+                elif mode == "all":
+                    tree[pos] = u'X'
             #print X[i][0]
             #print repr(tree)
             X[i][0] = unicode(tree)
