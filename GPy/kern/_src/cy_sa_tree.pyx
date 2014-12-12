@@ -1,7 +1,7 @@
 #ifndef CY_SA_TREE_H
 #define CY_SA_TREE_H
 # distutils: language = c++
-# cython: profile=True
+# cython: profile=False
 import nltk
 import numpy as np
 cimport numpy as np
