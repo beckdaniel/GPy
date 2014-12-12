@@ -420,7 +420,7 @@ class SamplingTests(unittest.TestCase):
 
     def setUp(self):
         TREES_TRAIN = 'GPy/testing/tk_toy/trees.tsv'
-        self.TREES = 100
+        self.TREES = 10
         with open(TREES_TRAIN) as f:
             self.X = np.array([[line] for line in f.readlines()], dtype=object)[:self.TREES]
 
@@ -457,7 +457,7 @@ class SamplingTests(unittest.TestCase):
         print 'LOG LIKELIHOOD: ',
         print m.log_likelihood()
 
-        m.optimize(messages=False)
+        m.optimize_restarts(messages=False, num_restarts=5)
         print '\nNEW GP AFTER OPTIMIZATION:'
         print m
         print 'LOG LIKELIHOOD: ',
@@ -516,7 +516,7 @@ class SamplingTests(unittest.TestCase):
         print k
         var = 1e-2
         print var
-        X = SASST().mask_symbols(self.X)
+        X = SASST().mask_symbols(self.X, mode="all")
         cov = k.K(X) + var * np.eye(self.TREES)
         #print cov
         f = np.random.multivariate_normal(np.zeros(self.TREES), cov)
@@ -532,13 +532,15 @@ class SamplingTests(unittest.TestCase):
         #m['sasstk.lambda'].constrain_bounded(1e-8,1)
         #m['sasstk.sigma'].constrain_bounded(1e-4,10)
         #m['.*variance.*'].constrain_fixed(1e-2)
+        
         m.randomize()
         print '\nNEW GP BEFORE OPTIMIZATION:'
         print m
         print 'LOG LIKELIHOOD: ',
         print m.log_likelihood()
 
-        m.optimize(messages=False)
+        m.optimize_restarts(messages=False, num_restarts=1)
+        #m.optimize(messages=False)
         print '\nNEW GP AFTER OPTIMIZATION:'
         print m
         print 'LOG LIKELIHOOD: ',
@@ -598,11 +600,11 @@ class HelperMethodsTests(unittest.TestCase):
             self.assertEqual(t1, t2)
 
     def test_mask_symbols_1(self):
-        expected = np.array([['(X (X X) (X X))'],
-                             ['(X (X X) (X X))'],
-                             ['(X (X (X X)) (X (X X)))'],
-                             ['(X (X (X X) (X X)) (X (X X)))'],
-                             ['(X (X (X X) (X X)) (X (X X) (X X)))']],
+        expected = np.array([['(X (X x) (X x))'],
+                             ['(X (X x) (X x))'],
+                             ['(X (X (X x)) (X (X x)))'],
+                             ['(X (X (X x) (X x)) (X (X x)))'],
+                             ['(X (X (X x) (X x)) (X (X x) (X x)))']],
                             dtype=object)
         result = SASST().mask_symbols(self.X, mode="all")
         #print result

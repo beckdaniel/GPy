@@ -92,7 +92,7 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef list ch_ids
         cdef list node_list = []
         
-        tree = nltk.tree.Tree.fromstring(tree_repr)
+        tree = nltk.tree.Tree.fromstring(unicode(tree_repr, encoding='utf-8'))
         self._get_node(tree, node_list)
         node_list.sort(key=lambda Node x: x.production)
         node_dict = dict([(node.node_id, node) for node in node_list])

@@ -137,8 +137,7 @@ class SymbolAwareSubsetTreeKernel(Kern):
                                          for i in range(len(self._sigma))])
 
     ####################################
-    # Helper functions to easily obtain
-    # symbols from an input
+    # Helper functions
     ####################################
     @staticmethod
     def get_symbols_dict(X, mode="all"):
@@ -175,10 +174,10 @@ class SymbolAwareSubsetTreeKernel(Kern):
                 if type(tree[pos]) != unicode:
                     tree[pos].set_label('X')
                 elif mode == "all":
-                    tree[pos] = u'X'
+                    tree[pos] = 'x'
             #print X[i][0]
             #print repr(tree)
-            X[i][0] = unicode(tree)
+            X[i][0] = str(tree)
         return X
 
 
