@@ -95,53 +95,32 @@ class SymbolAwareSubsetTreeKernel(Kern):
         self.link_parameters(self._lambda, self._sigma)
         self.kernel = cy_sa_tree.SymbolAwareSubsetTreeKernel(_lambda, _sigma, lambda_buckets, sigma_buckets,
                                                           normalize, num_threads=num_threads, parallel=parallel)
+        # just to ensure parameters are different at the first time
+        self.kernel._lambda = _lambda.copy() + 1
+        self.kernel._sigma = _sigma.copy() + 1
         
-    def _get_params(self):
-        return np.hstack((self.kernel._lambda, self.kernel._sigma))
-
-    def _set_params(self, x):
-        self.kernel._lambda = x[0]
-        self.kernel._sigma = x[1]
-
-    def _get_param_names(self):
-        return ['lambda', 'sigma']
 
     def K(self, X, X2):#, target):
-        #import ipdb
-        #ipdb.set_trace()
-        #print self._lambda
-        #print self._sigma
-
-        self.kernel._lambda = self._lambda
-        self.kernel._sigma = self._sigma
+        if (X2 == None and (self._lambda == self.kernel._lambda).all() 
+            and (self._sigma == self.kernel._sigma).all()):
+            return self.result
+        self.kernel._lambda = self._lambda.copy()
+        self.kernel._sigma = self._sigma.copy()
         result, dl, ds = self.kernel.K(X, X2)
+        self.result = result
         self.dlambda = dl
         self.dsigma = ds
-        return result
+        return self.result
 
     def Kdiag(self, X):#), target):
-        self.kernel._lambda = self._lambda
-        self.kernel._sigma = self._sigma
+        self.kernel._lambda = self._lambda.copy()
+        self.kernel._sigma = self._sigma.copy()
         if self.normalize:
-            #target += np.ones(X.shape[0])
             return np.ones(X.shape[0])
         else:
-            #target += self.kernel.Kdiag(X)
             return self.kernel.Kdiag(X)
 
-    #def dK_dtheta(self, dL_dK, X, X2):#, target):
-    #    print self.dlambda
-    #    print self.dsigma
-    #    return [np.sum(self.dlambda * dL_dK),
-    #            np.sum(self.dsigma * dL_dK)]
-
     def update_gradients_full(self, dL_dK, X, X2):
-        #print self._lambda.gradient.shape
-        #print self.dlambda.shape
-        #print self.dlambda[:,:,0]
-        #print self.dsigma[:,:,0]
-        #print "UPDATING GRADS:"
-        #print np.isnan(np.sum(dL_dK))
         self._lambda.gradient = np.array([np.sum(self.dlambda[:,:,i] * dL_dK)
                                           for i in range(len(self._lambda))])
         self._sigma.gradient = np.array([np.sum(self.dsigma[:,:,i] * dL_dK)
