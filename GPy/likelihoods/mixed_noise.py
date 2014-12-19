@@ -1,6 +1,8 @@
+# Copyright (c) 2012-2014 The GPy authors (see AUTHORS.txt)
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
+
 import numpy as np
 from scipy import stats, special
-from GPy.util.univariate_Gaussian import std_norm_pdf, std_norm_cdf
 import link_functions
 from likelihood import Likelihood
 from gaussian import Gaussian
@@ -14,7 +16,7 @@ class MixedNoise(Likelihood):
         #NOTE at the moment this likelihood only works for using a list of gaussians
         super(Likelihood, self).__init__(name=name)
 
-        self.add_parameters(*likelihoods_list)
+        self.link_parameters(*likelihoods_list)
         self.likelihoods_list = likelihoods_list
         self.log_concave = False
 

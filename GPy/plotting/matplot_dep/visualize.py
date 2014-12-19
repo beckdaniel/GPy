@@ -4,7 +4,6 @@ import GPy
 import numpy as np
 import matplotlib as mpl
 import time
-from ...util.misc import param_to_array
 from GPy.core.parameterization.variational import VariationalPosterior
 try:
     import visual
@@ -88,7 +87,7 @@ class vector_show(matplotlib_show):
 
 
 class lvm(matplotlib_show):
-    def __init__(self, vals, model, data_visualize, latent_axes=None, sense_axes=None, latent_index=[0,1]):
+    def __init__(self, vals, model, data_visualize, latent_axes=None, sense_axes=None, latent_index=[0,1], disable_drag=False):
         """Visualize a latent variable model
 
         :param model: the latent variable model to visualize.
@@ -107,12 +106,14 @@ class lvm(matplotlib_show):
 
         if isinstance(latent_axes,mpl.axes.Axes):
             self.cid = latent_axes.figure.canvas.mpl_connect('button_press_event', self.on_click)
-            self.cid = latent_axes.figure.canvas.mpl_connect('motion_notify_event', self.on_move)
+            if not disable_drag:
+                self.cid = latent_axes.figure.canvas.mpl_connect('motion_notify_event', self.on_move)
             self.cid = latent_axes.figure.canvas.mpl_connect('axes_leave_event', self.on_leave)
             self.cid = latent_axes.figure.canvas.mpl_connect('axes_enter_event', self.on_enter)
         else:
             self.cid = latent_axes[0].figure.canvas.mpl_connect('button_press_event', self.on_click)
-            self.cid = latent_axes[0].figure.canvas.mpl_connect('motion_notify_event', self.on_move)
+            if not disable_drag:
+                self.cid = latent_axes[0].figure.canvas.mpl_connect('motion_notify_event', self.on_move)
             self.cid = latent_axes[0].figure.canvas.mpl_connect('axes_leave_event', self.on_leave)
             self.cid = latent_axes[0].figure.canvas.mpl_connect('axes_enter_event', self.on_enter)
 
@@ -124,7 +125,8 @@ class lvm(matplotlib_show):
         self.move_on = False
         self.latent_index = latent_index
         self.latent_dim = model.input_dim
- 
+        self.disable_drag = disable_drag
+
         # The red cross which shows current latent point.
         self.latent_values = vals
         self.latent_handle = self.latent_axes.plot([0],[0],'rx',mew=2)[0]
@@ -147,8 +149,13 @@ class lvm(matplotlib_show):
 
     def on_click(self, event):
         if event.inaxes!=self.latent_axes: return
-        self.move_on = not self.move_on
-        self.called = True
+        if self.disable_drag:
+            self.move_on = True
+            self.called = True
+            self.on_move(event)
+        else:
+            self.move_on = not self.move_on
+            self.called = True
 
     def on_move(self, event):
         if event.inaxes!=self.latent_axes: return
@@ -274,8 +281,11 @@ class image_show(matplotlib_show):
     :param preset_mean: the preset mean of a scaled image.
     :type preset_mean: double
     :param preset_std: the preset standard deviation of a scaled image.
-    :type preset_std: double"""
-    def __init__(self, vals, axes=None, dimensions=(16,16), transpose=False, order='C', invert=False, scale=False, palette=[], preset_mean=0., preset_std=1., select_image=0):
+    :type preset_std: double
+    :param cmap: the colormap for image visualization
+    :type cmap: matplotlib.cm"""
+
+    def __init__(self, vals, axes=None, dimensions=(16,16), transpose=False, order='C', invert=False, scale=False, palette=[], preset_mean=0., preset_std=1., select_image=0, cmap=None):
         matplotlib_show.__init__(self, vals, axes)
         self.dimensions = dimensions
         self.transpose = transpose
@@ -290,8 +300,10 @@ class image_show(matplotlib_show):
         self.set_image(self.vals)
         if not self.palette == []: # Can just show the image (self.set_image() took care of setting the palette)
             self.handle = self.axes.imshow(self.vals, interpolation='nearest')
-        else: # Use a boring gray map.
-            self.handle = self.axes.imshow(self.vals, cmap=plt.cm.gray, interpolation='nearest') # @UndefinedVariable
+        elif cmap==None: # Use a jet map.
+            self.handle = self.axes.imshow(self.vals, cmap=plt.cm.jet, interpolation='nearest') # @UndefinedVariable
+        else: # Use the selected map.
+            self.handle = self.axes.imshow(self.vals, cmap=cmap, interpolation='nearest') # @UndefinedVariable
         plt.show()
 
     def modify(self, vals):
@@ -399,7 +411,7 @@ class mocap_data_show(matplotlib_show):
     def __init__(self, vals, axes=None, connect=None):
         if axes==None:
             fig = plt.figure()
-            axes = fig.add_subplot(111, projection='3d',aspect='equal')
+            axes = fig.add_subplot(111, projection='3d', aspect='equal')
         matplotlib_show.__init__(self, vals, axes)
 
         self.connect = connect
@@ -437,6 +449,7 @@ class mocap_data_show(matplotlib_show):
         self.process_values()
         self.initialize_axes_modify()
         self.draw_vertices()
+        self.initialize_axes()
         self.finalize_axes_modify()
         self.draw_edges()
         self.axes.figure.canvas.draw()
@@ -459,10 +472,10 @@ class mocap_data_show(matplotlib_show):
         self.axes.set_xlim(self.x_lim)
         self.axes.set_ylim(self.y_lim)
         self.axes.set_zlim(self.z_lim)
-        self.axes.auto_scale_xyz([-1., 1.], [-1., 1.], [-1.5, 1.5])
-        
-        #self.axes.set_aspect('equal')
-        self.axes.autoscale(enable=False)
+        self.axes.auto_scale_xyz([-1., 1.], [-1., 1.], [-1., 1.])
+
+#        self.axes.set_aspect('equal')
+#         self.axes.autoscale(enable=False)
 
     def finalize_axes_modify(self):
         self.axes.set_xlim(self.x_lim)
@@ -486,7 +499,7 @@ class skeleton_show(mocap_data_show):
         :param vals: set of modeled angles to use for printing in the axis when it's first created.
         :type vals: np.array
         :param skel: skeleton object that has the parameters of the motion capture skeleton associated with it.
-        :type skel: mocap.skeleton object 
+        :type skel: mocap.skeleton object
         :param padding:
         :type int
         """
@@ -498,7 +511,7 @@ class skeleton_show(mocap_data_show):
         """Takes a set of angles and converts them to the x,y,z coordinates in the internal prepresentation of the class, ready for plotting.
 
         :param vals: the values that are being modelled."""
-        
+
         if self.padding>0:
             channels = np.zeros((self.vals.shape[0], self.vals.shape[1]+self.padding))
             channels[:, 0:self.vals.shape[0]] = self.vals
@@ -510,7 +523,7 @@ class skeleton_show(mocap_data_show):
         self.vals[:, 0] = vals_mat[:, 0].copy()
         self.vals[:, 1] = vals_mat[:, 2].copy()
         self.vals[:, 2] = vals_mat[:, 1].copy()
-        
+
     def wrap_around(self, lim, connect):
         quot = lim[1] - lim[0]
         self.vals = rem(self.vals, quot)+lim[0]
@@ -532,7 +545,7 @@ def data_play(Y, visualizer, frame_rate=30):
     Example usage:
 
     This example loads in the CMU mocap database (http://mocap.cs.cmu.edu) subject number 35 motion number 01. It then plays it using the mocap_show visualize object.
-    
+
     .. code-block:: python
 
        data = GPy.util.datasets.cmu_mocap(subject='35', train_motions=['01'])
@@ -542,7 +555,7 @@ def data_play(Y, visualizer, frame_rate=30):
        GPy.util.visualize.data_play(Y, visualize)
 
     """
-    
+
 
     for y in Y:
         visualizer.modify(y[None, :])

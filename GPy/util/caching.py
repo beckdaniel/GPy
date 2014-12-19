@@ -1,5 +1,7 @@
-from ..core.parameterization.parameter_core import Observable
-import collections, weakref, logging
+# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
+from ..core.parameterization.observable import Observable
+import collections, weakref
 
 class Cacher(object):
     def __init__(self, operation, limit=5, ignore_args=(), force_kwargs=()):
@@ -33,13 +35,15 @@ class Cacher(object):
         """returns the self.id of an object, to be used in caching individual self.ids"""
         return hex(id(obj))
 
-    def combine_inputs(self, args, kw):
+    def combine_inputs(self, args, kw, ignore_args):
         "Combines the args and kw in a unique way, such that ordering of kwargs does not lead to recompute"
-        return args + tuple(c[1] for c in sorted(kw.items(), key=lambda x: x[0]))
+        inputs= args + tuple(c[1] for c in sorted(kw.items(), key=lambda x: x[0]))
+        # REMOVE the ignored arguments from input and PREVENT it from being checked!!!
+        return [a for i,a in enumerate(inputs) if i not in ignore_args]
 
-    def prepare_cache_id(self, combined_args_kw, ignore_args):
-        "get the cacheid (conc. string of argument self.ids in order) ignoring ignore_args"
-        cache_id = "".join(self.id(a) for i, a in enumerate(combined_args_kw) if i not in ignore_args)
+    def prepare_cache_id(self, combined_args_kw):
+        "get the cacheid (conc. string of argument self.ids in order)"
+        cache_id = "".join(self.id(a) for a in combined_args_kw)
         return cache_id
 
     def ensure_cache_length(self, cache_id):
@@ -95,10 +99,12 @@ class Cacher(object):
                     return self.operation(*args, **kw)
 
         # 2: prepare_cache_id and get the unique self.id string for this call
-        inputs = self.combine_inputs(args, kw)
-        cache_id = self.prepare_cache_id(inputs, self.ignore_args)
+        inputs = self.combine_inputs(args, kw, self.ignore_args)
+        cache_id = self.prepare_cache_id(inputs)
         # 2: if anything is not cachable, we will just return the operation, without caching
         if reduce(lambda a, b: a or (not (isinstance(b, Observable) or b is None)), inputs, False):
+            #print 'WARNING: '+self.operation.__name__ + ' not cacheable!'
+            #print [not (isinstance(b, Observable)) for b in inputs]
             return self.operation(*args, **kw)
         # 3&4: check whether this cache_id has been cached, then has it changed?
         try:
@@ -184,4 +190,6 @@ class Cache_this(object):
         self.ignore_args = ignore_args
         self.force_args = force_kwargs
     def __call__(self, f):
-        return Cacher_wrap(f, self.limit, self.ignore_args, self.force_args)
+        newf = Cacher_wrap(f, self.limit, self.ignore_args, self.force_args)
+        update_wrapper(newf, f)
+        return newf

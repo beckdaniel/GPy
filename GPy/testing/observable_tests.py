@@ -1,8 +1,5 @@
-'''
-Created on 27 Feb 2014
-
-@author: maxz
-'''
+# Copyright (c) 2014, Max Zwiessele
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
 import unittest
 from GPy.core.parameterization.parameterized import Parameterized
 from GPy.core.parameterization.param import Param
@@ -30,15 +27,15 @@ class Test(unittest.TestCase):
         self.par2 = ParameterizedTest('test model 2')
         self.p = Param('test parameter', numpy.random.normal(1,2,(10,3)))
 
-        self.par.add_parameter(self.p)
-        self.par.add_parameter(Param('test1', numpy.random.normal(0,1,(1,))))
-        self.par.add_parameter(Param('test2', numpy.random.normal(0,1,(1,))))
+        self.par.link_parameter(self.p)
+        self.par.link_parameter(Param('test1', numpy.random.normal(0,1,(1,))))
+        self.par.link_parameter(Param('test2', numpy.random.normal(0,1,(1,))))
 
-        self.par2.add_parameter(Param('par2 test1', numpy.random.normal(0,1,(1,))))
-        self.par2.add_parameter(Param('par2 test2', numpy.random.normal(0,1,(1,))))
+        self.par2.link_parameter(Param('par2 test1', numpy.random.normal(0,1,(1,))))
+        self.par2.link_parameter(Param('par2 test2', numpy.random.normal(0,1,(1,))))
 
-        self.parent.add_parameter(self.par)
-        self.parent.add_parameter(self.par2)
+        self.parent.link_parameter(self.par)
+        self.parent.link_parameter(self.par2)
 
         self._observer_triggered = None
         self._trigger_count = 0
@@ -129,7 +126,6 @@ class Test(unittest.TestCase):
         self.par.notify_observers(0)
         self.assertEqual(self._first, self._trigger, 'priority should be second')
         self.assertEqual(self._second, self._trigger_priority, 'priority should be second')
-
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

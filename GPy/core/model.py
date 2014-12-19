@@ -1,4 +1,4 @@
-# Copyright (c) 2012, 2013, GPy authors (see AUTHORS.txt).
+# Copyright (c) 2012-2014, GPy authors (see AUTHORS.txt).
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 
@@ -21,6 +21,10 @@ class Model(Parameterized):
         self.optimization_runs = []
         self.sampling_runs = []
         self.preferred_optimizer = 'bfgs'
+        from .parameterization.ties_and_remappings import Tie
+        self.tie = Tie()
+        self.link_parameter(self.tie, -1)
+        self.add_observer(self.tie, self.tie._parameters_changed_notification, priority=-500)
 
     def log_likelihood(self):
         raise NotImplementedError, "this needs to be implemented to use the model class"
@@ -209,6 +213,7 @@ class Model(Parameterized):
     def optimize(self, optimizer=None, start=None, **kwargs):
         """
         Optimize the model using self.log_likelihood and self.log_likelihood_gradient, as well as self.priors.
+
         kwargs are passed to the optimizer. They can be:
 
         :param max_f_eval: maximum number of function evaluations
@@ -218,12 +223,24 @@ class Model(Parameterized):
         :param optimizer: which optimizer to use (defaults to self.preferred optimizer)
         :type optimizer: string
 
-        TODO: valid args
+        Valid optimizers are:
+          - 'scg': scaled conjugate gradient method, recommended for stability.
+                   See also GPy.inference.optimization.scg
+          - 'fmin_tnc': truncated Newton method (see scipy.optimize.fmin_tnc)
+          - 'simplex': the Nelder-Mead simplex method (see scipy.optimize.fmin),
+          - 'lbfgsb': the l-bfgs-b method (see scipy.optimize.fmin_l_bfgs_b),
+          - 'sgd': stochastic gradient decsent (see scipy.optimize.sgd). For experts only!
+
+
         """
         if self.is_fixed:
-            raise RuntimeError, "Cannot optimize, when everything is fixed"
+            print 'nothing to optimize'
         if self.size == 0:
-            raise RuntimeError, "Model without parameters cannot be optimized"
+            print 'nothing to optimize'
+
+        if not self.update_model():
+            print "Updates were off, setting updates on again"
+            self.update_model(True)
 
         if start == None:
             start = self.optimizer_array
@@ -250,7 +267,7 @@ class Model(Parameterized):
         sgd.run()
         self.optimization_runs.append(sgd)
 
-    def _checkgrad(self, target_param=None, verbose=False, step=1e-6, tolerance=1e-3):
+    def _checkgrad(self, target_param=None, verbose=False, step=1e-6, tolerance=1e-3, df_tolerance=1e-12):
         """
         Check the gradient of the ,odel by comparing to a numerical
         estimate.  If the verbose flag is passed, individual
@@ -266,6 +283,10 @@ class Model(Parameterized):
         Note:-
            The gradient is considered correct if the ratio of the analytical
            and numerical gradients is within <tolerance> of unity.
+
+           The *dF_ratio* indicates the limit of numerical accuracy of numerical gradients.
+           If it is too small, e.g., smaller than 1e-12, the numerical gradients are usually
+           not accurate enough for the tests (shown with blue).
         """
         x = self.optimizer_array.copy()
 
@@ -309,7 +330,7 @@ class Model(Parameterized):
             except NotImplementedError:
                 names = ['Variable %i' % i for i in range(len(x))]
             # Prepare for pretty-printing
-            header = ['Name', 'Ratio', 'Difference', 'Analytical', 'Numerical']
+            header = ['Name', 'Ratio', 'Difference', 'Analytical', 'Numerical', 'dF_ratio']
             max_names = max([len(names[i]) for i in range(len(names))] + [len(header[0])])
             float_len = 10
             cols = [max_names]
@@ -346,10 +367,12 @@ class Model(Parameterized):
                 f1 = self._objective(xx)
                 xx[xind] -= 2.*step
                 f2 = self._objective(xx)
+                df_ratio = np.abs((f1-f2)/min(f1,f2))
+                df_unstable = df_ratio<df_tolerance
                 numerical_gradient = (f1 - f2) / (2 * step)
                 if np.all(gradient[xind] == 0): ratio = (f1 - f2) == gradient[xind]
                 else: ratio = (f1 - f2) / (2 * step * gradient[xind])
-                difference = np.abs((f1 - f2) / 2 / step - gradient[xind])
+                difference = np.abs(numerical_gradient - gradient[xind])
 
                 if (np.abs(1. - ratio) < tolerance) or np.abs(difference) < tolerance:
                     formatted_name = "\033[92m {0} \033[0m".format(names[nind])
@@ -357,15 +380,41 @@ class Model(Parameterized):
                 else:
                     formatted_name = "\033[91m {0} \033[0m".format(names[nind])
                     ret &= False
+                if df_unstable:
+                    formatted_name = "\033[94m {0} \033[0m".format(names[nind])
 
                 r = '%.6f' % float(ratio)
                 d = '%.6f' % float(difference)
                 g = '%.6f' % gradient[xind]
                 ng = '%.6f' % float(numerical_gradient)
-                grad_string = "{0:<{c0}}|{1:^{c1}}|{2:^{c2}}|{3:^{c3}}|{4:^{c4}}".format(formatted_name, r, d, g, ng, c0=cols[0] + 9, c1=cols[1], c2=cols[2], c3=cols[3], c4=cols[4])
+                df = '%1.e' % float(df_ratio)
+                grad_string = "{0:<{c0}}|{1:^{c1}}|{2:^{c2}}|{3:^{c3}}|{4:^{c4}}|{5:^{c5}}".format(formatted_name, r, d, g, ng, df, c0=cols[0] + 9, c1=cols[1], c2=cols[2], c3=cols[3], c4=cols[4], c5=cols[5])
                 print grad_string
 
             self.optimizer_array = x
             return ret
 
+    def _repr_html_(self):
+        """Representation of the model in html for notebook display."""
+        model_details = [['<b>Model</b>', self.name + '<br>'],
+                         ['<b>Log-likelihood</b>', '{}<br>'.format(float(self.log_likelihood()))],
+                         ["<b>Number of Parameters</b>", '{}<br>'.format(self.size)]]
+        from operator import itemgetter
+        to_print = ["""<style type="text/css">
+.pd{
+    font-family:"Courier New", Courier, monospace !important;
+}
+</style>\n"""] + ["<p class=pd>"] + ["{}: {}".format(name, detail) for name, detail in model_details] + ["</p>"]
+        to_print.append(super(Model, self)._repr_html_())
+        return "\n".join(to_print)
+
+    def __str__(self):
+        model_details = [['Name', self.name],
+                         ['Log-likelihood', '{}'.format(float(self.log_likelihood()))],
+                         ["Number of Parameters", '{}'.format(self.size)]]
+        from operator import itemgetter
+        max_len = reduce(lambda a, b: max(len(b[0]), a), model_details, 0)
+        to_print = [""] + ["{0:{l}} : {1}".format(name, detail, l=max_len) for name, detail in model_details] + ["Parameters:"]
+        to_print.append(super(Model, self).__str__())
+        return "\n".join(to_print)
 

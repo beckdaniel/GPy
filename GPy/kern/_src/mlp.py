@@ -36,7 +36,7 @@ class MLP(Kern):
         self.variance = Param('variance', variance, Logexp())
         self.weight_variance = Param('weight_variance', weight_variance, Logexp())
         self.bias_variance = Param('bias_variance', bias_variance, Logexp())
-        self.add_parameters(self.variance, self.weight_variance, self.bias_variance)
+        self.link_parameters(self.variance, self.weight_variance, self.bias_variance)
 
 
     def K(self, X, X2=None):
@@ -79,8 +79,14 @@ class MLP(Kern):
                              + 2*self.bias_variance + 2.))*base_cov_grad).sum()
 
     def update_gradients_diag(self, X):
-        raise NotImplementedError, "TODO"
-
+        self._K_diag_computations(X)
+        self.variance.gradient = np.sum(self._K_diag_dvar*dL_dKdiag)
+        
+        base = four_over_tau*self.variance/np.sqrt(1-self._K_diag_asin_arg*self._K_diag_asin_arg)
+        base_cov_grad = base*dL_dKdiag/np.square(self._K_diag_denom)
+        
+        self.weight_variance.gradient = (base_cov_grad*np.square(X).sum(axis=1)).sum()
+        self.bias_variance.gradient = base_cov_grad.sum()
 
     def gradients_X(self, dL_dK, X, X2):
         """Derivative of the covariance matrix with respect to X"""

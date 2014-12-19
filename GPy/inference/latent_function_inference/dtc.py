@@ -1,4 +1,4 @@
-# Copyright (c) 2012, James Hensman
+# Copyright (c) 2012-2014, James Hensman
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 from posterior import Posterior
@@ -124,6 +124,7 @@ class vDTC(object):
         v, _ = dtrtrs(L, tmp, lower=1, trans=1)
         tmp, _ = dtrtrs(LA, Li, lower=1, trans=0)
         P = tdot(tmp.T)
+        stop
 
         #compute log marginal
         log_marginal = -0.5*num_data*output_dim*np.log(2*np.pi) + \

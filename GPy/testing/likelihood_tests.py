@@ -1,3 +1,5 @@
+# Copyright (c) 2014, Alan Saul
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
 import numpy as np
 import unittest
 import GPy
@@ -75,7 +77,7 @@ def dparam_checkgrad(func, dfunc, params, params_names, args, constraints=None, 
             if verbose:
                 print grad
                 grad.checkgrad(verbose=1)
-            if not grad.checkgrad():
+            if not grad.checkgrad(verbose=True):
                 gradchecking = False
 
     return gradchecking
@@ -352,8 +354,8 @@ class TestNoiseModels(object):
         print model
         #print model._get_params()
         np.testing.assert_almost_equal(
-                               model.pdf(f.copy(), Y.copy()),
-                               np.exp(model.logpdf(f.copy(), Y.copy()))
+                model.pdf(f.copy(), Y.copy()).prod(),
+                               np.exp(model.logpdf(f.copy(), Y.copy()).sum())
                                )
 
     @with_setup(setUp, tearDown)
@@ -364,9 +366,8 @@ class TestNoiseModels(object):
         dlogpdf_df = functools.partial(model.dlogpdf_df, y=Y)
         grad = GradientChecker(logpdf, dlogpdf_df, f.copy(), 'g')
         grad.randomize()
-        grad.checkgrad(verbose=1)
         print model
-        assert grad.checkgrad()
+        assert grad.checkgrad(verbose=1)
 
     @with_setup(setUp, tearDown)
     def t_d2logpdf_df2(self, model, Y, f):
@@ -375,9 +376,8 @@ class TestNoiseModels(object):
         d2logpdf_df2 = functools.partial(model.d2logpdf_df2, y=Y)
         grad = GradientChecker(dlogpdf_df, d2logpdf_df2, f.copy(), 'g')
         grad.randomize()
-        grad.checkgrad(verbose=1)
         print model
-        assert grad.checkgrad()
+        assert grad.checkgrad(verbose=1)
 
     @with_setup(setUp, tearDown)
     def t_d3logpdf_df3(self, model, Y, f):
@@ -386,9 +386,8 @@ class TestNoiseModels(object):
         d3logpdf_df3 = functools.partial(model.d3logpdf_df3, y=Y)
         grad = GradientChecker(d2logpdf_df2, d3logpdf_df3, f.copy(), 'g')
         grad.randomize()
-        grad.checkgrad(verbose=1)
         print model
-        assert grad.checkgrad()
+        assert grad.checkgrad(verbose=1)
 
     ##############
     # df_dparams #
@@ -439,8 +438,8 @@ class TestNoiseModels(object):
 
         grad.randomize()
         print grad
-        grad.checkgrad(verbose=1)
-        assert grad.checkgrad()
+        print model
+        assert grad.checkgrad(verbose=1)
 
     @with_setup(setUp, tearDown)
     def t_d2logpdf_dlink2(self, model, Y, f, link_f_constraints):
@@ -454,9 +453,9 @@ class TestNoiseModels(object):
             constraint('g', grad)
 
         grad.randomize()
-        grad.checkgrad(verbose=1)
         print grad
-        assert grad.checkgrad()
+        print model
+        assert grad.checkgrad(verbose=1)
 
     @with_setup(setUp, tearDown)
     def t_d3logpdf_dlink3(self, model, Y, f, link_f_constraints):
@@ -470,9 +469,9 @@ class TestNoiseModels(object):
             constraint('g', grad)
 
         grad.randomize()
-        grad.checkgrad(verbose=1)
         print grad
-        assert grad.checkgrad()
+        print model
+        assert grad.checkgrad(verbose=1)
 
     #################
     # dlink_dparams #
@@ -535,13 +534,12 @@ class TestNoiseModels(object):
 
         #m.optimize(max_iters=8)
         print m
-        m.checkgrad(verbose=1, step=step)
         #if not m.checkgrad(step=step):
             #m.checkgrad(verbose=1, step=step)
             #NOTE this test appears to be stochastic for some likelihoods (student t?)
             # appears to all be working in test mode right now...
         #if isinstance(model, GPy.likelihoods.StudentT):
-        assert m.checkgrad(step=step)
+        assert m.checkgrad(verbose=1, step=step)
 
     ###########
     # EP test #
@@ -563,9 +561,8 @@ class TestNoiseModels(object):
             constraints[param_num](name, m)
 
         m.randomize()
-        m.checkgrad(verbose=1, step=step)
         print m
-        assert m.checkgrad(step=step)
+        assert m.checkgrad(verbose=1, step=step)
 
 
 class LaplaceTests(unittest.TestCase):
@@ -616,8 +613,8 @@ class LaplaceTests(unittest.TestCase):
         d2logpdf_df2 = functools.partial(self.gauss.d2logpdf_df2, y=self.Y)
         grad = GradientChecker(dlogpdf_df, d2logpdf_df2, self.f.copy(), 'g')
         grad.randomize()
-        grad.checkgrad(verbose=1)
-        self.assertTrue(grad.checkgrad())
+
+        self.assertTrue(grad.checkgrad(verbose=1))
 
     def test_laplace_log_likelihood(self):
         debug = False
@@ -705,8 +702,8 @@ class LaplaceTests(unittest.TestCase):
         #Check they are checkgradding
         #m1.checkgrad(verbose=1)
         #m2.checkgrad(verbose=1)
-        self.assertTrue(m1.checkgrad())
-        self.assertTrue(m2.checkgrad())
+        self.assertTrue(m1.checkgrad(verbose=True))
+        self.assertTrue(m2.checkgrad(verbose=True))
 
 if __name__ == "__main__":
     print "Running unit tests"

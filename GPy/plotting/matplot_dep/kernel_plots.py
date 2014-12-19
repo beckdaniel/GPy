@@ -25,23 +25,22 @@ def add_bar_labels(fig, ax, bars, bottom=0):
             c = 'w'
             t = TextPath((0, 0), "${xi}$".format(xi=xi), rotation=0, ha='center')
             transform = transOffset
-            if patch.get_extents().height <= t.get_extents().height + 3:
+            if patch.get_extents().height <= t.get_extents().height + 5:
                 va = 'bottom'
                 c = 'k'
                 transform = transOffsetUp
             ax.text(xi, height, "${xi}$".format(xi=int(num)), color=c, rotation=0, ha='center', va=va, transform=transform)
-    
+
     ax.set_xticks([])
 
 
 def plot_bars(fig, ax, x, ard_params, color, name, bottom=0):
-    from ...util.misc import param_to_array
-    return ax.bar(left=x, height=param_to_array(ard_params), width=.8, 
-                  bottom=bottom, align='center', 
-                  color=color, edgecolor='k', linewidth=1.2, 
+    return ax.bar(left=x, height=ard_params.view(np.ndarray), width=.8,
+                  bottom=bottom, align='center',
+                  color=color, edgecolor='k', linewidth=1.2,
                   label=name.replace("_"," "))
 
-def plot_ARD(kernel, fignum=None, ax=None, title='', legend=False):
+def plot_ARD(kernel, fignum=None, ax=None, title='', legend=False, filtering=None):
     """
     If an ARD kernel is present, plot a bar representation using matplotlib
 
@@ -51,6 +50,10 @@ def plot_ARD(kernel, fignum=None, ax=None, title='', legend=False):
         title of the plot,
         pass '' to not print a title
         pass None for a generic title
+    :param filtering: list of names, which to use for plotting ARD parameters.
+                      Only kernels which match names in the list of names in filtering
+                      will be used for plotting.
+    :type filtering: list of names to use for ARD plot
     """
     fig, ax = ax_default(fignum,ax)
 
@@ -58,21 +61,30 @@ def plot_ARD(kernel, fignum=None, ax=None, title='', legend=False):
         ax.set_title('ARD parameters, %s kernel' % kernel.name)
     else:
         ax.set_title(title)
-    
+
     Tango.reset()
     bars = []
-    
-    ard_params = np.atleast_2d(kernel.input_sensitivity())
+
+    ard_params = np.atleast_2d(kernel.input_sensitivity(summarize=False))
     bottom = 0
+    last_bottom = bottom
+
     x = np.arange(kernel.input_dim)
-    
+
+    if filtering is None:
+        filtering = kernel.parameter_names(recursive=False)
+
     for i in range(ard_params.shape[0]):
-        c = Tango.nextMedium()
-        bars.append(plot_bars(fig, ax, x, ard_params[i,:], c, kernel.parameters[i].name, bottom=bottom))
-        bottom += ard_params[i,:]
-    
+        if kernel.parameters[i].name in filtering:
+            c = Tango.nextMedium()
+            bars.append(plot_bars(fig, ax, x, ard_params[i,:], c, kernel.parameters[i].name, bottom=bottom))
+            last_bottom = ard_params[i,:]
+            bottom += last_bottom
+        else:
+            print "filtering out {}".format(kernel.parameters[i].name)
+
     ax.set_xlim(-.5, kernel.input_dim - .5)
-    add_bar_labels(fig, ax, [bars[-1]], bottom=bottom-ard_params[i,:])
+    add_bar_labels(fig, ax, [bars[-1]], bottom=bottom-last_bottom)
 
     if legend:
         if title is '':
@@ -87,9 +99,26 @@ def plot_ARD(kernel, fignum=None, ax=None, title='', legend=False):
     return ax
 
 
-def plot(kernel, x=None, plot_limits=None, which_parts='all', resolution=None, *args, **kwargs):
-    if which_parts == 'all':
-        which_parts = [True] * kernel.size
+
+def plot(kernel,x=None, fignum=None, ax=None, title=None, plot_limits=None, resolution=None, **mpl_kwargs):
+    """
+    plot a kernel.
+    :param x: the value to use for the other kernel argument (kernels are a function of two variables!)
+    :param fignum: figure number of the plot
+    :param ax: matplotlib axis to plot on
+    :param title: the matplotlib title
+    :param plot_limits: the range over which to plot the kernel
+    :resolution: the resolution of the lines used in plotting
+    :mpl_kwargs avalid keyword arguments to pass through to matplotlib (e.g. lw=7)
+    """
+    fig, ax = ax_default(fignum,ax)
+
+    if title is None:
+        ax.set_title('%s kernel' % kernel.name)
+    else:
+        ax.set_title(title)
+
+
     if kernel.input_dim == 1:
         if x is None:
             x = np.zeros((1, 1))
@@ -107,10 +136,10 @@ def plot(kernel, x=None, plot_limits=None, which_parts='all', resolution=None, *
 
         Xnew = np.linspace(xmin, xmax, resolution or 201)[:, None]
         Kx = kernel.K(Xnew, x)
-        pb.plot(Xnew, Kx, *args, **kwargs)
-        pb.xlim(xmin, xmax)
-        pb.xlabel("x")
-        pb.ylabel("k(x,%0.1f)" % x)
+        ax.plot(Xnew, Kx, **mpl_kwargs)
+        ax.set_xlim(xmin, xmax)
+        ax.set_xlabel("x")
+        ax.set_ylabel("k(x,%0.1f)" % x)
 
     elif kernel.input_dim == 2:
         if x is None:
@@ -120,7 +149,7 @@ def plot(kernel, x=None, plot_limits=None, which_parts='all', resolution=None, *
             assert x.size == 2, "The size of the fixed variable x is not 2"
             x = x.reshape((1, 2))
 
-        if plot_limits == None:
+        if plot_limits is None:
             xmin, xmax = (x - 5).flatten(), (x + 5).flatten()
         elif len(plot_limits) == 2:
             xmin, xmax = plot_limits
@@ -129,16 +158,14 @@ def plot(kernel, x=None, plot_limits=None, which_parts='all', resolution=None, *
 
         resolution = resolution or 51
         xx, yy = np.mgrid[xmin[0]:xmax[0]:1j * resolution, xmin[1]:xmax[1]:1j * resolution]
-        xg = np.linspace(xmin[0], xmax[0], resolution)
-        yg = np.linspace(xmin[1], xmax[1], resolution)
         Xnew = np.vstack((xx.flatten(), yy.flatten())).T
-        Kx = kernel.K(Xnew, x, which_parts)
+        Kx = kernel.K(Xnew, x)
         Kx = Kx.reshape(resolution, resolution).T
-        pb.contour(xg, yg, Kx, vmin=Kx.min(), vmax=Kx.max(), cmap=pb.cm.jet, *args, **kwargs) # @UndefinedVariable
-        pb.xlim(xmin[0], xmax[0])
-        pb.ylim(xmin[1], xmax[1])
-        pb.xlabel("x1")
-        pb.ylabel("x2")
-        pb.title("k(x1,x2 ; %0.1f,%0.1f)" % (x[0, 0], x[0, 1]))
+        ax.contour(xx, yy, Kx, vmin=Kx.min(), vmax=Kx.max(), cmap=pb.cm.jet, **mpl_kwargs) # @UndefinedVariable
+        ax.set_xlim(xmin[0], xmax[0])
+        ax.set_ylim(xmin[1], xmax[1])
+        ax.set_xlabel("x1")
+        ax.set_ylabel("x2")
+        ax.set_title("k(x1,x2 ; %0.1f,%0.1f)" % (x[0, 0], x[0, 1]))
     else:
         raise NotImplementedError, "Cannot plot a kernel with more than two input dimensions"

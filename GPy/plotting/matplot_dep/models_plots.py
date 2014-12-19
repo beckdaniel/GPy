@@ -1,11 +1,13 @@
 # Copyright (c) 2012, GPy authors (see AUTHORS.txt).
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
-import pylab as pb
+try:
+    import Tango
+    import pylab as pb
+except:
+    pass
 import numpy as np
-import Tango
 from base_plots import gpplot, x_frame1D, x_frame2D
-from ...util.misc import param_to_array
 from ...models.gp_coregionalized_regression import GPCoregionalizedRegression
 from ...models.sparse_gp_coregionalized_regression import SparseGPCoregionalizedRegression
 from scipy import sparse
@@ -64,7 +66,6 @@ def plot_fit(model, plot_limits=None, which_data_rows='all',
         X_variance = model.X.variance
     else:
         X = model.X
-    #X, Y = param_to_array(X, model.Y)
     Y = model.Y
     if sparse.issparse(Y): Y = Y.todense().view(np.ndarray)
 
@@ -150,7 +151,11 @@ def plot_fit(model, plot_limits=None, which_data_rows='all',
         if plot_raw:
             m, _ = model._raw_predict(Xgrid)
         else:
-            m, _ = model.predict(Xgrid)
+            if isinstance(model,GPCoregionalizedRegression) or isinstance(model,SparseGPCoregionalizedRegression):
+                meta = {'output_index': Xgrid[:,-1:].astype(np.int)}
+            else:
+                meta = None
+            m, v = model.predict(Xgrid, full_cov=False, Y_metadata=meta)
         for d in which_data_ycols:
             m_d = m[:,d].reshape(resolution, resolution).T
             plots['contour'] = ax.contour(x, y, m_d, levels, vmin=m.min(), vmax=m.max(), cmap=pb.cm.jet)

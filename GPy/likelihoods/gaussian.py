@@ -1,4 +1,4 @@
-# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Copyright (c) 2012-2014 The GPy authors (see AUTHORS.txt)
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 #TODO
 """
@@ -13,7 +13,6 @@ James 11/12/13
 
 import numpy as np
 from scipy import stats, special
-from GPy.util.univariate_Gaussian import std_norm_pdf, std_norm_cdf
 import link_functions
 from likelihood import Likelihood
 from ..core.parameterization import Param
@@ -40,7 +39,7 @@ class Gaussian(Likelihood):
         super(Gaussian, self).__init__(gp_link, name=name)
 
         self.variance = Param('variance', variance, Logexp())
-        self.add_parameter(self.variance)
+        self.link_parameter(self.variance)
 
         if isinstance(gp_link, link_functions.Identity):
             self.log_concave = True
@@ -81,7 +80,10 @@ class Gaussian(Likelihood):
 
     def predictive_values(self, mu, var, full_cov=False, Y_metadata=None):
         if full_cov:
-            var += np.eye(var.shape[0])*self.variance
+            if var.ndim == 2:
+                var += np.eye(var.shape[0])*self.variance
+            if var.ndim == 3:
+                var += np.atleast_3d(np.eye(var.shape[0])*self.variance)
         else:
             var += self.variance
         return mu, var

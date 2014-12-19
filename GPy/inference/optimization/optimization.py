@@ -1,4 +1,4 @@
-# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Copyright (c) 2012-2014, GPy authors (see AUTHORS.txt).
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import datetime as dt
@@ -225,13 +225,11 @@ class opt_SCG(Optimizer):
         self.status = opt_result[3]
 
 def get_optimizer(f_min):
-    from sgd import opt_SGD
 
     optimizers = {'fmin_tnc': opt_tnc,
           'simplex': opt_simplex,
           'lbfgsb': opt_lbfgsb,
-          'scg': opt_SCG,
-          'sgd': opt_SGD}
+          'scg': opt_SCG}
 
     if rasm_available:
         optimizers['rasmussen'] = opt_rasm

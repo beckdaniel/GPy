@@ -1,5 +1,11 @@
+# Copyright (c) 2012-2014, GPy authors (see AUTHORS.txt).
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
+
 import numpy as np
-import pylab as pb
+try:
+    import pylab as pb
+except:
+    pass
 import GPy
 pb.ion()
 pb.close('all')

@@ -6,6 +6,7 @@ import numpy as np
 from ...core.parameterization.parameterized import Parameterized
 from kernel_slice_operations import KernCallsViaSlicerMeta
 from ...util.caching import Cache_this
+from GPy.core.parameterization.observable_array import ObsAr
 
 
 
@@ -23,9 +24,9 @@ class Kern(Parameterized):
 
         input_dim:
 
-            is the number of dimensions to work on. Make sure to give the 
+            is the number of dimensions to work on. Make sure to give the
             tight dimensionality of inputs.
-            You most likely want this to be the integer telling the number of 
+            You most likely want this to be the integer telling the number of
             input dimensions of the kernel.
             If this is not an integer (!) we will work on the whole input matrix X,
             and not check whether dimensions match or not (!).
@@ -48,12 +49,26 @@ class Kern(Parameterized):
         if active_dims is None:
             active_dims = np.arange(input_dim)
 
-        self.active_dims = np.array(active_dims, dtype=int)
+        self.active_dims = np.atleast_1d(active_dims).astype(int)
 
         assert self.active_dims.size == self.input_dim, "input_dim={} does not match len(active_dim)={}, active_dims={}".format(self.input_dim, self.active_dims.size, self.active_dims)
 
         self._sliced_X = 0
         self.useGPU = self._support_GPU and useGPU
+        self._return_psi2_n_flag = ObsAr(np.zeros(1)).astype(bool)
+
+    @property
+    def return_psi2_n(self):
+        """
+        Flag whether to pass back psi2 as NxMxM or MxM, by summing out N.
+        """
+        return self._return_psi2_n_flag[0]
+    @return_psi2_n.setter
+    def return_psi2_n(self, val):
+        def visit(self):
+            if isinstance(self, Kern):
+                self._return_psi2_n_flag[0]=val
+        self.traverse(visit)
 
     @Cache_this(limit=20)
     def _slice_X(self, X):
@@ -117,13 +132,20 @@ class Kern(Parameterized):
         """
         raise NotImplementedError
 
-    def plot(self, *args, **kwargs):
+    def plot(self, x=None, fignum=None, ax=None, title=None, plot_limits=None, resolution=None, **mpl_kwargs):
         """
-        See GPy.plotting.matplot_dep.plot
+        plot this kernel.
+        :param x: the value to use for the other kernel argument (kernels are a function of two variables!)
+        :param fignum: figure number of the plot
+        :param ax: matplotlib axis to plot on
+        :param title: the matplotlib title
+        :param plot_limits: the range over which to plot the kernel
+        :resolution: the resolution of the lines used in plotting
+        :mpl_kwargs avalid keyword arguments to pass through to matplotlib (e.g. lw=7)
         """
         assert "matplotlib" in sys.modules, "matplotlib package has not been imported."
         from ...plotting.matplot_dep import kernel_plots
-        kernel_plots.plot(self,*args)
+        kernel_plots.plot(self, x, fignum, ax, title, plot_limits, resolution, **mpl_kwargs)
 
     def plot_ARD(self, *args, **kw):
         """
@@ -134,7 +156,7 @@ class Kern(Parameterized):
         from ...plotting.matplot_dep import kernel_plots
         return kernel_plots.plot_ARD(self,*args,**kw)
 
-    def input_sensitivity(self):
+    def input_sensitivity(self, summarize=True):
         """
         Returns the sensitivity for each dimension of this kernel.
         """
@@ -142,6 +164,9 @@ class Kern(Parameterized):
 
     def __add__(self, other):
         """ Overloading of the '+' operator. for more control, see self.add """
+        return self.add(other)
+
+    def __iadd__(self, other):
         return self.add(other)
 
     def add(self, other, name='add'):
@@ -157,6 +182,10 @@ class Kern(Parameterized):
         return Add([self, other], name=name)
 
     def __mul__(self, other):
+        """ Here we overload the '*' operator. See self.prod for more information"""
+        return self.prod(other)
+
+    def __imul__(self, other):
         """ Here we overload the '*' operator. See self.prod for more information"""
         return self.prod(other)
 
@@ -180,7 +209,7 @@ class Kern(Parameterized):
         :type tensor: bool
 
         """
-        assert isinstance(other, Kern), "only kernels can be added to kernels..."
+        assert isinstance(other, Kern), "only kernels can be multiplied to kernels..."
         from prod import Prod
         #kernels = []
         #if isinstance(self, Prod): kernels.extend(self.parameters)
@@ -218,7 +247,7 @@ class CombinationKernel(Kern):
         # initialize the kernel with the full input_dim
         super(CombinationKernel, self).__init__(input_dim, active_dims, name)
         self.extra_dims = extra_dims
-        self.add_parameters(*kernels)
+        self.link_parameters(*kernels)
 
     @property
     def parts(self):
@@ -235,7 +264,12 @@ class CombinationKernel(Kern):
         active_dims = np.arange(input_dim)
         return input_dim, active_dims
 
-    def input_sensitivity(self):
+    def input_sensitivity(self, summarize=True):
+        """
+        If summize is true, we want to get the summerized view of the sensitivities,
+        otherwise put everything into an array with shape (#kernels, input_dim)
+        in the order of appearance of the kernels in the parameterized object.
+        """
         raise NotImplementedError("Choose the kernel you want to get the sensitivity for. You need to override the default behaviour for getting the input sensitivity to be able to get the input sensitivity. For sum kernel it is the sum of all sensitivities, TODO: product kernel? Other kernels?, also TODO: shall we return all the sensitivities here in the combination kernel? So we can combine them however we want? This could lead to just plot all the sensitivities here...")
 
     def _check_active_dims(self, X):

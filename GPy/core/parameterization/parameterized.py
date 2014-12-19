@@ -1,4 +1,4 @@
-# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Copyright (c) 2014, Max Zwiessele, James Hensman
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 
@@ -9,6 +9,7 @@ from param import ParamConcatenation
 from parameter_core import HierarchyError, Parameterizable, adjust_name_for_printing
 
 import logging
+from GPy.core.parameterization.index_operations import ParameterIndexOperationsView
 logger = logging.getLogger("parameters changed meta")
 
 class ParametersChangedMeta(type):
@@ -20,7 +21,7 @@ class ParametersChangedMeta(type):
         self._in_init_ = False
         logger.debug("connecting parameters")
         self._highest_parent_._connect_parameters()
-        self._highest_parent_._notify_parent_change()
+        #self._highest_parent_._notify_parent_change()
         self._highest_parent_._connect_fixes()
         logger.debug("calling parameters changed")
         self.parameters_changed()
@@ -82,7 +83,7 @@ class Parameterized(Parameterizable):
             self._fixes_ = None
         self._param_slices_ = []
         #self._connect_parameters()
-        self.add_parameters(*parameters)
+        self.link_parameters(*parameters)
 
     def build_pydot(self, G=None):
         import pydot  # @UnresolvedImport
@@ -110,7 +111,7 @@ class Parameterized(Parameterizable):
     #===========================================================================
     # Add remove parameters:
     #===========================================================================
-    def add_parameter(self, param, index=None, _ignore_added_names=False):
+    def link_parameter(self, param, index=None, _ignore_added_names=False):
         """
         :param parameters:  the parameters to add
         :type parameters:   list of or one :py:class:`GPy.core.param.Param`
@@ -122,8 +123,8 @@ class Parameterized(Parameterizable):
         at any given index using the :func:`list.insert` syntax
         """
         if param in self.parameters and index is not None:
-            self.remove_parameter(param)
-            self.add_parameter(param, index)
+            self.unlink_parameter(param)
+            self.link_parameter(param, index)
         # elif param.has_parent():
         #    raise HierarchyError, "parameter {} already in another model ({}), create new object (or copy) for adding".format(param._short(), param._highest_parent_._short())
         elif param not in self.parameters:
@@ -132,7 +133,7 @@ class Parameterized(Parameterizable):
                     if parent is self:
                         raise HierarchyError, "You cannot add a parameter twice into the hierarchy"
                 param.traverse_parents(visit, self)
-                param._parent_.remove_parameter(param)
+                param._parent_.unlink_parameter(param)
             # make sure the size is set
             if index is None:
                 start = sum(p.size for p in self.parameters)
@@ -140,6 +141,8 @@ class Parameterized(Parameterizable):
                 self.priors.shift_right(start, param.size)
                 self.constraints.update(param.constraints, self.size)
                 self.priors.update(param.priors, self.size)
+                param._parent_ = self
+                param._parent_index_ = len(self.parameters)
                 self.parameters.append(param)
             else:
                 start = sum(p.size for p in self.parameters[:index])
@@ -147,6 +150,10 @@ class Parameterized(Parameterizable):
                 self.priors.shift_right(start, param.size)
                 self.constraints.update(param.constraints, start)
                 self.priors.update(param.priors, start)
+                param._parent_ = self
+                param._parent_index_ = index if index>=0 else len(self.parameters[:index])
+                for p in self.parameters[index:]:
+                    p._parent_index_ += 1
                 self.parameters.insert(index, param)
 
             param.add_observer(self, self._pass_through_notify_observers, -np.inf)
@@ -155,10 +162,11 @@ class Parameterized(Parameterizable):
             while parent is not None:
                 parent.size += param.size
                 parent = parent._parent_
+            self._notify_parent_change()
 
             if not self._in_init_:
-                self._connect_parameters()
-                self._notify_parent_change()
+                #self._connect_parameters()
+                #self._notify_parent_change()
 
                 self._highest_parent_._connect_parameters(ignore_added_names=_ignore_added_names)
                 self._highest_parent_._notify_parent_change()
@@ -168,19 +176,22 @@ class Parameterized(Parameterizable):
             raise HierarchyError, """Parameter exists already, try making a copy"""
 
 
-    def add_parameters(self, *parameters):
+    def link_parameters(self, *parameters):
         """
         convenience method for adding several
         parameters without gradient specification
         """
-        [self.add_parameter(p) for p in parameters]
+        [self.link_parameter(p) for p in parameters]
 
-    def remove_parameter(self, param):
+    def unlink_parameter(self, param):
         """
         :param param: param object to remove from being a parameter of this parameterized object.
         """
         if not param in self.parameters:
-            raise RuntimeError, "Parameter {} does not belong to this object {}, remove parameters directly from their respective parents".format(param._short(), self.name)
+            try:
+                raise RuntimeError, "{} does not belong to this object {}, remove parameters directly from their respective parents".format(param._short(), self.name)
+            except AttributeError:
+                raise RuntimeError, "{} does not seem to be a parameter, remove parameters directly from their respective parents".format(str(param))
 
         start = sum([p.size for p in self.parameters[:param._parent_index_]])
         self._remove_parameter_name(param)
@@ -202,6 +213,11 @@ class Parameterized(Parameterizable):
         self._highest_parent_._connect_parameters()
         self._highest_parent_._connect_fixes()
         self._highest_parent_._notify_parent_change()
+
+    def add_parameter(self, *args, **kwargs):
+        raise DeprecationWarning, "add_parameter was renamed to link_parameter to avoid confusion of setting variables"
+    def remove_parameter(self, *args, **kwargs):
+        raise DeprecationWarning, "remove_parameter was renamed to link_parameter to avoid confusion of setting variables"
 
     def _connect_parameters(self, ignore_added_names=False):
         # connect parameterlist to this parameterized object
@@ -291,7 +307,9 @@ class Parameterized(Parameterizable):
         if hasattr(self, "parameters"):
             try:
                 pnames = self.parameter_names(False, adjust_for_printing=True, recursive=False)
-                if name in pnames: self.parameters[pnames.index(name)][:] = val; return
+                if name in pnames:
+                    param = self.parameters[pnames.index(name)]
+                    param[:] = val; return
             except AttributeError:
                 pass
         object.__setattr__(self, name, val);
@@ -346,8 +364,44 @@ class Parameterized(Parameterizable):
     @property
     def _ties_str(self):
         return [','.join(x._ties_str) for x in self.flattened_parameters]
-    def __str__(self, header=True):
 
+    def _repr_html_(self, header=True):
+        """Representation of the parameters in html for notebook display."""
+        name = adjust_name_for_printing(self.name) + "."
+        constrs = self._constraints_str;
+        ts = self._ties_str
+        prirs = self._priors_str
+        desc = self._description_str; names = self.parameter_names()
+        nl = max([len(str(x)) for x in names + [name]])
+        sl = max([len(str(x)) for x in desc + ["Value"]])
+        cl = max([len(str(x)) if x else 0 for x in constrs + ["Constraint"]])
+        tl = max([len(str(x)) if x else 0 for x in ts + ["Tied to"]])
+        pl = max([len(str(x)) if x else 0 for x in prirs + ["Prior"]])
+        format_spec = "<tr><td class=tg-left>{{name:<{0}s}}</td><td class=tg-right>{{desc:>{1}s}}</td><td class=tg-left>{{const:^{2}s}}</td><td class=tg-left>{{pri:^{3}s}}</td><td class=tg-left>{{t:^{4}s}}</td></tr>".format(nl, sl, cl, pl, tl)
+        to_print = []
+        for n, d, c, t, p in itertools.izip(names, desc, constrs, ts, prirs):
+            to_print.append(format_spec.format(name=n, desc=d, const=c, t=t, pri=p))
+        sep = '-' * (nl + sl + cl + + pl + tl + 8 * 2 + 3)
+        if header:
+            header = """
+<tr>
+  <th><b>{name}</b></th>
+  <th><b>Value</b></th>
+  <th><b>Constraint</b></th>
+  <th><b>Prior</b></th>
+  <th><b>Tied to</b></th>
+</tr>""".format(name=name)
+            to_print.insert(0, header)
+        style = """<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;border-color:#999;}
+.tg td{font-family:Arial, sans-serif;font-size:14px;padding:2px 3px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#999;color:#444;background-color:#F7FDFA;}
+.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:normal;padding:2px 3px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#999;color:#fff;background-color:#26ADE4;}
+.tg .tg-left{font-family:"Courier New", Courier, monospace !important;;text-align:left}
+.tg .tg-right{font-family:"Courier New", Courier, monospace !important;;text-align:right}
+</style>"""
+        return style + '\n' + '<table class="tg">' + '\n'.format(sep).join(to_print) + '\n</table>'
+
+    def __str__(self, header=True):
         name = adjust_name_for_printing(self.name) + "."
         constrs = self._constraints_str;
         ts = self._ties_str
@@ -362,11 +416,9 @@ class Parameterized(Parameterizable):
         to_print = []
         for n, d, c, t, p in itertools.izip(names, desc, constrs, ts, prirs):
             to_print.append(format_spec.format(name=n, desc=d, const=c, t=t, pri=p))
-        # to_print = [format_spec.format(p=p, const=c, t=t) if isinstance(p, Param) else p.__str__(header=False) for p, c, t in itertools.izip(self.parameters, constrs, ts)]
         sep = '-' * (nl + sl + cl + + pl + tl + 8 * 2 + 3)
         if header:
             header = "  {{0:<{0}s}}  |  {{1:^{1}s}}  |  {{2:^{2}s}}  |  {{3:^{3}s}}  |  {{4:^{4}s}}".format(nl, sl, cl, pl, tl).format(name, "Value", "Constraint", "Prior", "Tied to")
-            # header += '\n' + sep
             to_print.insert(0, header)
         return '\n'.format(sep).join(to_print)
     pass

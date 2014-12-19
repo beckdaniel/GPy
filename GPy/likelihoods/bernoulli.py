@@ -1,4 +1,4 @@
-# Copyright (c) 2012, 2013 The GPy authors (see AUTHORS.txt)
+# Copyright (c) 2012-2014 The GPy authors (see AUTHORS.txt)
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import numpy as np
@@ -113,10 +113,8 @@ class Bernoulli(Likelihood):
         .. Note:
             Each y_i must be in {0, 1}
         """
-        assert np.atleast_1d(inv_link_f).shape == np.atleast_1d(y).shape
         #objective = (inv_link_f**y) * ((1.-inv_link_f)**(1.-y))
-        objective = np.where(y, inv_link_f, 1.-inv_link_f)
-        return np.exp(np.sum(np.log(objective)))
+        return np.where(y, inv_link_f, 1.-inv_link_f)
 
     def logpdf_link(self, inv_link_f, y, Y_metadata=None):
         """
@@ -133,13 +131,9 @@ class Bernoulli(Likelihood):
         :returns: log likelihood evaluated at points inverse link of f.
         :rtype: float
         """
-        assert np.atleast_1d(inv_link_f).shape == np.atleast_1d(y).shape
         #objective = y*np.log(inv_link_f) + (1.-y)*np.log(inv_link_f)
-        state = np.seterr(divide='ignore')
-        # TODO check y \in {0, 1} or {-1, 1}
-        objective = np.where(y==1, np.log(inv_link_f), np.log(1-inv_link_f))
-        np.seterr(**state)
-        return np.sum(objective)
+        p = np.where(y==1, inv_link_f, 1.-inv_link_f)
+        return np.log(np.clip(p, 1e-6 ,np.inf))
 
     def dlogpdf_dlink(self, inv_link_f, y, Y_metadata=None):
         """
@@ -156,13 +150,11 @@ class Bernoulli(Likelihood):
         :returns: gradient of log likelihood evaluated at points inverse link of f.
         :rtype: Nx1 array
         """
-        assert np.atleast_1d(inv_link_f).shape == np.atleast_1d(y).shape
         #grad = (y/inv_link_f) - (1.-y)/(1-inv_link_f)
-        state = np.seterr(divide='ignore')
-        # TODO check y \in {0, 1} or {-1, 1}
-        grad = np.where(y, 1./inv_link_f, -1./(1-inv_link_f))
-        np.seterr(**state)
-        return grad
+        #grad = np.where(y, 1./inv_link_f, -1./(1-inv_link_f))
+        ff = np.clip(inv_link_f, 1e-6, 1-1e-6)
+        denom = np.where(y, ff, -(1-ff))
+        return 1./denom
 
     def d2logpdf_dlink2(self, inv_link_f, y, Y_metadata=None):
         """
@@ -185,13 +177,13 @@ class Bernoulli(Likelihood):
             Will return diagonal of hessian, since every where else it is 0, as the likelihood factorizes over cases
             (the distribution for y_i depends only on inverse link of f_i not on inverse link of f_(j!=i)
         """
-        assert np.atleast_1d(inv_link_f).shape == np.atleast_1d(y).shape
         #d2logpdf_dlink2 = -y/(inv_link_f**2) - (1-y)/((1-inv_link_f)**2)
-        state = np.seterr(divide='ignore')
-        # TODO check y \in {0, 1} or {-1, 1}
-        d2logpdf_dlink2 = np.where(y, -1./np.square(inv_link_f), -1./np.square(1.-inv_link_f))
-        np.seterr(**state)
-        return d2logpdf_dlink2
+        #d2logpdf_dlink2 = np.where(y, -1./np.square(inv_link_f), -1./np.square(1.-inv_link_f))
+        arg = np.where(y, inv_link_f, 1.-inv_link_f)
+        ret =  -1./np.square(np.clip(arg, 1e-3, np.inf))
+        if np.any(np.isinf(ret)):
+            stop
+        return ret
 
     def d3logpdf_dlink3(self, inv_link_f, y, Y_metadata=None):
         """

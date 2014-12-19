@@ -4,7 +4,6 @@
 from gp_regression import GPRegression
 from gp_classification import GPClassification
 from sparse_gp_regression import SparseGPRegression, SparseGPRegressionUncertainInput
-from svigp_regression import SVIGPRegression
 from sparse_gp_classification import SparseGPClassification
 from gplvm import GPLVM
 from bcgplvm import BCGPLVM
@@ -17,3 +16,8 @@ from ss_gplvm import SSGPLVM
 from gp_coregionalized_regression import GPCoregionalizedRegression
 from sparse_gp_coregionalized_regression import SparseGPCoregionalizedRegression
 from gp_heteroscedastic_regression import GPHeteroscedasticRegression
+from ss_mrd import SSMRD
+from gp_kronecker_gaussian_regression import GPKroneckerGaussianRegression
+from gp_var_gauss import GPVariationalGaussianApproximation
+from one_vs_all_classification import OneVsAllClassification
+from one_vs_all_sparse_classification import OneVsAllSparseClassification

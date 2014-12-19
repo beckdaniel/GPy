@@ -4,13 +4,14 @@
 
 import numpy as np
 from ..core import SparseGP
+from ..core.sparse_gp_mpi import SparseGP_MPI
 from .. import likelihoods
 from .. import kern
 from ..inference.latent_function_inference import VarDTC
-from ..util.misc import param_to_array
 from ..core.parameterization.variational import NormalPosterior
+from GPy.inference.latent_function_inference.var_dtc_parallel import VarDTC_minibatch
 
-class SparseGPRegression(SparseGP):
+class SparseGPRegression(SparseGP_MPI):
     """
     Gaussian Process model for regression
 
@@ -30,7 +31,7 @@ class SparseGPRegression(SparseGP):
 
     """
 
-    def __init__(self, X, Y, kernel=None, Z=None, num_inducing=10, X_variance=None):
+    def __init__(self, X, Y, kernel=None, Z=None, num_inducing=10, X_variance=None, normalizer=None, mpi_comm=None):
         num_data, input_dim = X.shape
 
         # kern defaults to rbf (plus white for stability)
@@ -40,7 +41,7 @@ class SparseGPRegression(SparseGP):
         # Z defaults to a subset of the data
         if Z is None:
             i = np.random.permutation(num_data)[:min(num_inducing, num_data)]
-            Z = param_to_array(X)[i].copy()
+            Z = X.view(np.ndarray)[i].copy()
         else:
             assert Z.shape[1] == input_dim
 
@@ -48,8 +49,21 @@ class SparseGPRegression(SparseGP):
 
         if not (X_variance is None):
             X = NormalPosterior(X,X_variance)
+            
+        if mpi_comm is not None:
+            from ..inference.latent_function_inference.var_dtc_parallel import VarDTC_minibatch
+            infr = VarDTC_minibatch(mpi_comm=mpi_comm)
+        else:
+            infr = VarDTC()
 
-        SparseGP.__init__(self, X, Y, Z, kernel, likelihood, inference_method=VarDTC())
+        SparseGP_MPI.__init__(self, X, Y, Z, kernel, likelihood, inference_method=infr, normalizer=normalizer, mpi_comm=mpi_comm)
+
+    def parameters_changed(self):
+        from ..inference.latent_function_inference.var_dtc_parallel import update_gradients_sparsegp,VarDTC_minibatch
+        if isinstance(self.inference_method,VarDTC_minibatch):
+            update_gradients_sparsegp(self, mpi_comm=self.mpi_comm)
+        else:
+            super(SparseGPRegression, self).parameters_changed()
 
 class SparseGPRegressionUncertainInput(SparseGP):
     """
@@ -59,7 +73,7 @@ class SparseGPRegressionUncertainInput(SparseGP):
 
     """
 
-    def __init__(self, X, X_variance, Y, kernel=None, Z=None, num_inducing=10):
+    def __init__(self, X, X_variance, Y, kernel=None, Z=None, num_inducing=10, normalizer=None):
         """
         :param X: input observations
         :type X: np.ndarray (num_data x input_dim)
@@ -91,5 +105,5 @@ class SparseGPRegressionUncertainInput(SparseGP):
 
         likelihood = likelihoods.Gaussian()
 
-        SparseGP.__init__(self, X, Y, Z, kernel, likelihood, X_variance=X_variance, inference_method=VarDTC())
+        SparseGP.__init__(self, X, Y, Z, kernel, likelihood, X_variance=X_variance, inference_method=VarDTC(), normalizer=normalizer)
         self.ensure_default_constraints()

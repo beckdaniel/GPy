@@ -13,12 +13,11 @@ Observable Pattern for patameterization
 
 """
 
-from transformations import Logexp, NegativeLogexp, Logistic, __fixed__, FIXED, UNFIXED
+from transformations import Transformation,Logexp, NegativeLogexp, Logistic, __fixed__, FIXED, UNFIXED
 import numpy as np
 import re
 import logging
-
-__updated__ = '2014-05-21'
+from updateable import Updateable
 
 class HierarchyError(Exception):
     """
@@ -42,85 +41,6 @@ def adjust_name_for_printing(name):
     return ''
 
 
-class Observable(object):
-    """
-    Observable pattern for parameterization.
-
-    This Object allows for observers to register with self and a (bound!) function
-    as an observer. Every time the observable changes, it sends a notification with
-    self as only argument to all its observers.
-    """
-    _updates = True
-    def __init__(self, *args, **kwargs):
-        super(Observable, self).__init__()
-        from lists_and_dicts import ObserverList
-        self.observers = ObserverList()
-
-    @property
-    def updates(self):
-        p = getattr(self, '_highest_parent_', None)
-        if p is not None:
-            self._updates = p._updates
-        return self._updates
-
-    @updates.setter
-    def updates(self, ups):
-        assert isinstance(ups, bool), "updates are either on (True) or off (False)"
-        p = getattr(self, '_highest_parent_', None)
-        if p is not None:
-            p._updates = ups
-        else:
-            self._updates = ups
-        if ups:
-            self._trigger_params_changed()
-
-    def add_observer(self, observer, callble, priority=0):
-        """
-        Add an observer `observer` with the callback `callble`
-        and priority `priority` to this observers list.
-        """
-        self.observers.add(priority, observer, callble)
-
-    def remove_observer(self, observer, callble=None):
-        """
-        Either (if callble is None) remove all callables,
-        which were added alongside observer,
-        or remove callable `callble` which was added alongside
-        the observer `observer`.
-        """
-        to_remove = []
-        for poc in self.observers:
-            _, obs, clble = poc
-            if callble is not None:
-                if (obs is observer) and (callble == clble):
-                    to_remove.append(poc)
-            else:
-                if obs is observer:
-                    to_remove.append(poc)
-        for r in to_remove:
-            self.observers.remove(*r)
-
-    def notify_observers(self, which=None, min_priority=None):
-        """
-        Notifies all observers. Which is the element, which kicked off this
-        notification loop. The first argument will be self, the second `which`.
-
-        NOTE: notifies only observers with priority p > min_priority!
-                                                    ^^^^^^^^^^^^^^^^
-        :param min_priority: only notify observers with priority > min_priority
-                             if min_priority is None, notify all observers in order
-        """
-        if not self.updates:
-            return
-        if which is None:
-            which = self
-        if min_priority is None:
-            [callble(self, which=which) for _, _, callble in self.observers]
-        else:
-            for p, _, callble in self.observers:
-                if p <= min_priority:
-                    break
-                callble(self, which=which)
 
 class Parentable(object):
     """
@@ -191,7 +111,7 @@ class Pickleable(object):
         """
         import cPickle as pickle
         if isinstance(f, str):
-            with open(f, 'w') as f:
+            with open(f, 'wb') as f:
                 pickle.dump(self, f, protocol)
         else:
             pickle.dump(self, f, protocol)
@@ -266,7 +186,7 @@ class Gradcheckable(Pickleable, Parentable):
     def __init__(self, *a, **kw):
         super(Gradcheckable, self).__init__(*a, **kw)
 
-    def checkgrad(self, verbose=0, step=1e-6, tolerance=1e-3):
+    def checkgrad(self, verbose=0, step=1e-6, tolerance=1e-3, df_tolerance=1e-12):
         """
         Check the gradient of this parameter with respect to the highest parent's
         objective function.
@@ -277,11 +197,17 @@ class Gradcheckable(Pickleable, Parentable):
 
         :param bool verbose: whether each parameter shall be checked individually.
         :param float step: the stepsize for the numerical three point gradient estimate.
-        :param flaot tolerance: the tolerance for the gradient ratio or difference.
+        :param float tolerance: the tolerance for the gradient ratio or difference.
+        :param float df_tolerance: the tolerance for df_tolerance
+
+        Note:-
+           The *dF_ratio* indicates the limit of accuracy of numerical gradients.
+           If it is too small, e.g., smaller than 1e-12, the numerical gradients
+           are usually not accurate enough for the tests (shown with blue).
         """
         if self.has_parent():
-            return self._highest_parent_._checkgrad(self, verbose=verbose, step=step, tolerance=tolerance)
-        return self._checkgrad(self[''], verbose=verbose, step=step, tolerance=tolerance)
+            return self._highest_parent_._checkgrad(self, verbose=verbose, step=step, tolerance=tolerance, df_tolerance=df_tolerance)
+        return self._checkgrad(self, verbose=verbose, step=step, tolerance=tolerance, df_tolerance=df_tolerance)
 
     def _checkgrad(self, param, verbose=0, step=1e-6, tolerance=1e-3):
         """
@@ -329,7 +255,7 @@ class Nameable(Gradcheckable):
         return adjust(self.name)
 
 
-class Indexable(Nameable, Observable):
+class Indexable(Nameable, Updateable):
     """
     Make an object constrainable with Priors and Transformations.
     TODO: Mappings!!
@@ -372,8 +298,9 @@ class Indexable(Nameable, Observable):
         basically just sums up the parameter sizes which come before param.
         """
         if param.has_parent():
-            if param._parent_._get_original(param) in self.parameters:
-                return self._param_slices_[param._parent_._get_original(param)._parent_index_].start
+            p = param._parent_._get_original(param)
+            if p in self.parameters:
+                return reduce(lambda a,b: a + b.size, self.parameters[:p._parent_index_], 0)
             return self._offset_for(param._parent_) + param._parent_._offset_for(param)
         return 0
 
@@ -487,7 +414,7 @@ class Indexable(Nameable, Observable):
             self.constrain_negative(warning)
         elif prior.domain is _REAL:
             rav_i = self._raveled_index()
-            assert all(all(c.domain is _REAL for c in con) for con in self.constraints.properties_for(rav_i))
+            assert all(all(False if c is __fixed__ else c.domain is _REAL for c in con) for con in self.constraints.properties_for(rav_i)), 'Domain of prior and constraint have to match, please unconstrain if you REALLY wish to use this prior'
 
     def unset_priors(self, *priors):
         """
@@ -512,6 +439,22 @@ class Indexable(Nameable, Observable):
         return 0.
 
     #===========================================================================
+    # Tie parameters together
+    #===========================================================================
+
+    def _has_ties(self):
+        if self._highest_parent_.tie.tied_param is None:
+            return False
+        if self.has_parent():
+            return self._highest_parent_.tie.label_buf[self._highest_parent_._raveled_index_for(self)].sum()>0
+        return True
+
+    def tie_together(self):
+        self._highest_parent_.tie.add_tied_parameter(self)
+        self._highest_parent_._set_fixed(self,self._raveled_index())
+        self._trigger_params_changed()
+
+    #===========================================================================
     # Constrain operations -> done
     #===========================================================================
 
@@ -524,7 +467,8 @@ class Indexable(Nameable, Observable):
         Constrain the parameter to the given
         :py:class:`GPy.core.transformations.Transformation`.
         """
-        self.param_array[...] = transform.initialize(self.param_array)
+        if isinstance(transform, Transformation):
+            self.param_array[...] = transform.initialize(self.param_array)
         reconstrained = self.unconstrain()
         added = self._add_to_index_operations(self.constraints, reconstrained, transform, warning)
         self.notify_observers(self, None if trigger_parent else -np.inf)
@@ -588,10 +532,18 @@ class Indexable(Nameable, Observable):
         """
         From Parentable:
         Called when the parent changed
+
+        update the constraints and priors view, so that
+        constraining is automized for the parent.
         """
         from index_operations import ParameterIndexOperationsView
-        self.constraints = ParameterIndexOperationsView(parent.constraints, parent._offset_for(self), self.size)
-        self.priors = ParameterIndexOperationsView(parent.priors, parent._offset_for(self), self.size)
+        #if getattr(self, "_in_init_"):
+            #import ipdb;ipdb.set_trace()
+            #self.constraints.update(param.constraints, start)
+            #self.priors.update(param.priors, start)
+        offset = parent._offset_for(self)
+        self.constraints = ParameterIndexOperationsView(parent.constraints, offset, self.size)
+        self.priors = ParameterIndexOperationsView(parent.priors, offset, self.size)
         self._fixes_ = None
         for p in self.parameters:
             p._parent_changed(parent)
@@ -600,13 +552,13 @@ class Indexable(Nameable, Observable):
         """
         Helper preventing copy code.
         This adds the given what (transformation, prior etc) to parameter index operations which.
-        revonstrained are reconstrained indices.
+        reconstrained are reconstrained indices.
         warn when reconstraining parameters if warning is True.
         TODO: find out which parameters have changed specifically
         """
         if warning and reconstrained.size > 0:
             # TODO: figure out which parameters have changed and only print those
-            print "WARNING: reconstraining parameters {}".format(self.parameter_names() or self.name)
+            print "WARNING: reconstraining parameters {}".format(self.hierarchy_name() or self.name)
         index = self._raveled_index()
         which.add(what, index)
         return index
@@ -652,7 +604,7 @@ class OptimizationHandlable(Indexable):
         will be set accordingly. It has to be set with an array, retrieved from
         this method, as e.g. fixing will resize the array.
 
-        The optimizer should only interfere with this array, such that transofrmations
+        The optimizer should only interfere with this array, such that transformations
         are secured.
         """
         if self.__dict__.get('_optimizer_copy_', None) is None or self.size != self._optimizer_copy_.size:
@@ -661,12 +613,13 @@ class OptimizationHandlable(Indexable):
         if not self._optimizer_copy_transformed:
             self._optimizer_copy_.flat = self.param_array.flat
             [np.put(self._optimizer_copy_, ind, c.finv(self.param_array[ind])) for c, ind in self.constraints.iteritems() if c != __fixed__]
-            if self.has_parent() and self.constraints[__fixed__].size != 0:
+            if self.has_parent() and (self.constraints[__fixed__].size != 0 or self._has_ties()):
                 fixes = np.ones(self.size).astype(bool)
                 fixes[self.constraints[__fixed__]] = FIXED
-                return self._optimizer_copy_[fixes]
+                return self._optimizer_copy_[np.logical_and(fixes, self._highest_parent_.tie.getTieFlag(self))]
             elif self._has_fixes():
                 return self._optimizer_copy_[self._fixes_]
+
             self._optimizer_copy_transformed = True
 
         return self._optimizer_copy_
@@ -693,41 +646,16 @@ class OptimizationHandlable(Indexable):
             self.param_array.flat[f] = p
             [np.put(self.param_array, ind[f[ind]], c.f(self.param_array.flat[ind[f[ind]]]))
              for c, ind in self.constraints.iteritems() if c != __fixed__]
+        #self._highest_parent_.tie.propagate_val()
 
         self._optimizer_copy_transformed = False
-        self._trigger_params_changed()
+        self.trigger_update()
 
     def _get_params_transformed(self):
         raise DeprecationWarning, "_get|set_params{_optimizer_copy_transformed} is deprecated, use self.optimizer array insetad!"
-#         # transformed parameters (apply un-transformation rules)
-#         p = self.param_array.copy()
-#         [np.put(p, ind, c.finv(p[ind])) for c, ind in self.constraints.iteritems() if c != __fixed__]
-#         if self.has_parent() and self.constraints[__fixed__].size != 0:
-#             fixes = np.ones(self.size).astype(bool)
-#             fixes[self.constraints[__fixed__]] = FIXED
-#             return p[fixes]
-#         elif self._has_fixes():
-#             return p[self._fixes_]
-#         return p
 #
     def _set_params_transformed(self, p):
         raise DeprecationWarning, "_get|set_params{_optimizer_copy_transformed} is deprecated, use self.optimizer array insetad!"
-
-#         """
-#         Set parameters p, but make sure they get transformed before setting.
-#         This means, the optimizer sees p, whereas the model sees transformed(p),
-#         such that, the parameters the model sees are in the right domain.
-#         """
-#         if not(p is self.param_array):
-#             if self.has_parent() and self.constraints[__fixed__].size != 0:
-#                 fixes = np.ones(self.size).astype(bool)
-#                 fixes[self.constraints[__fixed__]] = FIXED
-#                 self.param_array.flat[fixes] = p
-#             elif self._has_fixes(): self.param_array.flat[self._fixes_] = p
-#             else: self.param_array.flat = p
-#         [np.put(self.param_array, ind, c.f(self.param_array.flat[ind]))
-#          for c, ind in self.constraints.iteritems() if c != __fixed__]
-#         self._trigger_params_changed()
 
     def _trigger_params_changed(self, trigger_parent=True):
         """
@@ -736,7 +664,7 @@ class OptimizationHandlable(Indexable):
 
         If trigger_parent is True, we will tell the parent, otherwise not.
         """
-        [p._trigger_params_changed(trigger_parent=False) for p in self.parameters]
+        [p._trigger_params_changed(trigger_parent=False) for p in self.parameters if not p.is_fixed]
         self.notify_observers(None, None if trigger_parent else -np.inf)
 
     def _size_transformed(self):
@@ -751,7 +679,8 @@ class OptimizationHandlable(Indexable):
         Transform the gradients by multiplying the gradient factor for each
         constraint to it.
         """
-        [np.put(g, i, g[i] * c.gradfactor(self.param_array[i])) for c, i in self.constraints.iteritems() if c != __fixed__]
+        self._highest_parent_.tie.collate_gradient()
+        [np.put(g, i, c.gradfactor(self.param_array[i], g[i])) for c, i in self.constraints.iteritems() if c != __fixed__]
         if self._has_fixes(): return g[self._fixes_]
         return g
 
@@ -791,7 +720,7 @@ class OptimizationHandlable(Indexable):
     #===========================================================================
     # Randomizeable
     #===========================================================================
-    def randomize(self, rand_gen=np.random.normal, *args, **kwargs):
+    def randomize(self, rand_gen=None, *args, **kwargs):
         """
         Randomize the model.
         Make this draw from the prior if one exists, else draw from given random generator
@@ -801,11 +730,20 @@ class OptimizationHandlable(Indexable):
         :param float scale: scale parameter for random number generator
         :param args, kwargs: will be passed through to random number generator
         """
+        if rand_gen is None:
+            rand_gen = np.random.normal
         # first take care of all parameters (from N(0,1))
         x = rand_gen(size=self._size_transformed(), *args, **kwargs)
-        # now draw from prior where possible
-        [np.put(x, ind, p.rvs(ind.size)) for p, ind in self.priors.iteritems() if not p is None]
+        updates = self.update_model()
+        self.update_model(False) # Switch off the updates
         self.optimizer_array = x  # makes sure all of the tied parameters get the same init (since there's only one prior object...)
+        # now draw from prior where possible
+        x = self.param_array.copy()
+        [np.put(x, ind, p.rvs(ind.size)) for p, ind in self.priors.iteritems() if not p is None]
+        unfixlist = np.ones((self.size,),dtype=np.bool)
+        unfixlist[self.constraints[__fixed__]] = False
+        self.param_array.flat[unfixlist] = x.view(np.ndarray).ravel()[unfixlist]
+        self.update_model(updates)
 
     #===========================================================================
     # For shared memory arrays. This does nothing in Param, but sets the memory
@@ -854,6 +792,7 @@ class OptimizationHandlable(Indexable):
     def _connect_parameters(self):
         pass
 
+_name_digit = re.compile("(?P<name>.*)_(?P<digit>\d+)$")
 class Parameterizable(OptimizationHandlable):
     """
     A parameterisable class.
@@ -884,9 +823,28 @@ class Parameterizable(OptimizationHandlable):
         !WARNING!: setting the parameter array MUST always be done in memory:
         m.param_array[:] = m_copy.param_array
         """
-        if self.__dict__.get('_param_array_', None) is None:
+        if (self.__dict__.get('_param_array_', None) is None) or (self._param_array_.size != self.size):
             self._param_array_ = np.empty(self.size, dtype=np.float64)
         return self._param_array_
+
+    @property
+    def unfixed_param_array(self):
+        """
+        Array representing the parameters of this class.
+        There is only one copy of all parameters in memory, two during optimization.
+
+        !WARNING!: setting the parameter array MUST always be done in memory:
+        m.param_array[:] = m_copy.param_array
+        """
+        if self.__dict__.get('_param_array_', None) is None:
+            self._param_array_ = np.empty(self.size, dtype=np.float64)
+
+        if self.constraints[__fixed__].size !=0:
+            fixes = np.ones(self.size).astype(bool)
+            fixes[self.constraints[__fixed__]] = FIXED
+            return self._param_array_[fixes]
+        else:
+            return self._param_array_
 
     @param_array.setter
     def param_array(self, arr):
@@ -943,7 +901,7 @@ class Parameterizable(OptimizationHandlable):
     #=========================================================================
     @property
     def gradient(self):
-        if self.__dict__.get('_gradient_array_', None) is None:
+        if (self.__dict__.get('_gradient_array_', None) is None) or self._gradient_array_.size != self.size:
             self._gradient_array_ = np.empty(self.size, dtype=np.float64)
         return self._gradient_array_
 
@@ -960,19 +918,39 @@ class Parameterizable(OptimizationHandlable):
         if ignore_added_names:
             self.__dict__[pname] = param
             return
+
+        def warn_and_retry(param, match=None):
+            #===================================================================
+            # print """
+            # WARNING: added a parameter with formatted name {},
+            # which is already assigned to {}.
+            # Trying to change the parameter name to
+            #
+            # {}.{}
+            # """.format(pname, self.hierarchy_name(), self.hierarchy_name(), param.name + "_")
+            #===================================================================
+            if match is None:
+                param.name += "_1"
+            else:
+                param.name = match.group('name') + "_" + str(int(match.group('digit'))+1)
+            self._add_parameter_name(param, ignore_added_names)
         # and makes sure to not delete programmatically added parameters
-        if pname in self.__dict__:
-            if not (param is self.__dict__[pname]):
-                if pname in self._added_names_:
-                    del self.__dict__[pname]
-                    self._add_parameter_name(param)
-        elif pname not in dir(self):
+        for other in self.parameters[::-1]:
+            if other is not param and other.name.startswith(param.name):
+                warn_and_retry(param, _name_digit.match(other.name))
+                return
+        if pname not in dir(self):
             self.__dict__[pname] = param
             self._added_names_.add(pname)
-        else:
-            print "WARNING: added a parameter with formatted name {}, which is already a member of {} object. Trying to change the parameter name to\n   {}".format(pname, self.__class__, param.name + "_")
-            param.name += "_"
-            self._add_parameter_name(param, ignore_added_names)
+        elif pname in self.__dict__:
+            if pname in self._added_names_:
+                other = self.__dict__[pname]
+                if not (param is other):
+                    del self.__dict__[pname]
+                    self._added_names_.remove(pname)
+                    warn_and_retry(other)
+                    warn_and_retry(param, _name_digit.match(other.name))
+            return
 
     def _remove_parameter_name(self, param=None, pname=None):
         assert param is None or pname is None, "can only delete either param by name, or the name of a param"
@@ -1031,3 +1009,29 @@ class Parameterizable(OptimizationHandlable):
         updates get passed through. See :py:function:``GPy.core.param.Observable.add_observer``
         """
         pass
+
+    def save(self, filename, ftype='HDF5'):
+        """
+        Save all the model parameters into a file (HDF5 by default).
+        """
+        from . import Param
+        from ...util.misc import param_to_array
+        def gather_params(self, plist):
+            if isinstance(self,Param):
+                plist.append(self)
+        plist = []
+        self.traverse(gather_params, plist)
+        names = self.parameter_names(adjust_for_printing=True)
+        if ftype=='HDF5':
+            try:
+                import h5py
+                f = h5py.File(filename,'w')
+                for p,n in zip(plist,names):
+                    n = n.replace('.','_')
+                    p = param_to_array(p)
+                    d = f.create_dataset(n,p.shape,dtype=p.dtype)
+                    d[:] = p
+                f.close()
+            except:
+                raise 'Fails to write the parameters into a HDF5 file!'
+

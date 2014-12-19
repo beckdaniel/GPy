@@ -1,16 +1,23 @@
-# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Copyright (c) 2012-2014, GPy authors (see AUTHORS.txt).
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 """
 Gaussian Processes regression examples
 """
-import pylab as pb
+try:
+    import pylab as pb
+except:
+    pass
 import numpy as np
 import GPy
 
 def olympic_marathon_men(optimize=True, plot=True):
     """Run a standard Gaussian process regression on the Olympic marathon data."""
-    data = GPy.util.datasets.olympic_marathon_men()
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.olympic_marathon_men()
 
     # create simple GP Model
     m = GPy.models.GPRegression(data['X'], data['Y'])
@@ -79,7 +86,11 @@ def epomeo_gpx(max_iters=200, optimize=True, plot=True):
     from the Mount Epomeo runs. Requires gpxpy to be installed on your system
     to load in the data.
     """
-    data = GPy.util.datasets.epomeo_gpx()
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.epomeo_gpx()
     num_data_list = []
     for Xpart in data['X']:
         num_data_list.append(Xpart.shape[0])
@@ -104,9 +115,9 @@ def epomeo_gpx(max_iters=200, optimize=True, plot=True):
     k = k1**k2
 
     m = GPy.models.SparseGPRegression(t, Y, kernel=k, Z=Z, normalize_Y=True)
-    m.constrain_fixed('.*rbf_var', 1.)
-    m.constrain_fixed('iip')
-    m.constrain_bounded('noise_variance', 1e-3, 1e-1)
+    m.constrain_fixed('.*variance', 1.)
+    m.inducing_inputs.constrain_fixed()
+    m.Gaussian_noise.variance.constrain_bounded(1e-3, 1e-1)
     m.optimize(max_iters=max_iters,messages=True)
 
     return m
@@ -122,7 +133,11 @@ def multiple_optima(gene_number=937, resolution=80, model_restarts=10, seed=1000
     length_scales = np.linspace(0.1, 60., resolution)
     log_SNRs = np.linspace(-3., 4., resolution)
 
-    data = GPy.util.datasets.della_gatta_TRP63_gene_expression(data_set='della_gatta',gene_number=gene_number)
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.della_gatta_TRP63_gene_expression(data_set='della_gatta',gene_number=gene_number)
     # data['Y'] = data['Y'][0::2, :]
     # data['X'] = data['X'][0::2, :]
 
@@ -148,16 +163,16 @@ def multiple_optima(gene_number=937, resolution=80, model_restarts=10, seed=1000
         kern = GPy.kern.RBF(1, variance=np.random.uniform(1e-3, 1), lengthscale=np.random.uniform(5, 50))
 
         m = GPy.models.GPRegression(data['X'], data['Y'], kernel=kern)
-        m['noise_variance'] = np.random.uniform(1e-3, 1)
-        optim_point_x[0] = m['rbf_lengthscale']
-        optim_point_y[0] = np.log10(m['rbf_variance']) - np.log10(m['noise_variance']);
+        m.likelihood.variance = np.random.uniform(1e-3, 1)
+        optim_point_x[0] = m.rbf.lengthscale
+        optim_point_y[0] = np.log10(m.rbf.variance) - np.log10(m.likelihood.variance);
 
         # optimize
         if optimize:
             m.optimize('scg', xtol=1e-6, ftol=1e-6, max_iters=max_iters)
 
-        optim_point_x[1] = m['rbf_lengthscale']
-        optim_point_y[1] = np.log10(m['rbf_variance']) - np.log10(m['noise_variance']);
+        optim_point_x[1] = m.rbf.lengthscale
+        optim_point_y[1] = np.log10(m.rbf.variance) - np.log10(m.likelihood.variance);
 
         if plot:
             pb.arrow(optim_point_x[0], optim_point_y[0], optim_point_x[1] - optim_point_x[0], optim_point_y[1] - optim_point_y[0], label=str(i), head_length=1, head_width=0.5, fc='k', ec='k')
@@ -188,7 +203,7 @@ def _contour_data(data, length_scales, log_SNRs, kernel_call=GPy.kern.RBF):
         noise_var = total_var / (1. + SNR)
         signal_var = total_var - noise_var
         model.kern['.*variance'] = signal_var
-        model['noise_variance'] = noise_var
+        model.likelihood.variance = noise_var
         length_scale_lls = []
 
         for length_scale in length_scales:
@@ -202,13 +217,17 @@ def _contour_data(data, length_scales, log_SNRs, kernel_call=GPy.kern.RBF):
 
 def olympic_100m_men(optimize=True, plot=True):
     """Run a standard Gaussian process regression on the Rogers and Girolami olympics data."""
-    data = GPy.util.datasets.olympic_100m_men()
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.olympic_100m_men()
 
     # create simple GP Model
     m = GPy.models.GPRegression(data['X'], data['Y'])
 
     # set the lengthscale to be something sensible (defaults to 1)
-    m['rbf_lengthscale'] = 10
+    m.rbf.lengthscale = 10
 
     if optimize:
         m.optimize('bfgs', max_iters=200)
@@ -219,7 +238,11 @@ def olympic_100m_men(optimize=True, plot=True):
 
 def toy_rbf_1d(optimize=True, plot=True):
     """Run a simple demonstration of a standard Gaussian process fitting it to data sampled from an RBF covariance."""
-    data = GPy.util.datasets.toy_rbf_1d()
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.toy_rbf_1d()
 
     # create simple GP Model
     m = GPy.models.GPRegression(data['X'], data['Y'])
@@ -233,7 +256,11 @@ def toy_rbf_1d(optimize=True, plot=True):
 
 def toy_rbf_1d_50(optimize=True, plot=True):
     """Run a simple demonstration of a standard Gaussian process fitting it to data sampled from an RBF covariance."""
-    data = GPy.util.datasets.toy_rbf_1d_50()
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.toy_rbf_1d_50()
 
     # create simple GP Model
     m = GPy.models.GPRegression(data['X'], data['Y'])
@@ -300,12 +327,11 @@ def toy_ARD(max_iters=1000, kernel_type='linear', num_samples=300, D=4, optimize
     # m.set_prior('.*lengthscale',len_prior)
 
     if optimize:
-        m.optimize(optimizer='scg', max_iters=max_iters, messages=1)
+        m.optimize(optimizer='scg', max_iters=max_iters)
 
     if plot:
         m.kern.plot_ARD()
 
-    print m
     return m
 
 def toy_ARD_sparse(max_iters=1000, kernel_type='linear', num_samples=300, D=4, optimize=True, plot=True):
@@ -340,24 +366,27 @@ def toy_ARD_sparse(max_iters=1000, kernel_type='linear', num_samples=300, D=4, o
     # m.set_prior('.*lengthscale',len_prior)
 
     if optimize:
-        m.optimize(optimizer='scg', max_iters=max_iters, messages=1)
+        m.optimize(optimizer='scg', max_iters=max_iters)
 
     if plot:
         m.kern.plot_ARD()
 
-    print m
     return m
 
 def robot_wireless(max_iters=100, kernel=None, optimize=True, plot=True):
     """Predict the location of a robot given wirelss signal strength readings."""
-    data = GPy.util.datasets.robot_wireless()
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.robot_wireless()
 
     # create simple GP Model
     m = GPy.models.GPRegression(data['Y'], data['X'], kernel=kernel)
 
     # optimize
     if optimize:
-        m.optimize(messages=True, max_iters=max_iters)
+        m.optimize(max_iters=max_iters)
 
     Xpredict = m.predict(data['Ytest'])[0]
     if plot:
@@ -369,13 +398,16 @@ def robot_wireless(max_iters=100, kernel=None, optimize=True, plot=True):
 
     sse = ((data['Xtest'] - Xpredict)**2).sum()
 
-    print m
     print('Sum of squares error on test data: ' + str(sse))
     return m
 
 def silhouette(max_iters=100, optimize=True, plot=True):
     """Predict the pose of a figure given a silhouette. This is a task from Agarwal and Triggs 2004 ICML paper."""
-    data = GPy.util.datasets.silhouette()
+    try:import pods
+    except ImportError:
+        print 'pods unavailable, see https://github.com/sods/ods for example datasets'
+        return
+    data = pods.datasets.silhouette()
 
     # create simple GP Model
     m = GPy.models.GPRegression(data['X'], data['Y'])
@@ -387,7 +419,7 @@ def silhouette(max_iters=100, optimize=True, plot=True):
     print m
     return m
 
-def sparse_GP_regression_1D(num_samples=400, num_inducing=5, max_iters=100, optimize=True, plot=True):
+def sparse_GP_regression_1D(num_samples=400, num_inducing=5, max_iters=100, optimize=True, plot=True, checkgrad=False):
     """Run a 1D example of a sparse GP regression."""
     # sample inputs and outputs
     X = np.random.uniform(-3., 3., (num_samples, 1))
@@ -396,10 +428,12 @@ def sparse_GP_regression_1D(num_samples=400, num_inducing=5, max_iters=100, opti
     rbf = GPy.kern.RBF(1)
     # create simple GP Model
     m = GPy.models.SparseGPRegression(X, Y, kernel=rbf, num_inducing=num_inducing)
-    m.checkgrad(verbose=1)
+
+    if checkgrad:
+        m.checkgrad()
 
     if optimize:
-        m.optimize('tnc', messages=1, max_iters=max_iters)
+        m.optimize('tnc', max_iters=max_iters)
 
     if plot:
         m.plot()
@@ -450,7 +484,7 @@ def uncertain_inputs_sparse_regression(max_iters=200, optimize=True, plot=True):
 
     k = GPy.kern.RBF(1)
     # create simple GP Model - no input uncertainty on this one
-    m = GPy.models.SparseGPRegression(X, Y, kernel=GPy.kern.RBF(1), Z=Z)
+    m = GPy.models.SparseGPRegression(X, Y, kernel=k, Z=Z)
 
     if optimize:
         m.optimize('scg', messages=1, max_iters=max_iters)

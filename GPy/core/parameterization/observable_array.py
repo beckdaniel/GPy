@@ -1,10 +1,10 @@
-# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Copyright (c) 2014, Max Zwiessele
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
-__updated__ = '2014-05-12'
 
 import numpy as np
-from parameter_core import Observable, Pickleable
+from parameter_core import Pickleable
+from observable import Observable
 
 class ObsAr(np.ndarray, Pickleable, Observable):
     """
@@ -39,6 +39,10 @@ class ObsAr(np.ndarray, Pickleable, Observable):
     def _setup_observers(self):
         # do not setup anything, as observable arrays do not have default observers
         pass
+
+    @property
+    def values(self):
+        return self.view(np.ndarray)
 
     def copy(self):
         from lists_and_dicts import ObserverList

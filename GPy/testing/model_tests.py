@@ -19,9 +19,10 @@ class MiscTests(unittest.TestCase):
         k = GPy.kern.RBF(1)
         m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
         m.randomize()
-        Kinv = np.linalg.pinv(k.K(self.X) + np.eye(self.N)*m.Gaussian_noise.variance)
+        m.likelihood.variance = .5
+        Kinv = np.linalg.pinv(k.K(self.X) + np.eye(self.N) * m.likelihood.variance)
         K_hat = k.K(self.X_new) - k.K(self.X_new, self.X).dot(Kinv).dot(k.K(self.X, self.X_new))
-        mu_hat = k.K(self.X_new, self.X).dot(Kinv).dot(self.Y)
+        mu_hat = k.K(self.X_new, self.X).dot(Kinv).dot(m.Y_normalized)
 
         mu, covar = m._raw_predict(self.X_new, full_cov=True)
         self.assertEquals(mu.shape, (self.N_new, self.D))
@@ -42,7 +43,7 @@ class MiscTests(unittest.TestCase):
         Z = m.Z[:]
         X = self.X[:]
 
-        #Not easy to check if woodbury_inv is correct in itself as it requires a large derivation and expression
+        # Not easy to check if woodbury_inv is correct in itself as it requires a large derivation and expression
         Kinv = m.posterior.woodbury_inv
         K_hat = k.K(self.X_new) - k.K(self.X_new, Z).dot(Kinv).dot(k.K(Z, self.X_new))
 
@@ -50,13 +51,13 @@ class MiscTests(unittest.TestCase):
         self.assertEquals(mu.shape, (self.N_new, self.D))
         self.assertEquals(covar.shape, (self.N_new, self.N_new))
         np.testing.assert_almost_equal(K_hat, covar)
-        #np.testing.assert_almost_equal(mu_hat, mu)
+        # np.testing.assert_almost_equal(mu_hat, mu)
 
         mu, var = m._raw_predict(self.X_new)
         self.assertEquals(mu.shape, (self.N_new, self.D))
         self.assertEquals(var.shape, (self.N_new, 1))
         np.testing.assert_almost_equal(np.diag(K_hat)[:, None], var)
-        #np.testing.assert_almost_equal(mu_hat, mu)
+        # np.testing.assert_almost_equal(mu_hat, mu)
 
     def test_likelihood_replicate(self):
         m = GPy.models.GPRegression(self.X, self.Y)
@@ -64,28 +65,28 @@ class MiscTests(unittest.TestCase):
         np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
         m.randomize()
         m2[:] = m[''].values()
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
         m.randomize()
         m2[''] = m[:]
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
         m.randomize()
         m2[:] = m[:]
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
         m.randomize()
         m2[''] = m['']
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
 
         m.kern.lengthscale.randomize()
         m2[:] = m[:]
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
 
         m.Gaussian_noise.randomize()
         m2[:] = m[:]
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
 
         m['.*var'] = 2
         m2['.*var'] = m['.*var']
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
 
 
     def test_likelihood_set(self):
@@ -109,22 +110,45 @@ class MiscTests(unittest.TestCase):
         m2.kern.lengthscale = m.kern['.*lengthscale']
         np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
 
+    def test_missing_data(self):
+        from GPy import kern
+        from GPy.models.bayesian_gplvm_minibatch import BayesianGPLVMMiniBatch
+        from GPy.examples.dimensionality_reduction import _simulate_matern
+
+        D1, D2, D3, N, num_inducing, Q = 13, 5, 8, 400, 3, 4
+        _, _, Ylist = _simulate_matern(D1, D2, D3, N, num_inducing, False)
+        Y = Ylist[0]
+
+        inan = np.random.binomial(1, .9, size=Y.shape).astype(bool) # 80% missing data
+        Ymissing = Y.copy()
+        Ymissing[inan] = np.nan
+
+        k = kern.Linear(Q, ARD=True) + kern.White(Q, np.exp(-2)) # + kern.bias(Q)
+        m = BayesianGPLVMMiniBatch(Ymissing, Q, init="random", num_inducing=num_inducing,
+                          kernel=k, missing_data=True)
+        assert(m.checkgrad())
+
+        k = kern.RBF(Q, ARD=True) + kern.White(Q, np.exp(-2)) # + kern.bias(Q)
+        m = BayesianGPLVMMiniBatch(Ymissing, Q, init="random", num_inducing=num_inducing,
+                          kernel=k, missing_data=True)
+        assert(m.checkgrad())
+
     def test_likelihood_replicate_kern(self):
         m = GPy.models.GPRegression(self.X, self.Y)
         m2 = GPy.models.GPRegression(self.X, self.Y)
         np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
         m.kern.randomize()
         m2.kern[''] = m.kern[:]
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
         m.kern.randomize()
         m2.kern[:] = m.kern[:]
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
         m.kern.randomize()
         m2.kern[''] = m.kern['']
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
         m.kern.randomize()
         m2.kern[:] = m.kern[''].values()
-        np.testing.assert_equal(m.log_likelihood(), m2.log_likelihood())
+        np.testing.assert_almost_equal(m.log_likelihood(), m2.log_likelihood())
 
     def test_big_model(self):
         m = GPy.examples.dimensionality_reduction.mrd_simulation(optimize=0, plot=0, plot_sim=0)
@@ -157,7 +181,7 @@ class MiscTests(unittest.TestCase):
     def test_model_optimize(self):
         X = np.random.uniform(-3., 3., (20, 1))
         Y = np.sin(X) + np.random.randn(20, 1) * 0.05
-        m = GPy.models.GPRegression(X,Y)
+        m = GPy.models.GPRegression(X, Y)
         m.optimize()
         print m
 
@@ -218,8 +242,8 @@ class GradientTests(np.testing.TestCase):
         mlp = GPy.kern.MLP(1)
         self.check_model(mlp, model_type='GPRegression', dimension=1)
 
-    #TODO:
-    #def test_GPRegression_poly_1d(self):
+    # TODO:
+    # def test_GPRegression_poly_1d(self):
     #    ''' Testing the GP regression with polynomial kernel with white kernel on 1d data '''
     #    mlp = GPy.kern.Poly(1, degree=5)
     #    self.check_model(mlp, model_type='GPRegression', dimension=1)
@@ -353,17 +377,14 @@ class GradientTests(np.testing.TestCase):
         m = GPy.models.GPLVM(Y, input_dim, init='PCA', kernel=k)
         self.assertTrue(m.checkgrad())
 
-    @unittest.expectedFailure
     def test_GP_EP_probit(self):
         N = 20
         X = np.hstack([np.random.normal(5, 2, N / 2), np.random.normal(10, 2, N / 2)])[:, None]
         Y = np.hstack([np.ones(N / 2), np.zeros(N / 2)])[:, None]
         kernel = GPy.kern.RBF(1)
         m = GPy.models.GPClassification(X, Y, kernel=kernel)
-        m.update_likelihood_approximation()
         self.assertTrue(m.checkgrad())
 
-    @unittest.expectedFailure
     def test_sparse_EP_DTC_probit(self):
         N = 20
         X = np.hstack([np.random.normal(5, 2, N / 2), np.random.normal(10, 2, N / 2)])[:, None]
@@ -375,7 +396,6 @@ class GradientTests(np.testing.TestCase):
         # likelihood = GPy.likelihoods.EP(Y, distribution)
         # m = GPy.core.SparseGP(X, likelihood, kernel, Z)
         # m.ensure_default_constraints()
-        m.update_likelihood_approximation()
         self.assertTrue(m.checkgrad())
 
     @unittest.expectedFailure
@@ -388,7 +408,8 @@ class GradientTests(np.testing.TestCase):
         m.update_likelihood_approximation()
         self.assertTrue(m.checkgrad())
 
-    def multioutput_regression_1D(self):
+    @unittest.expectedFailure
+    def test_multioutput_regression_1D(self):
         X1 = np.random.rand(50, 1) * 8
         X2 = np.random.rand(30, 1) * 5
         X = np.vstack((X1, X2))
@@ -398,10 +419,12 @@ class GradientTests(np.testing.TestCase):
 
         k1 = GPy.kern.RBF(1)
         m = GPy.models.GPMultioutputRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel_list=[k1])
+        import ipdb;ipdb.set_trace()
         m.constrain_fixed('.*rbf_var', 1.)
         self.assertTrue(m.checkgrad())
 
-    def multioutput_sparse_regression_1D(self):
+    @unittest.expectedFailure
+    def test_multioutput_sparse_regression_1D(self):
         X1 = np.random.rand(500, 1) * 8
         X2 = np.random.rand(300, 1) * 5
         X = np.vstack((X1, X2))
@@ -416,11 +439,68 @@ class GradientTests(np.testing.TestCase):
 
     def test_gp_heteroscedastic_regression(self):
         num_obs = 25
-        X = np.random.randint(0,140,num_obs)
-        X = X[:,None]
-        Y = 25. + np.sin(X/20.) * 2. + np.random.rand(num_obs)[:,None]
+        X = np.random.randint(0, 140, num_obs)
+        X = X[:, None]
+        Y = 25. + np.sin(X / 20.) * 2. + np.random.rand(num_obs)[:, None]
         kern = GPy.kern.Bias(1) + GPy.kern.RBF(1)
-        m = GPy.models.GPHeteroscedasticRegression(X,Y,kern)
+        m = GPy.models.GPHeteroscedasticRegression(X, Y, kern)
+        self.assertTrue(m.checkgrad())
+
+    def test_sparse_gp_heteroscedastic_regression(self):
+        num_obs = 25
+        X = np.random.randint(0, 140, num_obs)
+        X = X[:, None]
+        Y = 25. + np.sin(X / 20.) * 2. + np.random.rand(num_obs)[:, None]
+        kern = GPy.kern.Bias(1) + GPy.kern.RBF(1)
+        Y_metadata = {'output_index':np.arange(num_obs)[:,None]}
+        noise_terms = np.unique(Y_metadata['output_index'].flatten())
+        likelihoods_list = [GPy.likelihoods.Gaussian(name="Gaussian_noise_%s" %j) for j in noise_terms]
+        likelihood = GPy.likelihoods.MixedNoise(likelihoods_list=likelihoods_list)
+        m = GPy.core.SparseGP(X, Y, X[np.random.choice(num_obs, 10)],
+                              kern, likelihood,
+                              GPy.inference.latent_function_inference.VarDTC(),
+                              Y_metadata=Y_metadata)
+        self.assertTrue(m.checkgrad())
+
+    def test_gp_kronecker_gaussian(self):
+        N1, N2 = 30, 20
+        X1 = np.random.randn(N1, 1)
+        X2 = np.random.randn(N2, 1)
+        X1.sort(0); X2.sort(0)
+        k1 = GPy.kern.RBF(1)  # + GPy.kern.White(1)
+        k2 = GPy.kern.RBF(1)  # + GPy.kern.White(1)
+        Y = np.random.randn(N1, N2)
+        Y = Y - Y.mean(0)
+        Y = Y / Y.std(0)
+        m = GPy.models.GPKroneckerGaussianRegression(X1, X2, Y, k1, k2)
+
+        # build the model the dumb way
+        assert (N1 * N2 < 1000), "too much data for standard GPs!"
+        yy, xx = np.meshgrid(X2, X1)
+        Xgrid = np.vstack((xx.flatten(order='F'), yy.flatten(order='F'))).T
+        kg = GPy.kern.RBF(1, active_dims=[0]) * GPy.kern.RBF(1, active_dims=[1])
+        mm = GPy.models.GPRegression(Xgrid, Y.reshape(-1, 1, order='F'), kernel=kg)
+
+        m.randomize()
+        mm[:] = m[:]
+        assert np.allclose(m.log_likelihood(), mm.log_likelihood())
+        assert np.allclose(m.gradient, mm.gradient)
+        X1test = np.random.randn(100, 1)
+        X2test = np.random.randn(100, 1)
+        mean1, var1 = m.predict(X1test, X2test)
+        yy, xx = np.meshgrid(X2test, X1test)
+        Xgrid = np.vstack((xx.flatten(order='F'), yy.flatten(order='F'))).T
+        mean2, var2 = mm.predict(Xgrid)
+        assert np.allclose(mean1, mean2)
+        assert np.allclose(var1, var2)
+
+    def test_gp_VGPC(self):
+        num_obs = 25
+        X = np.random.randint(0, 140, num_obs)
+        X = X[:, None]
+        Y = 25. + np.sin(X / 20.) * 2. + np.random.rand(num_obs)[:, None]
+        kern = GPy.kern.Bias(1) + GPy.kern.RBF(1)
+        m = GPy.models.GPVariationalGaussianApproximation(X, Y, kern)
         self.assertTrue(m.checkgrad())
 
 

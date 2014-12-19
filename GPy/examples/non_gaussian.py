@@ -1,7 +1,13 @@
+# Copyright (c) 2014, Alan Saul
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
+
 import GPy
 import numpy as np
-import matplotlib.pyplot as plt
 from GPy.util import datasets
+try:
+    import matplotlib.pyplot as plt
+except:
+    pass
 
 def student_t_approx(optimize=True, plot=True):
     """
@@ -56,7 +62,7 @@ def student_t_approx(optimize=True, plot=True):
     t_distribution = GPy.likelihoods.StudentT(deg_free=deg_free, sigma2=edited_real_sd)
     laplace_inf = GPy.inference.latent_function_inference.Laplace()
     m3 = GPy.core.GP(X, Y.copy(), kernel3, likelihood=t_distribution, inference_method=laplace_inf)
-    m3['.*t_noise'].constrain_bounded(1e-6, 10.)
+    m3['.*t_scale2'].constrain_bounded(1e-6, 10.)
     m3['.*white'].constrain_fixed(1e-5)
     m3.randomize()
 
@@ -64,7 +70,7 @@ def student_t_approx(optimize=True, plot=True):
     t_distribution = GPy.likelihoods.StudentT(deg_free=deg_free, sigma2=edited_real_sd)
     laplace_inf = GPy.inference.latent_function_inference.Laplace()
     m4 = GPy.core.GP(X, Yc.copy(), kernel4, likelihood=t_distribution, inference_method=laplace_inf)
-    m4['.*t_noise'].constrain_bounded(1e-6, 10.)
+    m4['.*t_scale2'].constrain_bounded(1e-6, 10.)
     m4['.*white'].constrain_fixed(1e-5)
     m4.randomize()
     print m4
@@ -121,6 +127,7 @@ def student_t_approx(optimize=True, plot=True):
     return m1, m2, m3, m4
 
 def boston_example(optimize=True, plot=True):
+    raise NotImplementedError("Needs updating")
     import sklearn
     from sklearn.cross_validation import KFold
     optimizer='bfgs'
@@ -149,8 +156,8 @@ def boston_example(optimize=True, plot=True):
         noise = 1e-1 #np.exp(-2)
         rbf_len = 0.5
         data_axis_plot = 4
-        kernelstu = GPy.kern.rbf(X.shape[1]) + GPy.kern.white(X.shape[1]) + GPy.kern.bias(X.shape[1])
-        kernelgp = GPy.kern.rbf(X.shape[1]) + GPy.kern.white(X.shape[1]) + GPy.kern.bias(X.shape[1])
+        kernelstu = GPy.kern.RBF(X.shape[1]) + GPy.kern.white(X.shape[1]) + GPy.kern.bias(X.shape[1])
+        kernelgp = GPy.kern.RBF(X.shape[1]) + GPy.kern.white(X.shape[1]) + GPy.kern.bias(X.shape[1])
 
         #Baseline
         score_folds[0, n] = rmse(Y_test, np.mean(Y_train))
@@ -159,8 +166,8 @@ def boston_example(optimize=True, plot=True):
         print "Gauss GP"
         mgp = GPy.models.GPRegression(X_train.copy(), Y_train.copy(), kernel=kernelgp.copy())
         mgp.constrain_fixed('.*white', 1e-5)
-        mgp['rbf_len'] = rbf_len
-        mgp['noise'] = noise
+        mgp['.*len'] = rbf_len
+        mgp['.*noise'] = noise
         print mgp
         if optimize:
             mgp.optimize(optimizer=optimizer, messages=messages)
@@ -195,9 +202,9 @@ def boston_example(optimize=True, plot=True):
             stu_t_likelihood = GPy.likelihoods.Laplace(Y_train.copy(), t_distribution)
             mstu_t = GPy.models.GPRegression(X_train.copy(), Y_train.copy(), kernel=kernelstu.copy(), likelihood=stu_t_likelihood)
             mstu_t.constrain_fixed('.*white', 1e-5)
-            mstu_t.constrain_bounded('.*t_noise', 0.0001, 1000)
+            mstu_t.constrain_bounded('.*t_scale2', 0.0001, 1000)
             mstu_t['rbf_len'] = rbf_len
-            mstu_t['.*t_noise'] = noise
+            mstu_t['.*t_scale2'] = noise
             print mstu_t
             if optimize:
                 mstu_t.optimize(optimizer=optimizer, messages=messages)

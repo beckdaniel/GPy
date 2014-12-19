@@ -1,4 +1,4 @@
-# Copyright (c) 2013, 2014 GPy authors (see AUTHORS.txt).
+# Copyright (c) 2013, 2014 Alan Saul
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 #
 #Parts of this file were influenced by the Matlab GPML framework written by
@@ -12,9 +12,11 @@
 
 import numpy as np
 from ...util.linalg import mdot, jitchol, dpotrs, dtrtrs, dpotri, symmetrify, pdinv
-from ...util.misc import param_to_array
 from posterior import Posterior
 import warnings
+def warning_on_one_line(message, category, filename, lineno, file=None, line=None):
+    return ' %s:%s: %s:%s\n' % (filename, lineno, category.__name__, message)
+warnings.formatwarning = warning_on_one_line
 from scipy import optimize
 from . import LatentFunctionInference
 
@@ -30,8 +32,11 @@ class Laplace(LatentFunctionInference):
         """
 
         self._mode_finding_tolerance = 1e-7
-        self._mode_finding_max_iter = 40
-        self.bad_fhat = True
+        self._mode_finding_max_iter = 60
+        self.bad_fhat = False
+        #Store whether it is the first run of the inference so that we can choose whether we need
+        #to calculate things or reuse old variables
+        self.first_run = True
         self._previous_Ki_fhat = None
 
     def inference(self, kern, X, likelihood, Y, Y_metadata=None):
@@ -39,15 +44,13 @@ class Laplace(LatentFunctionInference):
         Returns a Posterior class containing essential quantities of the posterior
         """
 
-        #make Y a normal array!
-        Y = param_to_array(Y)
-
         # Compute K
         K = kern.K(X)
 
         #Find mode
-        if self.bad_fhat:
+        if self.bad_fhat or self.first_run:
             Ki_f_init = np.zeros_like(Y)
+            first_run = False
         else:
             Ki_f_init = self._previous_Ki_fhat
 
@@ -86,7 +89,7 @@ class Laplace(LatentFunctionInference):
 
         #define the objective function (to be maximised)
         def obj(Ki_f, f):
-            return -0.5*np.dot(Ki_f.flatten(), f.flatten()) + likelihood.logpdf(f, Y, Y_metadata=Y_metadata)
+            return -0.5*np.dot(Ki_f.flatten(), f.flatten()) + np.sum(likelihood.logpdf(f, Y, Y_metadata=Y_metadata))
 
         difference = np.inf
         iteration = 0
@@ -127,11 +130,11 @@ class Laplace(LatentFunctionInference):
         #Warn of bad fits
         if difference > self._mode_finding_tolerance:
             if not self.bad_fhat:
-                warnings.warn("Not perfect f_hat fit difference: {}".format(difference))
+                warnings.warn("Not perfect mode found (f_hat). difference: {}, iteration: {} out of max {}".format(difference, iteration, self._mode_finding_max_iter))
             self.bad_fhat = True
         elif self.bad_fhat:
             self.bad_fhat = False
-            warnings.warn("f_hat now fine again")
+            warnings.warn("f_hat now fine again. difference: {}, iteration: {} out of max {}".format(difference, iteration, self._mode_finding_max_iter))
 
         return f, Ki_f
 
@@ -153,10 +156,10 @@ class Laplace(LatentFunctionInference):
 
         #compute vital matrices
         C = np.dot(LiW12, K)
-        Ki_W_i  = K - C.T.dot(C) 
+        Ki_W_i  = K - C.T.dot(C)
 
         #compute the log marginal
-        log_marginal = -0.5*np.dot(Ki_f.flatten(), f_hat.flatten()) + likelihood.logpdf(f_hat, Y, Y_metadata=Y_metadata) - np.sum(np.log(np.diag(L)))
+        log_marginal = -0.5*np.dot(Ki_f.flatten(), f_hat.flatten()) + np.sum(likelihood.logpdf(f_hat, Y, Y_metadata=Y_metadata)) - np.sum(np.log(np.diag(L)))
 
         # Compute matrices for derivatives
         dW_df = -likelihood.d3logpdf_df3(f_hat, Y, Y_metadata=Y_metadata) # -d3lik_d3fhat

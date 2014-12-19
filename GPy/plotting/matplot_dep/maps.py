@@ -1,12 +1,15 @@
+# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
 import numpy as np
-import pylab as pb
-import matplotlib.patches as patches
-from matplotlib.patches import Polygon
-from matplotlib.collections import PatchCollection
-#from matplotlib import cm
+try:
+    import pylab as pb
+    from matplotlib.patches import Polygon
+    from matplotlib.collections import PatchCollection
+    #from matplotlib import cm
+    pb.ion()
+except:
+    pass
 import re
-
-pb.ion()
 
 def plot(shape_records,facecolor='w',edgecolor='k',linewidths=.5, ax=None,xlims=None,ylims=None):
     """

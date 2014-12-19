@@ -1,4 +1,4 @@
-# Copyright (c) 2012, GPy authors (see AUTHORS.txt).
+# Copyright (c) 2014, Max Zwiessele
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import itertools
@@ -49,11 +49,13 @@ class Param(Parameterizable, ObsAr):
         obj._realshape_ = obj.shape
         obj._realsize_ = obj.size
         obj._realndim_ = obj.ndim
-        obj._original_ = True
+        obj._original_ = obj
         return obj
 
     def __init__(self, name, input_array, default_constraint=None, *a, **kw):
+        self._in_init_ = True
         super(Param, self).__init__(name=name, default_constraint=default_constraint, *a, **kw)
+        self._in_init_ = False
 
     def build_pydot(self,G):
         import pydot
@@ -124,10 +126,10 @@ class Param(Parameterizable, ObsAr):
         #if not reduce(lambda a, b: a or numpy.any(b is Ellipsis), s, False) and len(s) <= self.ndim:
         #    s += (Ellipsis,)
         new_arr = super(Param, self).__getitem__(s, *args, **kwargs)
-        try: 
+        try:
             new_arr._current_slice_ = s
             new_arr._gradient_array_ = self.gradient[s]
-            new_arr._original_ = self.base is new_arr.base
+            new_arr._original_ = self._original_
         except AttributeError: pass  # returning 0d array or float, double etc
         return new_arr
 
@@ -143,31 +145,6 @@ class Param(Parameterizable, ObsAr):
         return self._raveled_index()
 
     #===========================================================================
-    # Index recreation
-    #===========================================================================
-    def _expand_index(self, slice_index=None):
-        # this calculates the full indexing arrays from the slicing objects given by get_item for _real..._ attributes
-        # it basically translates slices to their respective index arrays and turns negative indices around
-        # it tells you in the second return argument if it has only seen arrays as indices
-        if slice_index is None:
-            slice_index = self._current_slice_
-        def f(a):
-            a, b = a
-            if isinstance(a, numpy.ndarray) and a.dtype == bool:
-                raise ValueError, "Boolean indexing not implemented, use Param[np.where(index)] to index by boolean arrays!"
-            if a not in (slice(None), Ellipsis):
-                if isinstance(a, slice):
-                    start, stop, step = a.indices(b)
-                    return numpy.r_[start:stop:step]
-                elif isinstance(a, (list, numpy.ndarray, tuple)):
-                    a = numpy.asarray(a, dtype=int)
-                    a[a < 0] = b + a[a < 0]
-                elif a < 0:
-                    a = b + a
-                return numpy.r_[a]
-            return numpy.r_[:b]
-        return itertools.imap(f, itertools.izip_longest(slice_index[:self._realndim_], self._realshape_, fillvalue=slice(self.size)))
-    #===========================================================================
     # Constrainable
     #===========================================================================
     def _ensure_fixes(self):
@@ -182,29 +159,29 @@ class Param(Parameterizable, ObsAr):
         return self.constraints[__fixed__].size == self.size
 
     def _get_original(self, param):
-        return self
+        return self._original_
 
     #===========================================================================
     # Pickling and copying
     #===========================================================================
     def copy(self):
         return Parameterizable.copy(self, which=self)
-    
+
     def __deepcopy__(self, memo):
         s = self.__new__(self.__class__, name=self.name, input_array=self.view(numpy.ndarray).copy())
-        memo[id(self)] = s        
+        memo[id(self)] = s
         import copy
         Pickleable.__setstate__(s, copy.deepcopy(self.__getstate__(), memo))
         return s
     def _setup_observers(self):
         """
         Setup the default observers
-        
+
         1: pass through to parent, if present
         """
         if self.has_parent():
             self.add_observer(self._parent_, self._parent_._pass_through_notify_observers, -np.inf)
-    
+
     #===========================================================================
     # Printing -> done
     #===========================================================================
@@ -246,21 +223,14 @@ class Param(Parameterizable, ObsAr):
         # get a int-array containing all indices in the first axis.
         if slice_index is None:
             slice_index = self._current_slice_
-        if isinstance(slice_index, (tuple, list)):
-            clean_curr_slice = [s for s in slice_index if numpy.any(s != Ellipsis)]
-            for i in range(self._realndim_-len(clean_curr_slice)):
-                i+=1
-                clean_curr_slice += [range(self._realshape_[i])]
-            if (all(isinstance(n, (numpy.ndarray, list, tuple)) for n in clean_curr_slice)
-                and len(set(map(len, clean_curr_slice))) <= 1):
-                return numpy.fromiter(itertools.izip(*clean_curr_slice),
-                    dtype=[('', int)] * self._realndim_, count=len(clean_curr_slice[0])).view((int, self._realndim_))
         try:
-            expanded_index = list(self._expand_index(slice_index))
-            indices = numpy.fromiter(itertools.product(*expanded_index),
-                 dtype=[('', int)] * self._realndim_, count=reduce(lambda a, b: a * b.size, expanded_index, 1)).view((int, self._realndim_))
+            indices = np.indices(self._realshape_, dtype=int)
+            indices = indices[(slice(None),)+slice_index]
+            indices = np.rollaxis(indices, 0, indices.ndim).reshape(-1,self._realndim_)
+            #print indices_
+            #if not np.all(indices==indices__):
+            #    import ipdb; ipdb.set_trace()
         except:
-            print "Warning: extended indexing was used"
             indices = np.indices(self._realshape_, dtype=int)
             indices = indices[(slice(None),)+slice_index]
             indices = np.rollaxis(indices, 0, indices.ndim)
@@ -281,6 +251,35 @@ class Param(Parameterizable, ObsAr):
         if ind.size > 4: indstr = ','.join(map(str, ind[:2])) + "..." + ','.join(map(str, ind[-2:]))
         else: indstr = ','.join(map(str, ind))
         return name + '[' + indstr + ']'
+
+    def _repr_html_(self, constr_matrix=None, indices=None, prirs=None, ties=None):
+        """Representation of the parameter in html for notebook display."""
+        filter_ = self._current_slice_
+        vals = self.flat
+        if indices is None: indices = self._indices(filter_)
+        ravi = self._raveled_index(filter_)
+        if constr_matrix is None: constr_matrix = self.constraints.properties_for(ravi)
+        if prirs is None: prirs = self.priors.properties_for(ravi)
+        if ties is None: ties = self._ties_for(ravi)
+        ties = [' '.join(map(lambda x: x, t)) for t in ties]
+        header_format = """
+<tr>
+  <th><b>{i}</b></th>
+  <th><b>{x}</b></th>
+  <th><b>{c}</b></th>
+  <th><b>{p}</b></th>
+  <th><b>{t}</b></th>
+</tr>"""
+        header = header_format.format(x=self.hierarchy_name(), c=__constraints_name__, i=__index_name__, t=__tie_name__, p=__priors_name__)  # nice header for printing
+        if not ties: ties = itertools.cycle([''])
+        return "\n".join(["""<style type="text/css">
+.tg  {border-collapse:collapse;border-spacing:0;border-color:#999;}
+.tg td{font-family:Arial, sans-serif;font-size:14px;padding:2px 3px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#999;color:#444;background-color:#F7FDFA;}
+.tg th{font-family:Arial, sans-serif;font-size:14px;font-weight:normal;padding:2px 3px;border-style:solid;border-width:1px;overflow:hidden;word-break:normal;border-color:#999;color:#fff;background-color:#26ADE4;}
+.tg .tg-left{font-family:"Courier New", Courier, monospace !important;;text-align:left}
+.tg .tg-right{font-family:"Courier New", Courier, monospace !important;;text-align:right}
+</style>"""] + ['<table class="tg">'] + [header] + ["<tr><td class=tg-left>{i}</td><td  class=tg-right>{x}</td><td class=tg-left>{c}</td><td class=tg-left>{p}</td><td class=tg-left>{t}</td></tr>".format(x=x, c=" ".join(map(str, c)), p=" ".join(map(str, p)), t=(t or ''), i=i) for i, x, c, t, p in itertools.izip(indices, vals, constr_matrix, ties, prirs)] + ["</table>"])
+
     def __str__(self, constr_matrix=None, indices=None, prirs=None, ties=None, lc=None, lx=None, li=None, lp=None, lt=None, only_name=False):
         filter_ = self._current_slice_
         vals = self.flat

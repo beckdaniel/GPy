@@ -1,11 +1,10 @@
-# Copyright (c) 2012, 2013 GPy Authors
+# Copyright (c) 2012-2014 GPy Authors
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 
 import numpy as np
 from scipy import stats,special
 import scipy as sp
-from GPy.util.univariate_Gaussian import std_norm_pdf,std_norm_cdf
 import link_functions
 from likelihood import Likelihood
 

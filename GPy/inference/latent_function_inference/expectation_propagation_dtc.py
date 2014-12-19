@@ -1,7 +1,9 @@
+# Copyright (c) 2012-2014, GPy authors (see AUTHORS.txt).
+# Licensed under the BSD 3-clause license (see LICENSE.txt)
+
 import numpy as np
 from ...util import diag
 from ...util.linalg import mdot, jitchol, backsub_both_sides, tdot, dtrtrs, dtrtri, dpotri, dpotrs, symmetrify, DSYR
-from ...util.misc import param_to_array
 from ...core.parameterization.variational import VariationalPosterior
 from . import LatentFunctionInference
 from posterior import Posterior
@@ -22,8 +24,15 @@ class EPDTC(LatentFunctionInference):
         self.get_trYYT.limit = limit
         self.get_YYTfactor.limit = limit
 
+    def on_optimization_start(self):
+        self._ep_approximation = None
+
+    def on_optimization_end(self):
+        # TODO: update approximation in the end as well? Maybe even with a switch?
+        pass
+
     def _get_trYYT(self, Y):
-        return param_to_array(np.sum(np.square(Y)))
+        return np.sum(np.square(Y))
 
     def __getstate__(self):
         # has to be overridden, as Cacher objects cannot be pickled.
@@ -44,7 +53,7 @@ class EPDTC(LatentFunctionInference):
         """
         N, D = Y.shape
         if (N>=D):
-            return param_to_array(Y)
+            return Y
         else:
             return jitchol(tdot(Y))
 
@@ -56,7 +65,7 @@ class EPDTC(LatentFunctionInference):
         self._ep_approximation = None
 
     def inference(self, kern, X, Z, likelihood, Y, Y_metadata=None):
-        num_data, output_dim = X.shape
+        num_data, output_dim = Y.shape
         assert output_dim ==1, "ep in 1D only (for now!)"
 
         Kmm = kern.K(Z)

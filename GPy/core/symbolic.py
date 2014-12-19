@@ -11,8 +11,8 @@ from sympy.utilities.lambdify import lambdastr, _imp_namespace, _get_namespace
 from sympy.utilities.iterables import numbered_symbols
 import scipy
 import GPy
-#from scipy.special import gammaln, gamma, erf, erfc, erfcx, polygamma
-from GPy.util.symbolic import normcdf, normcdfln, logistic, logisticln, erfcx, erfc, gammaln
+
+
 def getFromDict(dataDict, mapList):
     return reduce(lambda d, k: d[k], mapList, dataDict)
 
@@ -127,7 +127,7 @@ class Symbolic_core():
                     val = parameters[theta.name]
             # Add parameter.
             
-            self.add_parameters(Param(theta.name, val, None))
+            self.link_parameters(Param(theta.name, val, None))
             #self._set_attribute(theta.name, )
 
     def eval_parameters_changed(self):
