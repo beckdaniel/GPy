@@ -107,6 +107,11 @@ class SymbolAwareSubsetTreeKernel(Kern):
         return ['lambda', 'sigma']
 
     def K(self, X, X2):#, target):
+        #import ipdb
+        #ipdb.set_trace()
+        #print self._lambda
+        #print self._sigma
+
         self.kernel._lambda = self._lambda
         self.kernel._sigma = self._sigma
         result, dl, ds = self.kernel.K(X, X2)
@@ -124,13 +129,19 @@ class SymbolAwareSubsetTreeKernel(Kern):
             #target += self.kernel.Kdiag(X)
             return self.kernel.Kdiag(X)
 
-    def dK_dtheta(self, dL_dK, X, X2):#, target):
-        return [np.sum(self.dlambda * dL_dK),
-                np.sum(self.dsigma * dL_dK)]
+    #def dK_dtheta(self, dL_dK, X, X2):#, target):
+    #    print self.dlambda
+    #    print self.dsigma
+    #    return [np.sum(self.dlambda * dL_dK),
+    #            np.sum(self.dsigma * dL_dK)]
 
     def update_gradients_full(self, dL_dK, X, X2):
         #print self._lambda.gradient.shape
         #print self.dlambda.shape
+        #print self.dlambda[:,:,0]
+        #print self.dsigma[:,:,0]
+        #print "UPDATING GRADS:"
+        #print np.isnan(np.sum(dL_dK))
         self._lambda.gradient = np.array([np.sum(self.dlambda[:,:,i] * dL_dK)
                                           for i in range(len(self._lambda))])
         self._sigma.gradient = np.array([np.sum(self.dsigma[:,:,i] * dL_dK)

@@ -42,9 +42,12 @@ class Prod(CombinationKernel):
         return reduce(np.multiply, (p.Kdiag(X) for p in which_parts))
 
     def update_gradients_full(self, dL_dK, X, X2=None):
-        k = self.K(X,X2)*dL_dK
-        for p in self.parts:
-            p.update_gradients_full(k/p.K(X,X2),X,X2)
+        for k1,k2 in itertools.combinations(self.parts, 2):
+            k1.update_gradients_full(dL_dK*k2.K(X, X2), X, X2)
+            k2.update_gradients_full(dL_dK*k1.K(X, X2), X, X2)
+        #k = self.K(X,X2)*dL_dK
+        #for p in self.parts:
+        #    p.update_gradients_full(k/p.K(X,X2),X,X2)
 
     def update_gradients_diag(self, dL_dKdiag, X):
         k = self.Kdiag(X)*dL_dKdiag
