@@ -145,10 +145,10 @@ class SymbolAwareSubsetTreeKernel(Kern):
         sym_dict = {}
         pos_set = set()
         for tree_repr in X:
-            tree = nltk.Tree.fromstring(tree_repr[0])
+            tree = nltk.Tree.fromstring(unicode(tree_repr[0], encoding='utf-8'))
             for prod in tree.productions():
                 symbol = str(prod.lhs())
-                if type(prod.rhs()[0]) == str:
+                if type(prod.rhs()[0]) == str or type(prod.rhs()[0]) == unicode:
                     pos_set.add(symbol)
                 else:
                     sym_set.add(symbol)
