@@ -71,7 +71,7 @@ class SymbolAwareSubsetTreeKernel(object):
     
     def __init__(self, _lambda=np.array([0.5]), _sigma=np.array([1.0]),
                  lambda_buckets={}, sigma_buckets={}, normalize=True, num_threads=1,
-                 parallel=True):
+                 parallel=True, no_grads=False):
         self._lambda = _lambda
         self._sigma = _sigma
         self.lambda_buckets = lambda_buckets
@@ -79,6 +79,7 @@ class SymbolAwareSubsetTreeKernel(object):
         self._tree_cache = {}
         self.normalize = normalize
         self.num_threads = num_threads
+        self.no_grads = no_grads
         #self.parallel = parallel
 
     def _gen_node_list(self, tree_repr):
@@ -176,10 +177,11 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:] K_vec_view = K_vec
         cdef double[:,:] dlambda_view = dlambda_mat
         cdef double[:,:] dsigma_view = dsigma_mat
+        cdef int no_grads = self.no_grads
         for i in range(len(X)):
-                calc_K(X_cpp[i], X_cpp[i], self._lambda, self._sigma, 
-                       K_vec_view[i],
-                       dlambda_view[i], dsigma_view[i])
+            calc_K(X_cpp[i], X_cpp[i], self._lambda, self._sigma, 
+                   K_vec_view[i], dlambda_view[i], dsigma_view[i],
+                   no_grads)
         return (K_vec, dlambda_mat, dsigma_mat)
 
     @cython.wraparound(False)
@@ -225,12 +227,15 @@ class SymbolAwareSubsetTreeKernel(object):
         cdef double[:,:,:] dlambdas_view = dlambdas
         cdef double[:,:,:] dsigmas_view = dsigmas
 
-        cdef int normalize, i, j, k
+        cdef int normalize, i, j, k, no_grads
         cdef int num_threads = self.num_threads
         cdef VecNode vecnode, vecnode2
         cdef double[:] _lambda = self._lambda
         cdef double[:] _sigma = self._sigma
         normalize = self.normalize
+        no_grads = self.no_grads
+        if no_grads:
+            print "NO_GRADS!"
         
         # Iterate over the trees in X and X2 (or X and X in the symmetric case).
         with nogil, parallel(num_threads=num_threads):
@@ -240,7 +245,8 @@ class SymbolAwareSubsetTreeKernel(object):
                     K_wrapper(X_cpp, X2_cpp, i, j, _lambda, _sigma,
                               Ks_view, dlambdas_view, dsigmas_view, gram, normalize, 
                               X_diag_Ks[i], X2_diag_Ks[j], X_diag_dlambdas[i],
-                              X2_diag_dlambdas[j], X_diag_dsigmas[i], X2_diag_dsigmas[j]) 
+                              X2_diag_dlambdas[j], X_diag_dsigmas[i], X2_diag_dsigmas[j],
+                              no_grads) 
         return (Ks, dlambdas, dsigmas)
 
     
@@ -334,7 +340,7 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
                     int gram, int normalize, double X_diag_Ks_i,
                     double X2_diag_Ks_j, double[:] X_diag_dlambdas_i,
                     double[:] X2_diag_dlambdas_j, double[:] X_diag_dsigmas_i,
-                    double[:] X2_diag_dsigmas_j) nogil:
+                    double[:] X2_diag_dsigmas_j, int no_grads) nogil:
     """
     Wrapper around K calculation.
     """ 
@@ -347,22 +353,25 @@ cdef void K_wrapper(VecVecNode& X_cpp, VecVecNode& X2_cpp, int i,
     vecnode = X_cpp[i]
     vecnode2 = X2_cpp[j]
     calc_K(vecnode, vecnode2, _lambda, _sigma,
-           Ks[i,j], dlambdas[i,j], dsigmas[i,j])
+           Ks[i,j], dlambdas[i,j], dsigmas[i,j], no_grads)
     if normalize == 1:
         _normalize(Ks[i,j], dlambdas[i,j], dsigmas[i,j],
                    X_diag_Ks_i, X2_diag_Ks_j, X_diag_dlambdas_i,
-                   X2_diag_dlambdas_j, X_diag_dsigmas_i, X2_diag_dsigmas_j)    
+                   X2_diag_dlambdas_j, X_diag_dsigmas_i, X2_diag_dsigmas_j,
+                   no_grads)    
     if gram:
         Ks[j,i] = Ks[i,j]
-        dlambdas[j,i] = dlambdas[i,j]
-        dsigmas[j,i] = dsigmas[i,j]
+        if not no_grads:
+            dlambdas[j,i] = dlambdas[i,j]
+            dsigmas[j,i] = dsigmas[i,j]
 
 
 @cython.wraparound(False)
 @cython.boundscheck(False)            
 cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
                  double[:] _lambda, double[:] _sigma, 
-                 double &K_result, double[:] dlambdas, double[:] dsigmas) nogil:
+                 double &K_result, double[:] dlambdas, 
+                 double[:] dsigmas, int no_grads) nogil:
     """
     The actual SSTK kernel, evaluated over two node lists.
     It also calculates the derivatives wrt lambda and sigma.
@@ -374,10 +383,13 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
     cdef int len2 = vecnode2.size()
     cdef double* delta_matrix = <double*> malloc(len1 * len2 * sizeof(double))
     #cdef Matrix delta_matrix = Matrix(len1)
-    cdef double* dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size
-                                                   * sizeof(double))
-    cdef double* dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
-                                                  * sizeof(double))
+    cdef double* dlambda_tensor
+    cdef double* dsigma_tensor
+    if not no_grads:
+        dlambda_tensor = <double*> malloc(len1 * len2 * lambda_size
+                                          * sizeof(double))
+        dsigma_tensor = <double*> malloc(len1 * len2 * sigma_size
+                                         * sizeof(double))
 
     cdef VecIntPair node_pairs
     cdef SAResult pair_result
@@ -390,21 +402,23 @@ cdef void calc_K(VecNode& vecnode1, VecNode& vecnode2,
         for j in range(len2):
             index = i * len2 + j
             delta_matrix[index] = 0
-            for k in range(lambda_size):
-                index2 = index * lambda_size + k
-                dlambda_tensor[index2] = 0
-            for k in range(sigma_size):
-                index2 = index * sigma_size + k
-                dsigma_tensor[index2] = 0
+            if not no_grads:
+                for k in range(lambda_size):
+                    index2 = index * lambda_size + k
+                    dlambda_tensor[index2] = 0
+                for k in range(sigma_size):
+                    index2 = index * sigma_size + k
+                    dsigma_tensor[index2] = 0
 
     node_pairs = get_node_pairs(vecnode1, vecnode2)
     for int_pair in node_pairs:
         delta(K_result, dlambdas, dsigmas, pair_result, int_pair, vecnode1, vecnode2,
-              delta_matrix, dlambda_tensor, dsigma_tensor, _lambda, _sigma)
+              delta_matrix, dlambda_tensor, dsigma_tensor, _lambda, _sigma, no_grads)
     
     free(delta_matrix)
-    free(dlambda_tensor)
-    free(dsigma_tensor)
+    if not no_grads:
+        free(dlambda_tensor)
+        free(dsigma_tensor)
 
 
 @cython.cdivision(True)
@@ -414,7 +428,7 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
                 SAResult& pair_result, IntPair int_pair,
                 VecNode& vecnode1, VecNode& vecnode2, double* delta_matrix,
                 double* dlambda_tensor, double* dsigma_tensor,
-                double[:] _lambda, double[:] _sigma) nogil:
+                double[:] _lambda, double[:] _sigma, int no_grads) nogil:
     """
     Recursive method used in kernel calculation.
     It also calculates the derivatives wrt lambda and sigma.
@@ -439,12 +453,13 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     #val = delta_matrix[id1][id2]
     if val > 0:
         pair_result.k = val
-        for i in range(lambda_size):
-            index2 = index * lambda_size + i
-            pair_result.dlambda[i] = dlambda_tensor[index2]
-        for i in range(sigma_size):
-            index2 = index * sigma_size + i
-            pair_result.dsigma[i] = dsigma_tensor[index2]
+        if not no_grads:
+            for i in range(lambda_size):
+                index2 = index * lambda_size + i
+                pair_result.dlambda[i] = dlambda_tensor[index2]
+            for i in range(sigma_size):
+                index2 = index * sigma_size + i
+                pair_result.dsigma[i] = dsigma_tensor[index2]
         return
 
     # BASE CASE: found a preterminal
@@ -455,19 +470,20 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
         delta_matrix[index] = _lambda[lambda_index] 
         pair_result.k = _lambda[lambda_index]
         (&K_result)[0] = (&K_result)[0] + _lambda[lambda_index]
-        for i in range(lambda_size):
-            index2 = index * lambda_size + i
-            if i == lambda_index:
-                pair_result.dlambda[i] = 1
-                dlambda_tensor[index2] = 1
-                dlambdas[i] += 1
-            else:
-                pair_result.dlambda[i] = 0
-                #dlambda_tensor[index2] = 0
-        for i in range(sigma_size):
-            index2 = index * sigma_size + i
-            pair_result.dsigma[i] = 0
-            #dsigma_tensor[index2] = 0
+        if not no_grads:
+            for i in range(lambda_size):
+                index2 = index * lambda_size + i
+                if i == lambda_index:
+                    pair_result.dlambda[i] = 1
+                    dlambda_tensor[index2] = 1
+                    dlambdas[i] += 1
+                else:
+                    pair_result.dlambda[i] = 0
+                    #dlambda_tensor[index2] = 0
+            for i in range(sigma_size):
+                index2 = index * sigma_size + i
+                pair_result.dsigma[i] = 0
+                #dsigma_tensor[index2] = 0
         return
 
     # RECURSIVE CASE: if val == 0, then we proceed to do recursion
@@ -477,9 +493,10 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
     sum_sigma = 0
     g = 1
     cdef Vector vec_lambda = Vector(lambda_size)
-    vec_lambda.assign(lambda_size, 0)
     cdef Vector vec_sigma = Vector(sigma_size)
-    vec_sigma.assign(sigma_size, 0)
+    if not no_grads:
+        vec_lambda.assign(lambda_size, 0)
+        vec_sigma.assign(sigma_size, 0)
     
     children1 = node1.first.second
     children2 = node2.first.second
@@ -491,40 +508,43 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
             delta(K_result, dlambdas, dsigmas,
                   pair_result, ch_pair, vecnode1, vecnode2,
                   delta_matrix, dlambda_tensor, dsigma_tensor, _lambda,
-                  _sigma)
+                  _sigma, no_grads)
             denom = _sigma[sigma_index] + pair_result.k
             g *= denom
-            for j in range(lambda_size):
-                vec_lambda[j] += pair_result.dlambda[j] / denom
-            for j in range(sigma_size):
-                if j == sigma_index:
-                    vec_sigma[j] += (1 + pair_result.dsigma[j]) / denom
-                else:
-                    vec_sigma[j] += pair_result.dsigma[j] / denom
+            if not no_grads:
+                for j in range(lambda_size):
+                    vec_lambda[j] += pair_result.dlambda[j] / denom
+                for j in range(sigma_size):
+                    if j == sigma_index:
+                        vec_sigma[j] += (1 + pair_result.dsigma[j]) / denom
+                    else:
+                        vec_sigma[j] += pair_result.dsigma[j] / denom
         else:
             g *= _sigma[sigma_index]
-            vec_sigma[sigma_index] += 1 / _sigma[sigma_index]
+            if not no_grads:
+                vec_sigma[sigma_index] += 1 / _sigma[sigma_index]
 
     delta_result = _lambda[lambda_index] * g
     delta_matrix[index] = delta_result
     #delta_matrix[id1][id2] = delta_result
     pair_result.k = delta_result
     (&K_result)[0] = (&K_result)[0] + delta_result
-    for i in range(lambda_size):
-        index2 = index * lambda_size + i
-        dlambda_result = delta_result * vec_lambda[i]
-        if i == lambda_index:
-            dlambda_result += g
-        dlambda_tensor[index2] = dlambda_result
-        pair_result.dlambda[i] = dlambda_result
-        dlambdas[i] += dlambda_result
+    if not no_grads:
+        for i in range(lambda_size):
+            index2 = index * lambda_size + i
+            dlambda_result = delta_result * vec_lambda[i]
+            if i == lambda_index:
+                dlambda_result += g
+            dlambda_tensor[index2] = dlambda_result
+            pair_result.dlambda[i] = dlambda_result
+            dlambdas[i] += dlambda_result
      
-    for i in range(sigma_size):
-        index2 = index * sigma_size + i
-        dsigma_result = delta_result * vec_sigma[i]
-        dsigma_tensor[index2] = dsigma_result
-        pair_result.dsigma[i] = dsigma_result
-        dsigmas[i] += dsigma_result
+        for i in range(sigma_size):
+            index2 = index * sigma_size + i
+            dsigma_result = delta_result * vec_sigma[i]
+            dsigma_tensor[index2] = dsigma_result
+            pair_result.dsigma[i] = dsigma_result
+            dsigmas[i] += dsigma_result
 
 
 @cython.wraparound(False)
@@ -532,7 +552,8 @@ cdef void delta(double &K_result, double[:] dlambdas, double[:] dsigmas,
 cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
                      double diag_Ks_i, double diag_Ks_j, 
                      double[:] diag_dlambdas_i, double[:] diag_dlambdas_j, 
-                     double[:] diag_dsigmas_i, double[:] diag_dsigmas_j) nogil:
+                     double[:] diag_dsigmas_i, double[:] diag_dsigmas_j,
+                     int no_grads) nogil:
     """
     Normalize the result from SSTK, including gradients.
     """
@@ -546,15 +567,16 @@ cdef void _normalize(double& K_result, double[:] dlambdas, double[:] dsigmas,
     sqrt_norm = sqrt(norm)
     K_norm = (&K_result)[0] / sqrt_norm
     (&K_result)[0] = K_norm
-    for i in range(lambda_size):
-        diff_lambda = ((diag_dlambdas_i[i] * diag_Ks_j) +
-                       (diag_Ks_i * diag_dlambdas_j[i]))
-        diff_lambda /= 2 * norm
-        dlambdas[i] = ((dlambdas[i] / sqrt_norm) - (K_norm * diff_lambda))
-    for i in range(sigma_size):
-        diff_sigma = ((diag_dsigmas_i[i] * diag_Ks_j) +
-                      (diag_Ks_i * diag_dsigmas_j[i]))
-        diff_sigma /= 2 * norm
-        dsigmas[i] = ((dsigmas[i] / sqrt_norm) - (K_norm * diff_sigma))
+    if not no_grads:
+        for i in range(lambda_size):
+            diff_lambda = ((diag_dlambdas_i[i] * diag_Ks_j) +
+                           (diag_Ks_i * diag_dlambdas_j[i]))
+            diff_lambda /= 2 * norm
+            dlambdas[i] = ((dlambdas[i] / sqrt_norm) - (K_norm * diff_lambda))
+        for i in range(sigma_size):
+            diff_sigma = ((diag_dsigmas_i[i] * diag_Ks_j) +
+                          (diag_Ks_i * diag_dsigmas_j[i]))
+            diff_sigma /= 2 * norm
+            dsigmas[i] = ((dsigmas[i] / sqrt_norm) - (K_norm * diff_sigma))
 
 #endif //CY_SA_TREE_H

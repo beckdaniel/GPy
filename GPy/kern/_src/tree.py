@@ -81,7 +81,7 @@ class SymbolAwareSubsetTreeKernel(Kern):
     An extension of SST, including specific lambdas/sigmas for each symbol.
     """
     def __init__(self, _lambda=np.array([0.5]), _sigma=np.array([1.0]), lambda_buckets={}, sigma_buckets={},
-                 normalize=True, active_dims=None, num_threads=1, parallel=True):
+                 normalize=True, active_dims=None, num_threads=1, parallel=True, no_grads=False):
         try:
             import nltk
         except ImportError:
@@ -94,7 +94,8 @@ class SymbolAwareSubsetTreeKernel(Kern):
         self._sigma = Param('sigma', _sigma)
         self.link_parameters(self._lambda, self._sigma)
         self.kernel = cy_sa_tree.SymbolAwareSubsetTreeKernel(_lambda, _sigma, lambda_buckets, sigma_buckets,
-                                                          normalize, num_threads=num_threads, parallel=parallel)
+                                                             normalize, num_threads=num_threads, parallel=parallel,
+                                                             no_grads=no_grads)
         # just to ensure parameters are different at the first time
         self.kernel._lambda = _lambda.copy() + 1
         self.kernel._sigma = _sigma.copy() + 1
