@@ -101,9 +101,9 @@ class SymbolAwareSubsetTreeKernel(Kern):
         
 
     def K(self, X, X2):#, target):
-        if (X2 == None and (self._lambda == self.kernel._lambda).all() 
-            and (self._sigma == self.kernel._sigma).all()):
-            return self.result
+        #if (X2 == None and (self._lambda == self.kernel._lambda).all() 
+        #    and (self._sigma == self.kernel._sigma).all()):
+        #    return self.result
         self.kernel._lambda = self._lambda.copy()
         self.kernel._sigma = self._sigma.copy()
         result, dl, ds = self.kernel.K(X, X2)
