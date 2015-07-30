@@ -11,6 +11,7 @@ from base_plots import gpplot, x_frame1D, x_frame2D
 from ...models.gp_coregionalized_regression import GPCoregionalizedRegression
 from ...models.sparse_gp_coregionalized_regression import SparseGPCoregionalizedRegression
 from scipy import sparse
+from ...models.warped_gp import WarpedGP
 
 def plot_fit(model, plot_limits=None, which_data_rows='all',
         which_data_ycols='all', fixed_inputs=[],
@@ -61,12 +62,16 @@ def plot_fit(model, plot_limits=None, which_data_rows='all',
         fig = pb.figure(num=fignum)
         ax = fig.add_subplot(111)
 
-    if hasattr(model, 'has_uncertain_inputs') and model.has_uncertain_inputs():
+    if hasattr(model, 'has_uncertain_inputs') and model.has_uncertain_inputs:
         X = model.X.mean
         X_variance = model.X.variance
     else:
         X = model.X
     Y = model.Y
+    ##############
+    if isinstance(model, WarpedGP):
+        Y = model.Y_untransformed
+    ##############
     if sparse.issparse(Y): Y = Y.todense().view(np.ndarray)
 
     if hasattr(model, 'Z'): Z = model.Z
@@ -112,7 +117,7 @@ def plot_fit(model, plot_limits=None, which_data_rows='all',
 
 
         #add error bars for uncertain (if input uncertainty is being modelled)
-        if hasattr(model,"has_uncertain_inputs") and model.has_uncertain_inputs():
+        if hasattr(model,"has_uncertain_inputs") and model.has_uncertain_inputs:
             plots['xerrorbar'] = ax.errorbar(X[which_data_rows, free_dims].flatten(), Y[which_data_rows, which_data_ycols].flatten(),
                         xerr=2 * np.sqrt(X_variance[which_data_rows, free_dims].flatten()),
                         ecolor='k', fmt=None, elinewidth=.5, alpha=.5)
