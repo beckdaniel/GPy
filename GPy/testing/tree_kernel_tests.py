@@ -939,6 +939,29 @@ class SSTKCheckingTests(unittest.TestCase):
                       dtype=object)
         #print m.predict(X2)
  
+    def test_integration3(self):
+        tk = SST(_lambda=1, active_dims=[0])
+        rbf = GPy.kern.RBF(1, active_dims=[1])
+        X = np.array([#['(S NP VP)'],
+                      ['(S (NP n) (VP v))'],
+                      ['(S (NP (N a)) (VP (V c)))'],
+                      ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                      ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                     dtype=object)
+        X2 = np.array([[20],[20],[30],[40]])
+        X = np.concatenate((X, X2), axis=1)
+        Y = np.array([[(a+10)*5] for a in range(4)])
+        m = GPy.models.GPRegression(X, Y, kernel=tk*rbf)
+        m.constrain_positive('')
+        m['.*variance'].constrain_fixed(1)
+        m.optimize(messages=False, optimizer='lbfgs')
+        #print m
+        X2 = np.array([#['(S NP VP)'],
+                       ['(S (NP n) (VP v))'],
+                       ['(S (NP (N a)) (VP (V c)))'],
+                       ['(S (NP (Det a) (N b)) (VP (V c)))'],
+                       ['(S (NP (ADJ colorless) (N ideas)) (VP (V sleep) (ADV furiously)))']],
+                      dtype=object)
         
         
 
