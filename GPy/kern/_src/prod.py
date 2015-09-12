@@ -2,9 +2,24 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import numpy as np
-from kern import CombinationKernel
+from .kern import CombinationKernel
 from ...util.caching import Cache_this
 import itertools
+from functools import reduce
+
+
+def numpy_invalid_op_as_exception(func):
+    """
+    A decorator that allows catching numpy invalid operations
+    as exceptions (the default behaviour is raising warnings).
+    """
+    def func_wrapper(*args, **kwargs):
+        np.seterr(invalid='raise')
+        result = func(*args, **kwargs)
+        np.seterr(invalid='warn')
+        return result
+    return func_wrapper
+
 
 class Prod(CombinationKernel):
     """
@@ -12,8 +27,6 @@ class Prod(CombinationKernel):
 
     :param k1, k2: the kernels to multiply
     :type k1, k2: Kern
-    :param tensor: The kernels are either multiply as functions defined on the same input space (default) or on the product of the input spaces
-    :type tensor: Boolean
     :rtype: kernel object
 
     """
@@ -42,28 +55,47 @@ class Prod(CombinationKernel):
         return reduce(np.multiply, (p.Kdiag(X) for p in which_parts))
 
     def update_gradients_full(self, dL_dK, X, X2=None):
-        for k1,k2 in itertools.combinations(self.parts, 2):
-            k1.update_gradients_full(dL_dK*k2.K(X, X2), X, X2)
-            k2.update_gradients_full(dL_dK*k1.K(X, X2), X, X2)
-        #k = self.K(X,X2)*dL_dK
-        #for p in self.parts:
-        #    p.update_gradients_full(k/p.K(X,X2),X,X2)
+        if len(self.parts)==2:
+            self.parts[0].update_gradients_full(dL_dK*self.parts[1].K(X,X2), X, X2)
+            self.parts[1].update_gradients_full(dL_dK*self.parts[0].K(X,X2), X, X2)
+        else:
+            for combination in itertools.combinations(self.parts, len(self.parts) - 1):
+                prod = reduce(np.multiply, [p.K(X, X2) for p in combination])
+                to_update = list(set(self.parts) - set(combination))[0]
+                to_update.update_gradients_full(dL_dK * prod, X, X2)
+
 
     def update_gradients_diag(self, dL_dKdiag, X):
-        k = self.Kdiag(X)*dL_dKdiag
-        for p in self.parts:
-            p.update_gradients_diag(k/p.Kdiag(X),X)
+        if len(self.parts)==2:
+            self.parts[0].update_gradients_diag(dL_dKdiag*self.parts[1].Kdiag(X), X)
+            self.parts[1].update_gradients_diag(dL_dKdiag*self.parts[0].Kdiag(X), X)
+        else:
+            for combination in itertools.combinations(self.parts, len(self.parts) - 1):
+                prod = reduce(np.multiply, [p.Kdiag(X) for p in combination])
+                to_update = list(set(self.parts) - set(combination))[0]
+                to_update.update_gradients_diag(dL_dKdiag * prod, X)
 
     def gradients_X(self, dL_dK, X, X2=None):
         target = np.zeros(X.shape)
-        k = self.K(X,X2)*dL_dK
-        for p in self.parts:
-            target += p.gradients_X(k/p.K(X,X2),X,X2)
+        if len(self.parts)==2:
+            target += self.parts[0].gradients_X(dL_dK*self.parts[1].K(X, X2), X, X2)
+            target += self.parts[1].gradients_X(dL_dK*self.parts[0].K(X, X2), X, X2)
+        else:
+            for combination in itertools.combinations(self.parts, len(self.parts) - 1):
+                prod = reduce(np.multiply, [p.K(X, X2) for p in combination])
+                to_update = list(set(self.parts) - set(combination))[0]
+                target += to_update.gradients_X(dL_dK * prod, X, X2)
         return target
 
     def gradients_X_diag(self, dL_dKdiag, X):
         target = np.zeros(X.shape)
-        k = self.Kdiag(X)*dL_dKdiag
-        for p in self.parts:
-            target += p.gradients_X_diag(k/p.Kdiag(X),X)
+        if len(self.parts)==2:
+            target += self.parts[0].gradients_X_diag(dL_dKdiag*self.parts[1].Kdiag(X), X)
+            target += self.parts[1].gradients_X_diag(dL_dKdiag*self.parts[0].Kdiag(X), X)
+        else:
+            k = self.Kdiag(X)*dL_dKdiag
+            for p in self.parts:
+                target += p.gradients_X_diag(k/p.Kdiag(X),X)
         return target
+
+

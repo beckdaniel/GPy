@@ -1,2 +1,3 @@
-import latent_function_inference
-import optimization
+from . import latent_function_inference
+from . import optimization
+from . import mcmc
