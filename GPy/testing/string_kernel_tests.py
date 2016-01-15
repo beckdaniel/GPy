@@ -8,13 +8,17 @@ import GPy
 
 class StringKernelTests(unittest.TestCase):
     
-    def setUp(self):
+    def test_sk_1(self):
         s1 = 'aab'
         s2 = 'aabb'
-        
-    def test_sk_1(self):
         k = GPy.kern.StringKernel()
         self.assertTrue(k.calc_k(s1, s2), 9)
+
+    def test_sk_2(self):
+        s1 = 'gatta'
+        s2 = 'cata'
+        k = GPy.kern.StringKernel()
+        self.assertTrue(k.calc_k(s1, s2), 14)
 
 
 if __name__ == "__main__":
