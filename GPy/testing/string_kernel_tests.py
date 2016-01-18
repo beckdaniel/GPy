@@ -34,6 +34,11 @@ class StringKernelTests(unittest.TestCase):
         k = GPy.kern.StringKernel()
         self.assertEquals(k.calc_k(s1, s2, decay=0.5), 2.75)
 
+    def test_sk_5(self):
+        s1 = 'aab'
+        s2 = 'aabb'
+        k = GPy.kern.StringKernel()
+        self.assertEquals(k.calc_k(s1, s2, decay=0.5), 3.25)
 
 if __name__ == "__main__":
     print("Running unit tests, please be (very) patient...")
