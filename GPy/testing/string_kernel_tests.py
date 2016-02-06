@@ -61,6 +61,12 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         k = GPy.kern.FixedLengthSubseqKernel(3)
         self.assertEquals(k.calc_k(s1, s2), 13.0)
 
+    def test_fixsubsk_5(self):
+        s2 = 'gatta'
+        s1 = 'cata'
+        k = GPy.kern.FixedLengthSubseqKernel(3, decay=0.5)
+        self.assertEquals(k.calc_k(s1, s2), 13.0)
+
 if __name__ == "__main__":
     print("Running unit tests, please be (very) patient...")
     unittest.main()

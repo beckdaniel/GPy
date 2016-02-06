@@ -51,7 +51,7 @@ class FixedLengthSubseqKernel(Kern):
             self.l_coef = [1.0] * length
 
 
-    def calc_k(self, s1, s2, decay=1.0):
+    def calc_k(self, s1, s2):
         """
         Kernel calculation (based on Lodhi, Cancedda)
         and Shogun implementation
