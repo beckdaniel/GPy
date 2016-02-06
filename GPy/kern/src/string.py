@@ -68,12 +68,17 @@ class FixedLengthSubseqKernel(Kern):
             for j in xrange(n - 1):
                 Kpp = 0.0
                 for k in xrange(m - 1):
-                    Kpp = decay * (Kpp + (decay * (s1[j] == s2[k]) * Kp[i][j][k]))
+                    term = (decay * (s1[j] == s2[k]) * Kp[i][j][k])
+                    Kpp = decay * (Kpp + term)
                     Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
-        for i in xrange(self.length):
-            for j in xrange(n):
-                for k in xrange(m):
-                    result += decay * decay * (s1[j] == s2[k]) * Kp[i][j][k]
+                    result += decay * decay * term
+                result += decay * decay * (s1[j] == s2[m - 1]) * Kp[i][j][m - 1]
+            for k in xrange(m):
+                result += decay * decay * (s1[n - 1] == s2[k]) * Kp[i][n - 1][k]
+        #for i in xrange(self.length):
+        #    for j in xrange(n):
+        #        for k in xrange(m):
+        #            result += decay * decay * (s1[j] == s2[k]) * Kp[i][j][k]
         return result
 
                 
