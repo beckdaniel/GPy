@@ -1,13 +1,14 @@
 import numpy as np
 from .kern import Kern
+import copy
 
 
-class StringKernel(Kern):
+class AllSubStringKernel(Kern):
     """
     String Kernel
     """
     def __init__(self, name='sk'):
-        super(StringKernel, self).__init__(1, 1, name)
+        super(AllSubStringKernel, self).__init__(1, 1, name)
 
     def calc_k(self, s1, s2, decay=1.0):
         """
@@ -34,4 +35,46 @@ class StringKernel(Kern):
                 dp[i][k] = dp[i - 1][k] + p[k]
             #print dp
         return dp[n][m]
+        
+
+class FixedLengthSubseqKernel(Kern):
+    """
+    Fixed length subsequences Kernel.
+    """
+    def __init__(self, length, name='fixsubsk', decay=1.0, l_coef=None):
+        super(FixedLengthSubseqKernel, self).__init__(1, 1, name)
+        self.length = length
+        self.decay = decay
+        if l_coef:
+            self.l_coef = l_coef
+        else:
+            self.l_coef = [1.0] * length
+
+
+    def calc_k(self, s1, s2, decay=1.0):
+        """
+        Kernel calculation (based on Lodhi, Cancedda)
+        and Shogun implementation
+        """
+        n = len(s1)
+        m = len(s2)
+        Kp = np.zeros(shape=(self.length + 1, n, m))
+        decay = self.decay
+        for j in xrange(n):
+            for k in xrange(m):
+                Kp[0][j][k] = 1.0
+        result = 0.0
+        for i in xrange(self.length):
+            for j in xrange(n - 1):
+                Kpp = 0.0
+                for k in xrange(m - 1):
+                    Kpp = decay * (Kpp + (decay * (s1[j] == s2[k]) * Kp[i][j][k]))
+                    Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
+        for i in xrange(self.length):
+            for j in xrange(n):
+                for k in xrange(m):
+                    result += decay * decay * (s1[j] == s2[k]) * Kp[i][j][k]
+        return result
+
+                
         
