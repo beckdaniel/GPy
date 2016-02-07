@@ -53,6 +53,7 @@ class FixedLengthSubseqKernel(Kern):
         self.order_coefs = Param('order_coefs', order_coefs, Logexp())
         self.link_parameter(self.order_coefs)
         self.X_data = X_data
+        self.sim = self.hard_match
 
     def K(self, X, X2=None):
         if X2 is None:
@@ -128,15 +129,16 @@ class FixedLengthSubseqKernel(Kern):
             for j in xrange(n - 1):
                 Kpp = 0.0
                 for k in xrange(m - 1):
-                    Kpp = decay * Kpp + decay * decay * (s1[j] == s2[k]) * Kp[i][j][k]
+                    Kpp = decay * Kpp + decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
                     Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
         result = 0.0
         for i in xrange(self.length):
             result_i = 0.0
             for j in xrange(n):
                 for k in xrange(m):
-                    result_i += decay * decay * (s1[j] == s2[k]) * Kp[i][j][k]
-            #print result_i
+                    result_i += decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
             result += self.order_coefs[i] * result_i
-        #print Kp
         return result
+
+    def hard_match(self, s1, s2):
+        return int(s1 == s2)
