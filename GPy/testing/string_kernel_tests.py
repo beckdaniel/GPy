@@ -61,11 +61,48 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         k = GPy.kern.FixedLengthSubseqKernel(3)
         self.assertEquals(k.calc_k(s1, s2), 13.0)
 
+    #@unittest.skip('')
     def test_fixsubsk_5(self):
         s2 = 'gatta'
         s1 = 'cata'
-        k = GPy.kern.FixedLengthSubseqKernel(3, decay=0.5)
-        self.assertEquals(k.calc_k(s1, s2), 13.0)
+        k = GPy.kern.FixedLengthSubseqKernel(1, decay=1.0, order_coefs=[0.5])
+        self.assertEquals(k.calc_k(s1, s2), 3.0)
+
+    def test_fixsubsk_6(self):
+        s2 = 'gatta'
+        s1 = 'cata'
+        k = GPy.kern.FixedLengthSubseqKernel(2, decay=1.0, order_coefs=[0.5, 0.2])
+        self.assertEquals(k.calc_k(s1, s2), 4.0)
+
+    def test_fixsubsk_6(self):
+        s2 = 'gatta'
+        s1 = 'cata'
+        k = GPy.kern.FixedLengthSubseqKernel(3, decay=1.0, order_coefs=[0.5, 0.2, 0.1])
+        self.assertEquals(k.calc_k(s1, s2), 4.2)
+
+    @unittest.skip('')
+    def test_profiling_1(self):
+        data = np.loadtxt('trial2', dtype=object, delimiter='\t')
+        labels = np.array(data[:,0], dtype=np.float64)[:, None]
+        import sklearn.preprocessing as pp
+        scaler = pp.StandardScaler()
+        scaler.fit(labels)
+        #print labels
+        labels = scaler.transform(labels)
+        #print labels
+        X = data[:, 1:]
+        inputs = np.array(range(len(X)))[:, None]
+        k = GPy.kern.FixedLengthSubseqKernel(10, X, decay=0.01)
+        #print inputs
+        #print labels
+        m = GPy.models.GPRegression(inputs, labels, kernel=k)
+        m['fixsubsk.decay'].constrain_fixed(0.1)
+        print m
+        m.optimize()
+        print m
+        for elem in zip(scaler.inverse_transform(m.predict(inputs)[0]), 
+                        scaler.inverse_transform(labels)):
+            print elem
 
 if __name__ == "__main__":
     print("Running unit tests, please be (very) patient...")
