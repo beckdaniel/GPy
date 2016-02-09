@@ -52,8 +52,9 @@ class FixedLengthSubseqKernel(Kern):
             order_coefs = [1.0] * length
         self.order_coefs = Param('order_coefs', order_coefs, Logexp())
         self.link_parameter(self.order_coefs)
-        self.X_data = X_data
+        #self.X_data = X_data
         self.sim = self.hard_match
+        self.calc = self.calc_k2_all
 
     def K(self, X, X2=None):
         if X2 is None:
@@ -62,26 +63,28 @@ class FixedLengthSubseqKernel(Kern):
         else:
             symm = False
         result = np.zeros(shape=(len(X), len(X2)))
-        for i, index1 in enumerate(X):
-            for j, index2 in enumerate(X2):
-                x1 = self.X_data[int(index1[0])]
-                x2 = self.X_data[int(index2[0])]
+        for i, x1 in enumerate(X):
+            for j, x2 in enumerate(X2):
+                #x1 = self.X_data[int(index1[0])]
+                #x2 = self.X_data[int(index2[0])]
                 if symm and (j > i):
                     result[i, j] = result[j, i]
                 else:
-                    result[i, j] = self.calc_k(x1, x2)
+                    result[i, j] = self.calc(x1, x2)
         return result
 
     def Kdiag(self, X):
         result = np.zeros(shape=(len(X)))
-        for i, index1 in enumerate(X):
-            x1 = self.X_data[int(index1[0])]
-            result[i] = self.calc_k(x1, x1)
+        for i, x1 in enumerate(X):
+            #x1 = self.X_data[int(index1[0])]
+            result[i] = self.calc(x1, x1)
         return result
 
-    def update_gradients_full(self, dL_dK, X, X2=None):
-        pass
-                    
+    def calc_k2_all(self, s1, s2):
+        result_i = self.calc_k3(s1, s2)
+        print result_i
+        return result_i.dot(self.order_coefs)
+
     def calc_k2(self, s1, s2):
         """
         Kernel calculation (based on Lodhi, Cancedda)
@@ -89,56 +92,73 @@ class FixedLengthSubseqKernel(Kern):
         """
         n = len(s1)
         m = len(s2)
-        Kp = np.zeros(shape=(self.length + 1, n, m))
+        Kp = np.zeros(shape=(self.length, n, m))
         decay = self.decay
+        Ki = np.zeros(shape=(self.length))
+
         for j in xrange(n):
             for k in xrange(m):
                 Kp[0][j][k] = 1.0
-        result = 0.0
-        for i in xrange(self.length):
+
+        for i in xrange(self.length - 1): # Kp is not needed for p == self.length
             for j in xrange(n - 1):
                 Kpp = 0.0
                 for k in xrange(m - 1):
-                    term = (decay * (s1[j] == s2[k]) * Kp[i][j][k])
-                    Kpp = decay * (Kpp + term)
+                    Kpp = decay * Kpp + decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
+                    print Kpp
                     Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
-                    result += decay * decay * term
-                result += decay * decay * (s1[j] == s2[m - 1]) * Kp[i][j][m - 1]
-            for k in xrange(m):
-                result += decay * decay * (s1[n - 1] == s2[k]) * Kp[i][n - 1][k]
-        #for i in xrange(self.length):
-        #    for j in xrange(n):
-        #        for k in xrange(m):
-        #            result += decay * decay * (s1[j] == s2[k]) * Kp[i][j][k]
-        return result
 
-    def calc_k(self, s1, s2):
+        for i in xrange(self.length):
+            for j in xrange(i, n): # s1[:i-1] is always zero.
+                for k in xrange(m):
+                    Ki[i] += decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
+        return Ki
+
+    def hard_match(self, s1, s2):
+        return int(s1 == s2)
+
+    def calc_k3(self, s1, s2):
         """
         Kernel calculation (based on Lodhi, Cancedda)
         and Shogun implementation
         """
         n = len(s1)
         m = len(s2)
-        Kp = np.zeros(shape=(self.length + 1, n, m))
+        Kp = np.zeros(shape=(self.length, n, m))
+        dKp = np.zeros(shape=(self.length, n, m))
         decay = self.decay
+        Ki = np.zeros(shape=(self.length))
+
         for j in xrange(n):
             for k in xrange(m):
                 Kp[0][j][k] = 1.0
+                dKp[0][j][k] = 0.0
 
-        for i in xrange(self.length):
+        for i in xrange(self.length - 1): # Kp is not needed for p == self.length
             for j in xrange(n - 1):
                 Kpp = 0.0
+                #Kpp = np.zeros(shape=(m))
+                #for k in xrange(1, m):
                 for k in xrange(m - 1):
+                    #Kpp[k] = decay * Kpp[k - 1] + decay * decay * self.sim(s1[j], s2[k - 1]) * Kp[i][j][k - 1]
                     Kpp = decay * Kpp + decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
                     Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
-        result = 0.0
-        for i in xrange(self.length):
-            result_i = 0.0
-            for j in xrange(n):
-                for k in xrange(m):
-                    result_i += decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
-            result += self.order_coefs[i] * result_i
-        return result
+                #print Kpp
+                #Kp[i + 1][j + 1] = decay * Kp[i + 1][j] + Kpp
 
-    def hard_match(self, s1, s2):
-        return int(s1 == s2)
+        for i in xrange(self.length):
+            for j in xrange(i, n): # s1[:i-1] is always zero.
+                for k in xrange(m):
+                    Ki[i] += decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
+        
+        # Gradients for coeficients are simply the fixed kernel evals.
+        self.order_coefs.gradient = Ki.copy()
+        return Ki
+
+
+    def update_gradients_full(self, dL_dK, X, X2=None):
+        """
+        We assume the gradients were already calculated inside K.
+        """
+        self.decay.gradient *= dL_dK
+        self.order_coefs *= dL_dK

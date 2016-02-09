@@ -47,38 +47,38 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(1)
-        self.assertEquals(k.calc_k(s1, s2), 6.0)
+        self.assertEquals(k.calc(s1, s2), 6.0)
 
     def test_fixsubsk_3(self):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(2)
-        self.assertEquals(k.calc_k(s1, s2), 11.0)
+        self.assertEquals(k.calc(s1, s2), 11.0)
 
     def test_fixsubsk_4(self):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(3)
-        self.assertEquals(k.calc_k(s1, s2), 13.0)
+        self.assertEquals(k.calc(s1, s2), 13.0)
 
     #@unittest.skip('')
     def test_fixsubsk_5(self):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(1, decay=1.0, order_coefs=[0.5])
-        self.assertEquals(k.calc_k(s1, s2), 3.0)
+        self.assertEquals(k.calc(s1, s2), 3.0)
 
     def test_fixsubsk_6(self):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(2, decay=1.0, order_coefs=[0.5, 0.2])
-        self.assertEquals(k.calc_k(s1, s2), 4.0)
+        self.assertEquals(k.calc(s1, s2), 4.0)
 
     def test_fixsubsk_6(self):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(3, decay=1.0, order_coefs=[0.5, 0.2, 0.1])
-        self.assertEquals(k.calc_k(s1, s2), 4.2)
+        self.assertEquals(k.calc(s1, s2), 4.2)
 
     @unittest.skip('')
     def test_profiling_1(self):
