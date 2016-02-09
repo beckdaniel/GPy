@@ -136,15 +136,17 @@ class FixedLengthSubseqKernel(Kern):
 
         for i in xrange(self.length - 1): # Kp is not needed for p == self.length
             for j in xrange(n - 1):
-                Kpp = 0.0
-                #Kpp = np.zeros(shape=(m))
-                #for k in xrange(1, m):
-                for k in xrange(m - 1):
-                    #Kpp[k] = decay * Kpp[k - 1] + decay * decay * self.sim(s1[j], s2[k - 1]) * Kp[i][j][k - 1]
-                    Kpp = decay * Kpp + decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
-                    Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
+                #Kpp = 0.0
+                #dKpp = 0.0
+                Kpp = np.zeros(shape=(m))
+                for k in xrange(1, m):
+                #for k in xrange(m - 1):
+                    Kpp[k] = decay * Kpp[k - 1] + decay * decay * self.sim(s1[j], s2[k - 1]) * Kp[i][j][k - 1]
+                    #Kpp = decay * Kpp + decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
+                    #Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
+                    
                 #print Kpp
-                #Kp[i + 1][j + 1] = decay * Kp[i + 1][j] + Kpp
+                Kp[i + 1][j + 1] = decay * Kp[i + 1][j] + Kpp
 
         for i in xrange(self.length):
             for j in xrange(i, n): # s1[:i-1] is always zero.
