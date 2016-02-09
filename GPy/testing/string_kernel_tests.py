@@ -74,11 +74,72 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         k = GPy.kern.FixedLengthSubseqKernel(2, decay=1.0, order_coefs=[0.5, 0.2])
         self.assertEquals(k.calc(s1, s2), 4.0)
 
-    def test_fixsubsk_6(self):
+    def test_fixsubsk_7(self):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(3, decay=1.0, order_coefs=[0.5, 0.2, 0.1])
         self.assertEquals(k.calc(s1, s2), 4.2)
+
+    def test_fixsubsk_grads_1(self):
+        s2 = 'gatta'
+        s1 = 'cata'
+        k = GPy.kern.FixedLengthSubseqKernel(3)
+        h = 0.000001
+        k.decay += h
+        result1 = k.calc(s1, s2)
+        k.decay -= 2*h
+        result2 = k.calc(s1, s2)
+        k.decay += h
+        result3 = k.calc(s1, s2)
+        print result1
+        print result2
+        print result3
+        approx = (result1 - result2) / (2 * h)
+        print approx
+        print k.decay.gradient
+        self.assertAlmostEqual(approx, k.decay.gradient)
+        #self.assertEquals(k.calc(s1, s2), 13.0)
+
+    def test_fixsubsk_grads_2(self):
+        s2 = 'gatta'
+        s1 = 'cata'
+        k = GPy.kern.FixedLengthSubseqKernel(3)
+        k.decay = 0.5
+        h = 0.000001
+        k.decay += h
+        result1 = k.calc(s1, s2)
+        k.decay -= 2*h
+        result2 = k.calc(s1, s2)
+        k.decay += h
+        result3 = k.calc(s1, s2)
+        print result1
+        print result2
+        print result3
+        approx = (result1 - result2) / (2 * h)
+        print approx
+        print k.decay.gradient
+        self.assertAlmostEqual(approx, k.decay.gradient)
+        #self.assertEquals(k.calc(s1, s2), 13.0)
+
+    def test_fixsubsk_grads_3(self):
+        s2 = 'gatta'
+        s1 = 'cata'
+        k = GPy.kern.FixedLengthSubseqKernel(3)
+        k.decay = 0.01
+        h = 0.000001
+        k.decay += h
+        result1 = k.calc(s1, s2)
+        k.decay -= 2*h
+        result2 = k.calc(s1, s2)
+        k.decay += h
+        result3 = k.calc(s1, s2)
+        print result1
+        print result2
+        print result3
+        approx = (result1 - result2) / (2 * h)
+        print approx
+        print k.decay.gradient
+        self.assertAlmostEqual(approx, k.decay.gradient)
 
     @unittest.skip('')
     def test_profiling_1(self):

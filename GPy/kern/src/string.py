@@ -128,6 +128,7 @@ class FixedLengthSubseqKernel(Kern):
         dKp = np.zeros(shape=(self.length, n, m))
         decay = self.decay
         Ki = np.zeros(shape=(self.length))
+        dKi = np.zeros(shape=(self.length))
 
         for j in xrange(n):
             for k in xrange(m):
@@ -139,22 +140,32 @@ class FixedLengthSubseqKernel(Kern):
                 #Kpp = 0.0
                 #dKpp = 0.0
                 Kpp = np.zeros(shape=(m))
+                dKpp = np.zeros(shape=(m))
                 for k in xrange(1, m):
                 #for k in xrange(m - 1):
                     Kpp[k] = decay * Kpp[k - 1] + decay * decay * self.sim(s1[j], s2[k - 1]) * Kp[i][j][k - 1]
+                    dKpp[k] = (Kpp[k - 1] + (decay * dKpp[k - 1]) +
+                               (2 * decay * self.sim(s1[j], s2[k - 1]) * Kp[i][j][k - 1]) +
+                               (decay * decay * self.sim(s1[j], s2[k - 1]) * dKp[i][j][k - 1])
+                           )
                     #Kpp = decay * Kpp + decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
                     #Kp[i + 1][j + 1][k + 1] = decay * Kp[i + 1][j][k + 1] + Kpp
-                    
                 #print Kpp
                 Kp[i + 1][j + 1] = decay * Kp[i + 1][j] + Kpp
+                dKp[i + 1][j + 1] = Kp[i + 1][j] + decay * dKp[i + 1][j] + dKpp
 
         for i in xrange(self.length):
             for j in xrange(i, n): # s1[:i-1] is always zero.
                 for k in xrange(m):
                     Ki[i] += decay * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k]
+                    dKi[i] += (2 * decay * self.sim(s1[j], s2[k]) * Kp[i][j][k] +
+                            decay * decay * self.sim(s1[j], s2[k]) * dKp[i][j][k])
+                    #print dKn
         
         # Gradients for coeficients are simply the fixed kernel evals.
+        #print dKi
         self.order_coefs.gradient = Ki.copy()
+        self.decay.gradient = dKi.sum()
         return Ki
 
 
