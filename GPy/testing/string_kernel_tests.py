@@ -91,14 +91,8 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         result2 = k.calc(s1, s2)
         k.decay += h
         result3 = k.calc(s1, s2)
-        print result1
-        print result2
-        print result3
         approx = (result1 - result2) / (2 * h)
-        print approx
-        print k.decay.gradient
         self.assertAlmostEqual(approx, k.decay.gradient)
-        #self.assertEquals(k.calc(s1, s2), 13.0)
 
     def test_fixsubsk_grads_2(self):
         s2 = 'gatta'
@@ -112,14 +106,8 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         result2 = k.calc(s1, s2)
         k.decay += h
         result3 = k.calc(s1, s2)
-        print result1
-        print result2
-        print result3
         approx = (result1 - result2) / (2 * h)
-        print approx
-        print k.decay.gradient
         self.assertAlmostEqual(approx, k.decay.gradient)
-        #self.assertEquals(k.calc(s1, s2), 13.0)
 
     def test_fixsubsk_grads_3(self):
         s2 = 'gatta'
@@ -133,32 +121,28 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         result2 = k.calc(s1, s2)
         k.decay += h
         result3 = k.calc(s1, s2)
-        print result1
-        print result2
-        print result3
         approx = (result1 - result2) / (2 * h)
-        print approx
-        print k.decay.gradient
         self.assertAlmostEqual(approx, k.decay.gradient)
 
-    def test_fixsubsk_grads_2(self):
+    def test_fixsubsk_grads_4(self):
         s2 = 'gatta'
         s1 = 'cata'
         k = GPy.kern.FixedLengthSubseqKernel(3)
         h = 0.000001
-        k.order_coefs += h
+        k.order_coefs[2] = 0.3
+        k.order_coefs[2] += h
         result1 = k.calc(s1, s2)
-        k.order_coefs -= 2*h
+        k.order_coefs[2] -= 2*h
         result2 = k.calc(s1, s2)
-        k.order_coefs += h
+        k.order_coefs[2] += h
         result3 = k.calc(s1, s2)
         print result1
         print result2
         print result3
         approx = (result1 - result2) / (2 * h)
         print approx
-        print k.order_coefs.gradient
-        self.assertAlmostEqual(approx, k.decay.gradient)
+        print k.order_coefs.gradient[2]
+        self.assertAlmostEqual(approx, k.order_coefs.gradient[2])
 
     @unittest.skip('')
     def test_profiling_1(self):
