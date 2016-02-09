@@ -141,6 +141,25 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         print k.decay.gradient
         self.assertAlmostEqual(approx, k.decay.gradient)
 
+    def test_fixsubsk_grads_2(self):
+        s2 = 'gatta'
+        s1 = 'cata'
+        k = GPy.kern.FixedLengthSubseqKernel(3)
+        h = 0.000001
+        k.order_coefs += h
+        result1 = k.calc(s1, s2)
+        k.order_coefs -= 2*h
+        result2 = k.calc(s1, s2)
+        k.order_coefs += h
+        result3 = k.calc(s1, s2)
+        print result1
+        print result2
+        print result3
+        approx = (result1 - result2) / (2 * h)
+        print approx
+        print k.order_coefs.gradient
+        self.assertAlmostEqual(approx, k.decay.gradient)
+
     @unittest.skip('')
     def test_profiling_1(self):
         data = np.loadtxt('trial2', dtype=object, delimiter='\t')
