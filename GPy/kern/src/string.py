@@ -43,7 +43,7 @@ class FixedLengthSubseqKernel(Kern):
     """
     Fixed length subsequences Kernel.
     """
-    def __init__(self, length, X_data=None, name='fixsubsk', decay=1.0, order_coefs=None):
+    def __init__(self, length, name='fixsubsk', decay=1.0, order_coefs=None):
         super(FixedLengthSubseqKernel, self).__init__(1, None, name)
         self.length = length
         self.decay = Param('decay', decay, Logexp())
@@ -63,27 +63,43 @@ class FixedLengthSubseqKernel(Kern):
         else:
             symm = False
         result = np.zeros(shape=(len(X), len(X2)))
+        ddecay = np.zeros(shape=(len(X), len(X2)))
+        dcoefs = np.zeros(shape=(len(self.order_coefs), len(X), len(X2)))
         for i, x1 in enumerate(X):
             for j, x2 in enumerate(X2):
+                #print x1
+                #print x2
                 #x1 = self.X_data[int(index1[0])]
                 #x2 = self.X_data[int(index2[0])]
                 if symm and (j > i):
                     result[i, j] = result[j, i]
+                    ddecay[i, j] = ddecay[j, i]
+                    dcoefs[:, i, j] = dcoefs[:, j, i]
                 else:
-                    result[i, j] = self.calc(x1, x2)
+                    result[i, j], ddecay[i, j], dcoefs[:, i, j] = self.calc(x1[0], x2[0])
+                    #print result[i, j], ddecay[i, j], dcoefs[:, i, j]
+        
+        self.decay_grad = ddecay
+        #print "COEFS GRADS AT END OF K:"
+        #print dcoefs
+        #print result
+        self.order_coefs_grad = dcoefs
         return result
 
     def Kdiag(self, X):
         result = np.zeros(shape=(len(X)))
         for i, x1 in enumerate(X):
             #x1 = self.X_data[int(index1[0])]
-            result[i] = self.calc(x1, x1)
+            result[i] = self.calc(x1, x1)[0]
         return result
 
     def calc_k2_all(self, s1, s2):
-        result_i = self.calc_k3(s1, s2)
-        print result_i
-        return result_i.dot(self.order_coefs)
+        Ki, dKi = self.calc_k3(s1, s2)
+        ddecay = dKi.sum()
+        dcoefs = Ki.copy()
+        #print "Ki"
+        #print Ki
+        return Ki.dot(self.order_coefs), ddecay, dcoefs
 
     def calc_k2(self, s1, s2):
         """
@@ -164,14 +180,29 @@ class FixedLengthSubseqKernel(Kern):
         
         # Gradients for coeficients are simply the fixed kernel evals.
         #print dKi
-        self.order_coefs.gradient = Ki.copy()
-        self.decay.gradient = dKi.sum()
-        return Ki
+        #self.order_coefs.gradient = Ki.copy()
+        #self.decay.gradient = dKi.sum()
+        #print "DECAY GRAD AT END OF K: %.5f" % self.decay.gradient
+        #print s1
+        #print s2
+        #print Ki
+        return Ki, dKi.sum()
 
 
     def update_gradients_full(self, dL_dK, X, X2=None):
         """
         We assume the gradients were already calculated inside K.
         """
-        self.decay.gradient *= dL_dK
-        self.order_coefs *= dL_dK
+        #print self.decay.gradient
+        #print self.order_coefs.gradient
+        #print dL_dK
+        #print dL_dK
+        #if X2 is None: print dL_dK == (dL_dK+dL_dK.T)/2
+        #print dL_dK
+        #print "DECAY GRAD AT UPDATE GRADS: %.5f" % self.decay.gradient
+        #print "COEFS GRADS AT UPDATE:",
+        #print self.order_coefs_grad
+
+        self.decay.gradient = np.sum(self.decay_grad * dL_dK)
+        for i in xrange(self.length):
+            self.order_coefs.gradient[i] = np.sum(self.order_coefs_grad[i] * dL_dK)
