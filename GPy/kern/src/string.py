@@ -193,15 +193,6 @@ class FixedLengthSubseqKernel(Kern):
         """
         We assume the gradients were already calculated inside K.
         """
-        #print self.decay.gradient
-        #print self.order_coefs.gradient
-        #print dL_dK
-        #print dL_dK
-        #if X2 is None: print dL_dK == (dL_dK+dL_dK.T)/2
-        #print dL_dK
-        #print "DECAY GRAD AT UPDATE GRADS: %.5f" % self.decay.gradient
-        #print "COEFS GRADS AT UPDATE:",
-        #print self.order_coefs_grad
 
         self.decay.gradient = np.sum(self.decay_grad * dL_dK)
         for i in xrange(self.length):
