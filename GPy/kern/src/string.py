@@ -55,6 +55,7 @@ class FixedLengthSubseqKernel(Kern):
         #self.X_data = X_data
         self.sim = self.hard_match
         self.calc = self.calc_k2_all
+        #self.calc = self.calc_vectorized
 
     def K(self, X, X2=None):
         if X2 is None:
@@ -94,11 +95,13 @@ class FixedLengthSubseqKernel(Kern):
         return result
 
     def calc_k2_all(self, s1, s2):
-        Ki, dKi = self.calc_k3(s1, s2)
+        #Ki, dKi = self.calc_k3(s1, s2)
+        Ki, dKi = self.calc_vectorized(s1, s2)
         ddecay = dKi.sum()
         dcoefs = Ki.copy()
         #print "Ki"
         #print Ki
+        #print self.order_coefs
         return Ki.dot(self.order_coefs), ddecay, dcoefs
 
     def calc_k2(self, s1, s2):
@@ -193,7 +196,44 @@ class FixedLengthSubseqKernel(Kern):
         """
         We assume the gradients were already calculated inside K.
         """
+        pass
+        #self.decay.gradient = np.sum(self.decay_grad * dL_dK)
+        #for i in xrange(self.length):
+        #    self.order_coefs.gradient[i] = np.sum(self.order_coefs_grad[i] * dL_dK)
 
-        self.decay.gradient = np.sum(self.decay_grad * dL_dK)
-        for i in xrange(self.length):
-            self.order_coefs.gradient[i] = np.sum(self.order_coefs_grad[i] * dL_dK)
+
+    def calc_vectorized(self, s1, s2):
+        """
+        Vectorized version.
+        """
+        n = len(s1)
+        m = len(s2)
+        length = len(self.order_coefs)
+        Kp = np.zeros(shape=(2, length + 1, n, m))
+        Kp[0,0,:,:] = 1.0
+
+        # store sim(j, k) values
+        S = np.zeros(shape=(n,m))
+        for j in xrange(n):
+            for k in xrange(m):
+                S[j,k] = self.sim(s1[j],s2[k])
+        
+        # store triangular matrix with powers of decay (to side-step recursion)
+        max_len = max(n, m)
+        D = np.zeros((max_len,max_len))
+        d1, d2 = np.indices(D.shape)
+        for k in xrange(max_len):
+            D[d2-k == d1] = self.decay ** k 
+        #print D
+
+        # Some precomputation, I expect we'll need this as tensor
+        # This stores the similarities multiplied by the decays
+        DS = self.decay * self.decay * S[:, :-1]
+        
+        for i in xrange(length):
+            Kp[1, i, :, 1:] = (DS * Kp[0, i, :, :-1]).dot(D[1:m, 1:m])
+            Kp[0, i + 1, 1:, :] = Kp[1, i, :-1, :].T.dot(D[1:n, 1:n]).T #Last colons are useless, put them for clarity
+
+        Ki = np.sum(np.sum(S * Kp[0, :-1], axis=1), axis=1) * self.decay * self.decay
+        return Ki, self.order_coefs.copy()
+        #print 'FINAL', result

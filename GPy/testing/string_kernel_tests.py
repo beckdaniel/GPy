@@ -159,9 +159,9 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         approx = (result1 - result2) / (2 * h)
         self.assertAlmostEqual(approx, dKd)
 
-    @unittest.skip('')
+    #@unittest.skip('')
     def test_profiling_1(self):
-        data = np.loadtxt('trial2', dtype=object, delimiter='\t')[:1]
+        data = np.loadtxt('trial2', dtype=object, delimiter='\t')[:10]
         labels = np.array(data[:,0], dtype=np.float64)[:, None]
         import sklearn.preprocessing as pp
         scaler = pp.StandardScaler()
@@ -181,8 +181,8 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         #m['fixsubsk.decay'].constrain_positive(0.1)
         print m
         print m['.*coefs']
-        print m.checkgrad(verbose=True)
-        m.optimize(messages=True)
+        #print m.checkgrad(verbose=True)
+        #m.optimize(messages=True)
         print m
         print m['.*coefs']
         for elem in zip(scaler.inverse_transform(m.predict(inputs)[0]), 
@@ -191,7 +191,6 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
 
     @unittest.skip('')
     def test_profiling_2(self):
-        #data = np.loadtxt('trial2', dtype=object, delimiter='\t')[:5]
         data = np.array([['cata', 1.0],
                          ['gatta', -1.0],
                          ['acta', -2.0],
@@ -201,15 +200,10 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         import sklearn.preprocessing as pp
         scaler = pp.StandardScaler()
         scaler.fit(labels)
-        #print labels
         labels = scaler.transform(labels)
-        #print labels
         X = data[:, 0:1]
-        #inputs = np.array(range(len(X)))[:, None]
-        k = GPy.kern.FixedLengthSubseqKernel(2, decay=0.1)
+        k = GPy.kern.FixedLengthSubseqKernel(1, decay=0.1)
         k.K(X)
-        #print inputs
-        #print labels
         print X
         m = GPy.models.GPRegression(X, labels, kernel=k)
         m['fixsubsk.decay'].constrain_bounded(0.0001, 1.0)
@@ -221,7 +215,6 @@ class FixedLengthSubseqKernelTests(unittest.TestCase):
         print m.checkgrad(verbose=True)
         print m
         print m['.*coefs']
-        
         for elem in zip(scaler.inverse_transform(m.predict(X)[0]), 
                         scaler.inverse_transform(labels)):
             print elem
