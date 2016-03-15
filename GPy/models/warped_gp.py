@@ -163,6 +163,34 @@ class WarpedGP(GP):
         ll_lpd = self.likelihood.log_predictive_density(fy, mu_star, var_star, Y_metadata=Y_metadata)
         return ll_lpd + np.log(self.warping_function.fgrad_y(y_test))
 
+    def predict_reciprocal(self, X, deg_gauss_hermite=20, gh=False):
+        """
+        Predict the reciprocal of the response variable according
+        to a squared error loss. This is *not* equivalent to the
+        mean because the reciprocal is not a linear transformation.
+        """
+        mu, var = GP._raw_predict(self, X)
+        # now push through likelihood
+        mean, var = self.likelihood.predictive_values(mu, var)
+
+        if not gh:
+            std = np.sqrt(var)
+            wmean = self._get_warped_mean(mean, std,
+                                          deg_gauss_hermite=deg_gauss_hermite).T
+            wvar = self._get_warped_variance(mean, std,
+                                             deg_gauss_hermite=deg_gauss_hermite).T
+            return (1 / wmean) + (wvar / (wmean ** 3))
+
+        if self.predict_in_warped_space:
+            std = np.sqrt(var)
+            gh_samples, gh_weights = np.polynomial.hermite.hermgauss(deg_gauss_hermite)
+            gh_samples = gh_samples[:, None]
+            gh_weights = gh_weights[None, :]
+            # this is where we change (term / sqrt(pi) to its reciprocal
+            wmean = gh_weights.dot((1 / self._get_warped_term(mean, std, gh_samples)) / np.sqrt(np.pi))
+        else:
+            wmean = mean
+        return wmean
 
 if __name__ == '__main__':
     X = np.random.randn(100, 1)
