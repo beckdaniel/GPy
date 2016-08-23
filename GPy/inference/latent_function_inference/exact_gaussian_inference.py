@@ -4,6 +4,7 @@
 from .posterior import PosteriorExact as Posterior
 from ...util.linalg import pdinv, dpotrs, tdot
 from ...util import diag
+from ...kern import Prod, Coregionalize
 import numpy as np
 from . import LatentFunctionInference
 log_2_pi = np.log(2*np.pi)
@@ -37,7 +38,17 @@ class ExactGaussianInference(LatentFunctionInference):
         YYT_factor = Y-m
 
         if K is None:
-            K = kern.K(X)
+            # We activate kronecker-based calculation for coreg models here
+            if (isinstance(kern, Prod) and 
+                isinstance(kern.parts[1], Coregionalize) and
+                kern.parts[1].kron_prod):
+                # Unravel X. We assume Xs are replicated. This is checked when
+                # creating the Coreg kernel.
+                unr_X = X[:(X.shape[0]/kern.parts[1].output_dim),:-1]
+
+                K = np.kron(kern.parts[1].B, kern.parts[0].K(unr_X))
+            else:
+                K = kern.K(X)
 
         Ky = K.copy()
         diag.add(Ky, precision+1e-8)

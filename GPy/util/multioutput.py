@@ -56,6 +56,7 @@ def ICM(input_dim, num_outputs, kernel, W_rank=1,W=None,kappa=None, kron_prod=Fa
         warnings.warn("kernel's input dimension overwritten to fit input_dim parameter.")
 
     K = kernel.prod(GPy.kern.Coregionalize(1, num_outputs, active_dims=[input_dim], rank=W_rank,W=W,kappa=kappa,kron_prod=kron_prod, name='B'),name=name)
+    print K
     return K
 
 
