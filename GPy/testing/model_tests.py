@@ -465,6 +465,24 @@ class MiscTests(unittest.TestCase):
         m.optimize()
         assert np.abs(m.offset[0]-offset)<0.1, ("GPOffsetRegression model failing to estimate correct offset (value estimated = %0.2f instead of %0.2f)" % (m.offset[0], offset))
 
+    def test_multioutput_regression_via_kron_prod(self):
+        """
+        Build two coreg models, one using the usual inference via kernel products
+        and another using the kronecker product. Results should be the same.
+        """
+        X1 = np.random.rand(50, 3) * 8
+        X2 = X1.copy()
+        Y1 = np.sin(X1) + np.random.randn(*X1.shape) * 0.05
+        Y2 = -np.sin(X2) + np.random.randn(*X2.shape) * 0.05
+
+        k1 = GPy.kern.RBF(3)
+        m1 = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k1, kron_prod=True)
+        k2 = GPy.kern.RBF(3)
+        m2 = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k2)
+
+        self.assertTrue(m1.log_likelihood(), m2.log_likelihood())
+
+
 
 class GradientTests(np.testing.TestCase):
     def setUp(self):
@@ -719,16 +737,11 @@ class GradientTests(np.testing.TestCase):
     def test_multioutput_regression_1D_via_kron(self):
         X1 = np.random.rand(50, 1) * 8
         X2 = X1.copy()
-        #X2 = np.random.rand(30, 1) * 5
-        #X = np.vstack((X1, X2))
         Y1 = np.sin(X1) + np.random.randn(*X1.shape) * 0.05
         Y2 = -np.sin(X2) + np.random.randn(*X2.shape) * 0.05
-        #Y = np.vstack((Y1, Y2))
 
         k1 = GPy.kern.RBF(1)
         m = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k1, kron_prod=True)
-        #import ipdb;ipdb.set_trace()
-        #m.constrain_fixed('.*rbf_var', 1.)
         self.assertTrue(m.checkgrad())
 
     def test_multioutput_sparse_regression_1D(self):
