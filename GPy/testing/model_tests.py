@@ -480,6 +480,8 @@ class MiscTests(unittest.TestCase):
         k2 = GPy.kern.RBF(3)
         m2 = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k2)
 
+        m1.optimize()
+        m2.optimize()
         self.assertTrue(m1.log_likelihood(), m2.log_likelihood())
 
 
