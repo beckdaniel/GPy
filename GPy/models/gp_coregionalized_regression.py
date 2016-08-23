@@ -28,7 +28,14 @@ class GPCoregionalizedRegression(GP):
     :param kernel_name: name of the kernel
     :type kernel_name: string
     """
-    def __init__(self, X_list, Y_list, kernel=None, likelihoods_list=None, name='GPCR',W_rank=1,kernel_name='coreg'):
+    def __init__(self, X_list, Y_list, kernel=None, likelihoods_list=None, kron_prod=False, name='GPCR',W_rank=1,kernel_name='coreg'):
+
+        # Inference via kronecker only allowed when all outputs are present for all inputs.
+        if kron_prod:
+            for X in X_list[1:]:
+                assert (X == X_list[0]).all()
+            for Y in Y_list[1:]:
+                assert len(Y) == len(Y_list[0])
 
         #Input and Output
         X,Y,self.output_index = util.multioutput.build_XY(X_list,Y_list)

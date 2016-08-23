@@ -702,7 +702,6 @@ class GradientTests(np.testing.TestCase):
         m = GPy.models.SparseGPClassificationUncertainInput(X, X_var, Y, kernel=kernel, Z=Z)
         self.assertTrue(m.checkgrad())
 
-
     def test_multioutput_regression_1D(self):
         X1 = np.random.rand(50, 1) * 8
         X2 = np.random.rand(30, 1) * 5
@@ -713,6 +712,21 @@ class GradientTests(np.testing.TestCase):
 
         k1 = GPy.kern.RBF(1)
         m = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k1)
+        #import ipdb;ipdb.set_trace()
+        #m.constrain_fixed('.*rbf_var', 1.)
+        self.assertTrue(m.checkgrad())
+
+    def test_multioutput_regression_1D_via_kron(self):
+        X1 = np.random.rand(50, 1) * 8
+        X2 = X1.copy()
+        #X2 = np.random.rand(30, 1) * 5
+        #X = np.vstack((X1, X2))
+        Y1 = np.sin(X1) + np.random.randn(*X1.shape) * 0.05
+        Y2 = -np.sin(X2) + np.random.randn(*X2.shape) * 0.05
+        #Y = np.vstack((Y1, Y2))
+
+        k1 = GPy.kern.RBF(1)
+        m = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k1, kron_prod=True)
         #import ipdb;ipdb.set_trace()
         #m.constrain_fixed('.*rbf_var', 1.)
         self.assertTrue(m.checkgrad())
