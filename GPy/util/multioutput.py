@@ -40,7 +40,7 @@ def build_likelihood(Y_list,noise_index,likelihoods_list=None):
     return likelihood
 
 
-def ICM(input_dim, num_outputs, kernel, W_rank=1,W=None,kappa=None,name='ICM'):
+def ICM(input_dim, num_outputs, kernel, W_rank=1,W=None,kappa=None, kron_prod=False, name='ICM'):
     """
     Builds a kernel for an Intrinsic Coregionalization Model
 
@@ -55,7 +55,7 @@ def ICM(input_dim, num_outputs, kernel, W_rank=1,W=None,kappa=None,name='ICM'):
         kernel.input_dim = input_dim
         warnings.warn("kernel's input dimension overwritten to fit input_dim parameter.")
 
-    K = kernel.prod(GPy.kern.Coregionalize(1, num_outputs, active_dims=[input_dim], rank=W_rank,W=W,kappa=kappa,name='B'),name=name)
+    K = kernel.prod(GPy.kern.Coregionalize(1, num_outputs, active_dims=[input_dim], rank=W_rank,W=W,kappa=kappa,kron_prod=kron_prod, name='B'),name=name)
     return K
 
 

@@ -39,7 +39,7 @@ class Coregionalize(Kern):
 
     .. note: see coregionalization examples in GPy.examples.regression for some usage.
     """
-    def __init__(self, input_dim, output_dim, rank=1, W=None, kappa=None, active_dims=None, name='coregion'):
+    def __init__(self, input_dim, output_dim, rank=1, W=None, kappa=None, active_dims=None, kron_prod=False, name='coregion'):
         super(Coregionalize, self).__init__(input_dim, active_dims, name=name)
         self.output_dim = output_dim
         self.rank = rank
@@ -56,6 +56,7 @@ class Coregionalize(Kern):
             assert kappa.shape==(self.output_dim, )
         self.kappa = Param('kappa', kappa, Logexp())
         self.link_parameters(self.W, self.kappa)
+        self.kron_prod = kron_prod
 
     def parameters_changed(self):
         self.B = np.dot(self.W, self.W.T) + np.diag(self.kappa)
