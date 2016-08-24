@@ -6,6 +6,7 @@ from .kern import CombinationKernel
 from paramz.caching import Cache_this
 import itertools
 from functools import reduce
+from coregionalize import Coregionalize
 
 
 def numpy_invalid_op_as_exception(func):
@@ -57,7 +58,14 @@ class Prod(CombinationKernel):
     def update_gradients_full(self, dL_dK, X, X2=None):
         if len(self.parts)==2:
             self.parts[0].update_gradients_full(dL_dK*self.parts[1].K(X,X2), X, X2)
-            self.parts[1].update_gradients_full(dL_dK*self.parts[0].K(X,X2), X, X2)
+            # Workaround to enable kronecker product 
+            if isinstance(self.parts[1], Coregionalize) and self.parts[1].kron_prod:
+                outd = self.parts[1].output_dim
+                unr_X = X[:(X.shape[0] / outd),:-1]
+                K = np.tile(self.parts[0].K(unr_X), (outd, outd))
+                self.parts[1].update_gradients_full(dL_dK * K, X, X2)
+            else:
+                self.parts[1].update_gradients_full(dL_dK*self.parts[0].K(X,X2), X, X2)
         else:
             for combination in itertools.combinations(self.parts, len(self.parts) - 1):
                 prod = reduce(np.multiply, [p.K(X, X2) for p in combination])
