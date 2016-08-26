@@ -57,6 +57,8 @@ class ExactGaussianInference(LatentFunctionInference):
         if (isinstance(kern, Prod) and 
             isinstance(kern.parts[1], Coregionalize) and
             kern.parts[1].kron_prod):
+            diag.add(unr_B, precision+1e-8)
+            diag.add(unr_K, precision+1e-8)
             Bi, LB, LBi, _ = pdinv(unr_B)
             Ki, LK, LKi, _ = pdinv(unr_K)
             Wi = np.kron(Bi, Ki)
