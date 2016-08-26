@@ -45,15 +45,26 @@ class ExactGaussianInference(LatentFunctionInference):
                 # Unravel X. We assume Xs are replicated. This is checked when
                 # creating the Coreg kernel.
                 unr_X = X[:(X.shape[0]/kern.parts[1].output_dim),:-1]
-
-                K = np.kron(kern.parts[1].B, kern.parts[0].K(unr_X))
+                unr_B = kern.parts[1].B
+                unr_K = kern.parts[0].K(unr_X)
+                K = np.kron(unr_B, unr_K)
             else:
                 K = kern.K(X)
 
         Ky = K.copy()
         diag.add(Ky, precision+1e-8)
 
-        Wi, LW, LWi, W_logdet = pdinv(Ky)
+        if (isinstance(kern, Prod) and 
+            isinstance(kern.parts[1], Coregionalize) and
+            kern.parts[1].kron_prod):
+            Bi, LB, LBi, _ = pdinv(unr_B)
+            Ki, LK, LKi, _ = pdinv(unr_K)
+            Wi = np.kron(Bi, Ki)
+            LW = np.kron(LB, LK)
+            LWi = np.kron(LBi, LKi)
+            W_logdet = 2 * np.sum(np.log(np.kron(np.diag(LB), np.diag(LK))))
+        else:
+            Wi, LW, LWi, W_logdet = pdinv(Ky)
 
         alpha, _ = dpotrs(LW, YYT_factor, lower=1)
 
