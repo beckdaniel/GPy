@@ -87,7 +87,8 @@ class WarpedGP(GP):
         return arg1 - (arg2 ** 2)
 
     def predict(self, Xnew, kern=None, pred_init=None, Y_metadata=None,
-                median=False, deg_gauss_hermite=20, likelihood=None):
+                median=False, deg_gauss_hermite=20, likelihood=None,
+                include_likelihood=True):
         """
         Prediction results depend on:
         - The value of the self.predict_in_warped_space flag
@@ -98,7 +99,7 @@ class WarpedGP(GP):
         # now push through likelihood
         #mean, var = self.likelihood.predictive_values(mu, var)
         
-        mean, var = super(WarpedGP, self).predict(Xnew, kern=kern, full_cov=False, likelihood=likelihood)
+        mean, var = super(WarpedGP, self).predict(Xnew, kern=kern, full_cov=False, likelihood=likelihood, include_likelihood=include_likelihood)
 
 
         if self.predict_in_warped_space:
@@ -114,6 +115,12 @@ class WarpedGP(GP):
             wmean = mean
             wvar = var
         return wmean, wvar
+
+    def predict_noiseless(self, Xnew, kern=None, pred_init=None, Y_metadata=None,
+                median=False, deg_gauss_hermite=20):
+        return self.predict(Xnew, kern=kern, pred_init=pred_init, Y_metadata=Y_metadata,
+                            median=median, deg_gauss_hermite=deg_gauss_hermite,
+                            include_likelihood=False)
 
     def predict_quantiles(self, X, quantiles=(2.5, 97.5), Y_metadata=None, likelihood=None, kern=None):
         """
