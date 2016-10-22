@@ -51,12 +51,15 @@ class ExactGaussianInference(LatentFunctionInference):
             else:
                 K = kern.K(X)
 
-        Ky = K.copy()
-        diag.add(Ky, precision+1e-8)
 
         if (isinstance(kern, Prod) and 
             isinstance(kern.parts[1], Coregionalize) and
             kern.parts[1].kron_prod):
+            print unr_B
+            print unr_K
+            print prec_given
+            print precision
+            print Y_metadata
             diag.add(unr_B, precision+1e-8)
             diag.add(unr_K, precision+1e-8)
             Bi, LB, LBi, _ = pdinv(unr_B)
@@ -66,6 +69,8 @@ class ExactGaussianInference(LatentFunctionInference):
             LWi = np.kron(LBi, LKi)
             W_logdet = 2 * np.sum(np.log(np.kron(np.diag(LB), np.diag(LK))))
         else:
+            Ky = K.copy()
+            diag.add(Ky, precision+1e-8)
             Wi, LW, LWi, W_logdet = pdinv(Ky)
 
         alpha, _ = dpotrs(LW, YYT_factor, lower=1)

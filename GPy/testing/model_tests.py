@@ -476,9 +476,11 @@ class MiscTests(unittest.TestCase):
         Y2 = -np.sin(X2) + np.random.randn(*X2.shape) * 0.05
 
         k1 = GPy.kern.RBF(3)
-        m1 = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k1, kron_prod=True)
+        icm1 = GPy.util.multioutput.ICM(input_dim=X1.shape[1], num_outputs=2, kernel=k1, W_rank=1, kron_prod=True)
+        m1 = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=icm1)
         k2 = GPy.kern.RBF(3)
-        m2 = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=k2)
+        icm2 = GPy.util.multioutput.ICM(input_dim=X1.shape[1], num_outputs=2, kernel=k2, W_rank=1, kron_prod=False)
+        m2 = GPy.models.GPCoregionalizedRegression(X_list=[X1, X2], Y_list=[Y1, Y2], kernel=icm2)
 
         m1.optimize()
         m2.optimize()

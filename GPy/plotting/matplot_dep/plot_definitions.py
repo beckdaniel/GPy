@@ -85,7 +85,7 @@ class MatplotlibPlots(AbstractPlottingLibrary):
         #ax.autoscale_view()
         fontdict=dict(family='sans-serif', weight='light', size=9)
         if legend is True:
-            ax.legend(*ax.get_legend_handles_labels())
+            ax.legend(*ax.get_legend_handles_labels(), loc=4)
         elif legend >= 1:
             #ax.legend(prop=fontdict)
             legend_ontop(ax, ncol=legend, fontdict=fontdict)

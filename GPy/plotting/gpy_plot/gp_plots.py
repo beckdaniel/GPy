@@ -147,6 +147,9 @@ def plot_confidence(self, lower=2.5, upper=97.5, plot_limits=None, fixed_inputs=
 def _plot_confidence(self, canvas, helper_data, helper_prediction, label, **kwargs):
     _, free_dims, Xgrid, _, _, _, _, _ = helper_data
     update_not_existing_kwargs(kwargs, pl().defaults.confidence_interval)  # @UndefinedVariable
+    print kwargs
+    kwargs['color'] = 'blue'
+    kwargs['edgecolor'] = 'darkblue'
     if len(free_dims)<=1:
         if len(free_dims)==1:
             percs = helper_prediction[1]
@@ -339,7 +342,7 @@ def plot(self, plot_limits=None, fixed_inputs=None,
     if hasattr(self, 'Z') and plot_inducing:
         plots.update(_plot_inducing(self, canvas, visible_dims, projection, 'Inducing'))
     if plot_data:
-        plots.update(_plot_data(self, canvas, which_data_rows, which_data_ycols, free_dims, projection, "Data"))
+        plots.update(_plot_data(self, canvas, which_data_rows, which_data_ycols, free_dims, projection, "data"))
         plots.update(_plot_data_error(self, canvas, which_data_rows, which_data_ycols, free_dims, projection, "Data Error"))
     plots.update(_plot(self, canvas, plots, helper_data, helper_prediction, levels, plot_inducing, plot_density, projection))
     if plot_raw and (samples_likelihood > 0):
@@ -404,12 +407,12 @@ def plot_f(self, plot_limits=None, fixed_inputs=None,
 
 
 def _plot(self, canvas, plots, helper_data, helper_prediction, levels, plot_inducing=True, plot_density=False, projection='2d'):
-        plots.update(_plot_mean(self, canvas, helper_data, helper_prediction, levels, projection, 'Mean'))
+        plots.update(_plot_mean(self, canvas, helper_data, helper_prediction, levels, projection, 'prediction'))
 
         try:
             if projection=='2d':
                 if not plot_density:
-                    plots.update(_plot_confidence(self, canvas, helper_data, helper_prediction, "Confidence"))
+                    plots.update(_plot_confidence(self, canvas, helper_data, helper_prediction, "uncertainty"))
                 else:
                     plots.update(_plot_density(self, canvas, helper_data, helper_prediction, "Density"))
         except RuntimeError:
