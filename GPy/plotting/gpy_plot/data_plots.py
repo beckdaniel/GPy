@@ -71,7 +71,7 @@ def _plot_data(self, canvas, which_data_rows='all',
     plots = {}
     plots['dataplot'] = []
 
-    #plot_kwargs['marker'] = 'o'
+    plot_kwargs['marker'] = 'o'
 
     #one dimensional plotting
     if len(free_dims) == 1:

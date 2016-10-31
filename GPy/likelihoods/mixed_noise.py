@@ -63,6 +63,15 @@ class MixedNoise(Likelihood):
             Q[ind==j,:] = np.hstack(q)
         return [q[:,None] for q in Q.T]
 
+    def log_predictive_density(self, y_test, mu_star, var_star, Y_metadata=None):
+        ind = Y_metadata['output_index'].flatten()
+        v = np.zeros(ind.size)
+        for lik, j in zip(self.likelihoods_list, range(len(self.likelihoods_list))):
+            v[ind==j] = var_star + lik.variance
+        #v = var_star + self.variance
+        return -0.5*np.log(2*np.pi) -0.5*np.log(v) - 0.5*np.square(y_test - mu_star)/v
+        
+
     def samples(self, gp, Y_metadata):
         """
         Returns a set of samples of observations based on a given value of the latent variable.
