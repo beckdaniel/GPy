@@ -1,64 +1,160 @@
 # GPy
 
+The Gaussian processes framework in Python.
 
-A Gaussian processes framework in Python.
+* GPy [homepage](http://sheffieldml.github.io/GPy/)
+* Tutorial [notebooks](http://nbviewer.ipython.org/github/SheffieldML/notebook/blob/master/GPy/index.ipynb)
+* User [mailing-list](https://lists.shef.ac.uk/sympa/subscribe/gpy-users)
+* Developer [documentation](http://pythonhosted.org/GPy/)
+* Travis-CI [unit-tests](https://travis-ci.org/SheffieldML/GPy)
+* [![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause)
 
-* [GPy homepage](http://sheffieldml.github.io/GPy/)
-* [Tutorial notebooks](http://nbviewer.ipython.org/github/SheffieldML/notebook/blob/master/GPy/index.ipynb)
-* [User mailing list](https://lists.shef.ac.uk/sympa/subscribe/gpy-users)
-* [Online documentation](https://gpy.readthedocs.org/en/latest/)
-* [Unit tests (Travis-CI)](https://travis-ci.org/SheffieldML/GPy)
+[![deploystat](https://travis-ci.org/SheffieldML/GPy.svg?branch=deploy)](https://travis-ci.org/SheffieldML/GPy) [![appveyor](https://ci.appveyor.com/api/projects/status/662o6tha09m2jix3/branch/deploy?svg=true)](https://ci.appveyor.com/project/mzwiessele/gpy/branch/deploy) [![coverallsdevel](https://coveralls.io/repos/github/SheffieldML/GPy/badge.svg?branch=devel)](https://coveralls.io/github/SheffieldML/GPy?branch=devel) [![covdevel](http://codecov.io/github/SheffieldML/GPy/coverage.svg?branch=devel)](http://codecov.io/github/SheffieldML/GPy?branch=devel) [![Research software impact](http://depsy.org/api/package/pypi/GPy/badge.svg)](http://depsy.org/package/python/GPy) [![Code Health](https://landscape.io/github/SheffieldML/GPy/devel/landscape.svg?style=flat)](https://landscape.io/github/SheffieldML/GPy/devel)
 
-##### Continuous integration: 
+## Contributing to GPy
 
+We welcome any contributions to GPy, after all it is an open source project. We use the GitHub feature of pull requests for contributions.
 
-|   master   |   devel   |
-| ---------- | --------- |
-| [![Build Status](https://travis-ci.org/SheffieldML/GPy.svg?branch=master)](https://travis-ci.org/SheffieldML/GPy) | [![Build Status](https://travis-ci.org/SheffieldML/GPy.svg?branch=devel)](https://travis-ci.org/SheffieldML/GPy) |
+For an in depth description of pull requests, please visit https://help.github.com/articles/using-pull-requests/ .
 
-### Avalability
+Steps to a successfull contribution:
 
-Python 2.7 and 3.4, Windows, MacOSX, Linux
+1. Fork GPy: https://help.github.com/articles/fork-a-repo/
+2. Make your changes to the source in your fork.
+3. Set up tests to test your code. We are using unttests in the testing subfolder of GPy. There is a good chance that there already a framework set up to test your new model in model_tests.py. have a look at the source and you might be able to just add your model as an additional test. There is also a framework for testing the other bits and pieces, just head over to the testing folder and have alook.
+4. Create a pull request to the devel branch in GPy, see above.
+5. The tests will be running on your pull request and with the comments we will be able to discuss the changes and help you with any problems.
+6. The pull request gets accepted and your awsome new feature will be in the next release :)
 
-### Citation
+For any further questions/suggestions head over to the issues section in GPy. 
+
+## Support and questions to the community
+
+We have set up a meailing list for any questions you might have or problems you feel others have encountered:
+
+gpy-users@lists.shef.ac.uk
+
+Feel free to join the discussions on the issues section, too.
+
+## Updated Structure
+
+We have pulled the core parameterization out of GPy. It is a package called [paramz](https://github.com/sods/paramz) and is the pure gradient based model optimization.
+
+If you installed GPy with pip, just upgrade the package using:
+
+    $ pip install --upgrade GPy
+
+If you have the developmental version of GPy (using the develop or -e option) just install the dependencies by running
+
+    $ python setup.py develop
+
+again, in the GPy installation folder.
+
+A warning: This usually works, but sometimes `distutils/setuptools` opens a
+whole can of worms here, specially when compiled extensions are involved.
+If that is the case, it is best to clean the repo and reinstall.
+
+## Supported Platforms:
+
+[<img src="https://www.python.org/static/community_logos/python-logo-generic.svg" height=40px>](https://www.python.org/)
+[<img src="https://upload.wikimedia.org/wikipedia/commons/5/5f/Windows_logo_-_2012.svg" height=40px>](http://www.microsoft.com/en-gb/windows)
+[<img src="https://upload.wikimedia.org/wikipedia/commons/8/8e/OS_X-Logo.svg" height=40px>](http://www.apple.com/osx/)
+[<img src="https://upload.wikimedia.org/wikipedia/commons/3/35/Tux.svg" height=40px>](https://en.wikipedia.org/wiki/List_of_Linux_distributions)
+
+Python 2.7, 3.4 and higher
+
+## Citation
 
     @Misc{gpy2014,
-      author =   {{The GPy authors}},
+      author =   {{GPy}},
       title =    {{GPy}: A Gaussian process framework in python},
       howpublished = {\url{http://github.com/SheffieldML/GPy}},
-      year = {2012--2015}
+      year = {since 2012}
     }
 
-### Pronounciation: dʒí páj
+### Pronounciation:
 
 We like to pronounce it 'g-pie'.
 
-### Getting started: installing with pip
+## Getting started: installing with pip
 
-We are now requiring the newest version (0.16) of 
-[scipy](http://www.scipy.org/) and thus, we strongly recommend using 
+We are now requiring the newest version (0.16) of
+[scipy](http://www.scipy.org/) and thus, we strongly recommend using
 the  [anaconda python distribution](http://continuum.io/downloads).
 With anaconda you can install GPy by the following:
 
     conda update scipy
     pip install gpy
-    
-We've also had luck with [enthought](http://www.enthought.com), 
-although enthought currently (as of 8th Sep. 2015) does not support scipy 0.16.
 
-If you'd like to install from source, or want to contribute to the project (e.g. by sending pull requests via github), read on.
+We've also had luck with [enthought](http://www.enthought.com). Install scipy 0.16 (or later)
+ and then pip install GPy:
+
+    pip install gpy
+
+If you'd like to install from source, or want to contribute to the project (i.e. by sending pull requests via github), read on.
 
 ### Troubleshooting installation problems
 
 If you're having trouble installing GPy via `pip install GPy` here is a probable solution:
 
-    git clone https://github.com/mikecroucher/GPy.git
+    git clone https://github.com/SheffieldML/GPy.git
     cd GPy
     git checkout devel
-    python3 setup.py build_ext --inplace
-    nosetests3 GPy/testing
+    python setup.py build_ext --inplace
+    nosetests GPy/testing
 
-### Ubuntu hackers
+### Direct downloads
+
+[![PyPI version](https://badge.fury.io/py/GPy.svg)](https://pypi.python.org/pypi/GPy) [![source](https://img.shields.io/badge/download-source-green.svg)](https://pypi.python.org/pypi/GPy)
+[![Windows](https://img.shields.io/badge/download-windows-orange.svg)](https://pypi.python.org/pypi/GPy)
+[![MacOSX](https://img.shields.io/badge/download-macosx-blue.svg)](https://pypi.python.org/pypi/GPy)
+
+# Saving models in a consistent way across versions:
+
+As pickle is inconsistent across python versions and heavily dependent on class structure, it behaves inconsistent across versions. 
+Pickling as meant to serialize models within the same environment, and not to store models on disk to be used later on.
+
+To save a model it is best to save the m.param_array of it to disk (using numpy’s np.save).
+Additionally, you save the script, which creates the model. 
+In this script you can create the model using initialize=False as a keyword argument and with the data loaded as normal. 
+You then set the model parameters by setting m.param_array[:] = loaded_params as the previously saved parameters. 
+Then you initialize the model by m.initialize_parameter(), which will make the model usable. 
+Be aware that up to this point the model is in an inconsistent state and cannot be used to produce any results.
+
+```python
+# let X, Y be data loaded above
+# Model creation:
+m = GPy.models.GPRegression(X, Y)
+m.optimize()
+# 1: Saving a model:
+np.save('model_save.npy', m.param_array)
+# 2: loading a model
+# Model creation, without initialization:
+m = GPy.models(GPRegression(X,Y,initialize=False)
+m[:] = np.load('model_save.npy')
+m.initialize_parameter()
+print m
+```
+
+## Running unit tests:
+
+Ensure nose is installed via pip:
+
+    pip install nose
+
+Run nosetests from the root directory of the repository:
+
+    nosetests -v GPy/testing
+
+or from within IPython
+
+    import GPy; GPy.tests()
+
+or using setuptools
+
+    python setup.py test
+
+## Ubuntu hackers
 
 > Note: Right now the Ubuntu package index does not include scipy 0.16.0, and thus, cannot
 > be used for GPy. We hope this gets fixed soon.
@@ -73,89 +169,34 @@ clone this git repository and add it to your path:
     echo 'PYTHONPATH=$PYTHONPATH:~/SheffieldML' >> ~/.bashrc
 
 
- 
-### OSX
-
-
-We were working hard to make pre-built distributions ready. 
-You can now install GPy via pip on MacOSX using 
-[anaconda python distribution](http://continuum.io/downloads):
-
-    conda update scipy
-    pip install gpy
-
-If this does not work, then you need to build GPy yourself, 
-using the [development toolkits](https://developer.apple.com/xcode/). 
-Download/clone GPy and run the build process:
-
-    conda update scipy
-    git clone git@github.com:SheffieldML/GPy.git ~/GPy
-    cd ~/GPy
-    python setup.py install
-
-If you do not wish to build the C extensions (10 times speedup),
-you can run the pure python installations, by just adding GPy
-to your python path.
-
-   echo 'PYTHONPATH=$PYTHONPATH:~/SheffieldML' >> ~/.profile
-
-
-
-### Compiling documentation:
-
+## Compiling documentation:
 
 The documentation is stored in doc/ and is compiled with the Sphinx Python documentation generator, and is written in the reStructuredText format.
 
 The Sphinx documentation is available here: http://sphinx-doc.org/latest/contents.html
 
-
-##### Installing dependencies:
-
+**Installing dependencies:**
 
 To compile the documentation, first ensure that Sphinx is installed. On Debian-based systems, this can be achieved as follows:
 
     sudo apt-get install python-pip
     sudo pip install sphinx
 
-A LaTeX distribution is also required to compile the equations. Note that the extra packages are necessary to install the unicode packages. To compile the equations to PNG format for use in HTML pages, the package *dvipng* must be installed. IPython is also required. On Debian-based systems, this can be achieved as follows:
-
-    sudo apt-get install texlive texlive-latex-extra texlive-base texlive-recommended
-    sudo apt-get install dvipng
-    sudo apt-get install ipython
-
-
-#### Compiling documentation:
-
+**Compiling documentation:**
 
 The documentation can be compiled as follows:
 
     cd doc
+    sphinx-apidoc -o source/ ../GPy/
     make html
 
-The HTML files are then stored in doc/_build/
-
-
-## Running unit tests:
-
-
-Ensure nose is installed via pip:
-
-    pip install nose
-
-Run nosetests from the root directory of the repository:
-
-    nosetests -v GPy/testing
-
-or from within IPython
-
-    import GPy; GPy.tests()
-
-
+The HTML files are then stored in doc/build/html
 
 ## Funding Acknowledgements
 
+Current support for the GPy software is coming through the following projects.
 
-Current support for the GPy software is coming through the following projects. 
+* [EU FP7-HEALTH Project Ref 305626](http://radiant-project.eu) "RADIANT: Rapid Development and Distribution of Statistical Tools for High-Throughput Sequencing Data"
 
 * [EU FP7-PEOPLE Project Ref 316861](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/mlpm/) "MLPM2012: Machine Learning for Personalized Medicine"
 
@@ -164,7 +205,8 @@ Current support for the GPy software is coming through the following projects.
 *  [EU FP7-ICT Project Ref 612139](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/wysiwyd/) "WYSIWYD: What You Say is What You Did"
 
 Previous support for the GPy software came from the following projects:
-* [BBSRC Project No BB/K011197/1](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/recombinant/) "Linking recombinant gene sequence to protein product manufacturability using CHO cell genomic resources"
-* [EU FP7-KBBE Project Ref 289434](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/biopredyn/) "From Data to Models: New Bioinformatics Methods and Tools for Data-Driven Predictive Dynamic Modelling in Biotechnological Applications"
-* [BBSRC Project No BB/H018123/2](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/iterative/) "An iterative pipeline of computational modelling and experimental design for uncovering gene regulatory networks in vertebrates"
-* [Erasysbio](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/synergy/) "SYNERGY: Systems approach to gene regulation biology through nuclear receptors"
+
+- [BBSRC Project No BB/K011197/1](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/recombinant/) "Linking recombinant gene sequence to protein product manufacturability using CHO cell genomic resources"
+- [EU FP7-KBBE Project Ref 289434](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/biopredyn/) "From Data to Models: New Bioinformatics Methods and Tools for Data-Driven Predictive Dynamic Modelling in Biotechnological Applications"
+- [BBSRC Project No BB/H018123/2](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/iterative/) "An iterative pipeline of computational modelling and experimental design for uncovering gene regulatory networks in vertebrates"
+- [Erasysbio](http://staffwww.dcs.shef.ac.uk/people/N.Lawrence/projects/synergy/) "SYNERGY: Systems approach to gene regulation biology through nuclear receptors"

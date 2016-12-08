@@ -2,9 +2,9 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 
-import numpy as np
 import sys
-from GPy.models.sparse_gp_regression import SparseGPRegression
+from .sparse_gp_regression import SparseGPRegression
+from ..core import Param
 
 class SparseGPLVM(SparseGPRegression):
     """
@@ -22,7 +22,9 @@ class SparseGPLVM(SparseGPRegression):
         if X is None:
             from ..util.initialization import initialize_latent
             X, fracs = initialize_latent(init, input_dim, Y)
+        X = Param('latent space', X)
         SparseGPRegression.__init__(self, X, Y, kernel=kernel, num_inducing=num_inducing)
+        self.link_parameter(self.X, 0)
 
     def parameters_changed(self):
         super(SparseGPLVM, self).parameters_changed()

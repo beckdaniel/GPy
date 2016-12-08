@@ -3,8 +3,8 @@
 
 from .gp_regression import GPRegression
 from .gp_classification import GPClassification
-from .sparse_gp_regression import SparseGPRegression, SparseGPRegressionUncertainInput
-from .sparse_gp_classification import SparseGPClassification
+from .sparse_gp_regression import SparseGPRegression
+from .sparse_gp_classification import SparseGPClassification, SparseGPClassificationUncertainInput
 from .gplvm import GPLVM
 from .bcgplvm import BCGPLVM
 from .sparse_gplvm import SparseGPLVM
@@ -22,3 +22,9 @@ from .gp_var_gauss import GPVariationalGaussianApproximation
 from .one_vs_all_classification import OneVsAllClassification
 from .one_vs_all_sparse_classification import OneVsAllSparseClassification
 from .dpgplvm import DPBayesianGPLVM
+
+from .state_space_model import StateSpace
+
+from .ibp_lfm import IBPLFM
+
+from .gp_offset_regression import GPOffsetRegression

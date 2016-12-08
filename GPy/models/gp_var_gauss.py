@@ -3,8 +3,6 @@
 
 import numpy as np
 from ..core import GP
-from ..core.parameterization import ObsAr
-from .. import kern
 from ..core.parameterization.param import Param
 from ..inference.latent_function_inference import VarGauss
 
@@ -30,7 +28,7 @@ class GPVariationalGaussianApproximation(GP):
         self.beta = Param('beta', np.ones(num_data))
 
         inf = VarGauss(self.alpha, self.beta)
-        super(GPVariationalGaussianApproximation, self).__init__(X, Y, kernel, likelihood, name='VarGP', inference_method=inf)
+        super(GPVariationalGaussianApproximation, self).__init__(X, Y, kernel, likelihood, name='VarGP', inference_method=inf, Y_metadata=Y_metadata)
 
         self.link_parameter(self.alpha)
         self.link_parameter(self.beta)

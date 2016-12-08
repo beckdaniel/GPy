@@ -2,18 +2,17 @@
 # Licensed under the BSD 3-clause license (see LICENSE.txt)
 
 import numpy as np
-import sys
-from .. import kern
 from .model import Model
-from .parameterization import ObsAr
+from .parameterization.variational import VariationalPosterior
 from .mapping import Mapping
 from .. import likelihoods
+from .. import kern
 from ..inference.latent_function_inference import exact_gaussian_inference, expectation_propagation
-from .parameterization.variational import VariationalPosterior
+from ..util.normalizer import Standardize
+from paramz import ObsAr
 
 import logging
 import warnings
-from GPy.util.normalizer import MeanNorm
 logger = logging.getLogger("GP")
 
 class GP(Model):
@@ -29,7 +28,7 @@ class GP(Model):
     :param Norm normalizer:
         normalize the outputs Y.
         Prediction will be un-normalized using this normalizer.
-        If normalizer is None, we will normalize using MeanNorm.
+        If normalizer is None, we will normalize using Standardize.
         If normalizer is False, no normalization will be done.
 
     .. Note:: Multiple independent outputs are allowed using columns of Y
@@ -50,7 +49,7 @@ class GP(Model):
         logger.info("initializing Y")
 
         if normalizer is True:
-            self.normalizer = MeanNorm()
+            self.normalizer = Standardize()
         elif normalizer is False:
             self.normalizer = None
         else:
@@ -65,6 +64,7 @@ class GP(Model):
             self.Y_normalized = self.Y
         else:
             self.Y = Y
+            self.Y_normalized = self.Y
 
         if Y.shape[0] != self.num_data:
             #There can be cases where we want inputs than outputs, for example if we have multiple latent
@@ -83,6 +83,9 @@ class GP(Model):
         assert isinstance(likelihood, likelihoods.Likelihood)
         self.likelihood = likelihood
 
+        if self.kern._effective_input_dim != self.X.shape[1]:
+            warnings.warn("Your kernel has a different input dimension {} then the given X dimension {}. Be very sure this is what you want and you have not forgotten to set the right input dimenion in your kernel".format(self.kern._effective_input_dim, self.X.shape[1]))
+
         #handle the mean function
         self.mean_function = mean_function
         if mean_function is not None:
@@ -98,7 +101,7 @@ class GP(Model):
                 inference_method = exact_gaussian_inference.ExactGaussianInference()
             else:
                 inference_method = expectation_propagation.EP()
-                print("defaulting to ", inference_method, "for latent function inference")
+                print("defaulting to " + str(inference_method) + " for latent function inference")
         self.inference_method = inference_method
 
         logger.info("adding kernel and likelihood as parameters")
@@ -146,14 +149,16 @@ class GP(Model):
                 # LVM models
                 if isinstance(self.X, VariationalPosterior):
                     assert isinstance(X, type(self.X)), "The given X must have the same type as the X in the model!"
+                    index = self.X._parent_index_
                     self.unlink_parameter(self.X)
                     self.X = X
-                    self.link_parameter(self.X)
+                    self.link_parameter(self.X, index=index)
                 else:
+                    index = self.X._parent_index_
                     self.unlink_parameter(self.X)
                     from ..core import Param
-                    self.X = Param('latent mean',X)
-                    self.link_parameter(self.X)
+                    self.X = Param('latent mean', X)
+                    self.link_parameter(self.X, index=index)
             else:
                 self.X = ObsAr(X)
         self.update_model(True)
@@ -179,7 +184,7 @@ class GP(Model):
     def parameters_changed(self):
         """
         Method that is called upon any changes to :class:`~GPy.core.parameterization.param.Param` variables within the model.
-        In particular in the GP class this method reperforms inference, recalculating the posterior and log marginal likelihood and gradients of the model
+        In particular in the GP class this method re-performs inference, recalculating the posterior and log marginal likelihood and gradients of the model
 
         .. warning::
             This method is not designed to be called manually, the framework is set up to automatically call this method upon changes to parameters, if you call
@@ -210,41 +215,18 @@ class GP(Model):
                         = N(f*| K_{x*x}(K_{xx} + \Sigma)^{-1}Y, K_{x*x*} - K_{xx*}(K_{xx} + \Sigma)^{-1}K_{xx*}
             \Sigma := \texttt{Likelihood.variance / Approximate likelihood covariance}
         """
-        if kern is None:
-            kern = self.kern
-
-        Kx = kern.K(self._predictive_variable, Xnew)
-        mu = np.dot(Kx.T, self.posterior.woodbury_vector)
-        if len(mu.shape)==1:
-            mu = mu.reshape(-1,1)
-        if full_cov:
-            Kxx = kern.K(Xnew)
-            if self.posterior.woodbury_inv.ndim == 2:
-                var = Kxx - np.dot(Kx.T, np.dot(self.posterior.woodbury_inv, Kx))
-            elif self.posterior.woodbury_inv.ndim == 3: # Missing data
-                var = np.empty((Kxx.shape[0],Kxx.shape[1],self.posterior.woodbury_inv.shape[2]))
-                from ..util.linalg import mdot
-                for i in range(var.shape[2]):
-                    var[:, :, i] = (Kxx - mdot(Kx.T, self.posterior.woodbury_inv[:, :, i], Kx))
-            var = var
-        else:
-            Kxx = kern.Kdiag(Xnew)
-            if self.posterior.woodbury_inv.ndim == 2:
-                var = (Kxx - np.sum(np.dot(self.posterior.woodbury_inv.T, Kx) * Kx, 0))[:,None]
-            elif self.posterior.woodbury_inv.ndim == 3: # Missing data
-                var = np.empty((Kxx.shape[0],self.posterior.woodbury_inv.shape[2]))
-                for i in range(var.shape[1]):
-                    var[:, i] = (Kxx - (np.sum(np.dot(self.posterior.woodbury_inv[:, :, i].T, Kx) * Kx, 0)))
-            var = var
-        #add in the mean function
+        mu, var = self.posterior._raw_predict(kern=self.kern if kern is None else kern, Xnew=Xnew, pred_var=self._predictive_variable, full_cov=full_cov)
         if self.mean_function is not None:
             mu += self.mean_function.f(Xnew)
-
         return mu, var
 
-    def predict(self, Xnew, full_cov=False, Y_metadata=None, kern=None):
+    def predict(self, Xnew, full_cov=False, Y_metadata=None, kern=None, likelihood=None, include_likelihood=True):
         """
-        Predict the function(s) at the new point(s) Xnew.
+        Predict the function(s) at the new point(s) Xnew. This includes the likelihood
+        variance added to the predicted underlying function (usually referred to as f).
+
+        In order to predict without adding in the likelihood give
+        `include_likelihood=False`, or refer to self.predict_noiseless().
 
         :param Xnew: The points at which to make a prediction
         :type Xnew: np.ndarray (Nnew x self.input_dim)
@@ -254,6 +236,8 @@ class GP(Model):
         :param Y_metadata: metadata about the predicting point to pass to the likelihood
         :param kern: The kernel to use for prediction (defaults to the model
                      kern). this is useful for examining e.g. subprocesses.
+        :param bool include_likelihood: Whether or not to add likelihood noise to the predicted underlying latent function f.
+
         :returns: (mean, var):
             mean: posterior mean, a Numpy array, Nnew x self.input_dim
             var: posterior variance, a Numpy array, Nnew x 1 if full_cov=False, Nnew x Nnew otherwise
@@ -265,14 +249,47 @@ class GP(Model):
         """
         #predict the latent function values
         mu, var = self._raw_predict(Xnew, full_cov=full_cov, kern=kern)
+
+        if include_likelihood:
+            # now push through likelihood
+            if likelihood is None:
+                likelihood = self.likelihood
+            mu, var = likelihood.predictive_values(mu, var, full_cov, Y_metadata=Y_metadata)
+
         if self.normalizer is not None:
             mu, var = self.normalizer.inverse_mean(mu), self.normalizer.inverse_variance(var)
 
-        # now push through likelihood
-        mean, var = self.likelihood.predictive_values(mu, var, full_cov, Y_metadata=Y_metadata)
-        return mean, var
+        return mu, var
 
-    def predict_quantiles(self, X, quantiles=(2.5, 97.5), Y_metadata=None, kern=None):
+    def predict_noiseless(self,  Xnew, full_cov=False, Y_metadata=None, kern=None):
+        """
+        Convenience function to predict the underlying function of the GP (often
+        referred to as f) without adding the likelihood variance on the
+        prediction function.
+
+        This is most likely what you want to use for your predictions.
+
+        :param Xnew: The points at which to make a prediction
+        :type Xnew: np.ndarray (Nnew x self.input_dim)
+        :param full_cov: whether to return the full covariance matrix, or just
+                         the diagonal
+        :type full_cov: bool
+        :param Y_metadata: metadata about the predicting point to pass to the likelihood
+        :param kern: The kernel to use for prediction (defaults to the model
+                     kern). this is useful for examining e.g. subprocesses.
+
+        :returns: (mean, var):
+            mean: posterior mean, a Numpy array, Nnew x self.input_dim
+            var: posterior variance, a Numpy array, Nnew x 1 if full_cov=False, Nnew x Nnew otherwise
+
+           If full_cov and self.input_dim > 1, the return shape of var is Nnew x Nnew x self.input_dim. If self.input_dim == 1, the return shape is Nnew x Nnew.
+           This is to allow for different normalizations of the output dimensions.
+
+        Note: If you want the predictive quantiles (e.g. 95% confidence interval) use :py:func:"~GPy.core.gp.GP.predict_quantiles".
+        """
+        return self.predict(Xnew, full_cov, Y_metadata, kern, None, False)
+
+    def predict_quantiles(self, X, quantiles=(2.5, 97.5), Y_metadata=None, kern=None, likelihood=None):
         """
         Get the predictive quantiles around the prediction at X
 
@@ -286,11 +303,16 @@ class GP(Model):
         :rtype: [np.ndarray (Xnew x self.output_dim), np.ndarray (Xnew x self.output_dim)]
         """
         m, v = self._raw_predict(X,  full_cov=False, kern=kern)
+        if likelihood is None:
+            likelihood = self.likelihood
+            
+        quantiles = likelihood.predictive_quantiles(m, v, quantiles, Y_metadata=Y_metadata)
+        
         if self.normalizer is not None:
-            m, v = self.normalizer.inverse_mean(m), self.normalizer.inverse_variance(v)
-        return self.likelihood.predictive_quantiles(m, v, quantiles, Y_metadata=Y_metadata)
+            quantiles = [self.normalizer.inverse_mean(q) for q in quantiles]
+        return quantiles
 
-    def predictive_gradients(self, Xnew):
+    def predictive_gradients(self, Xnew, kern=None):
         """
         Compute the derivatives of the predicted latent function with respect to X*
 
@@ -307,19 +329,21 @@ class GP(Model):
         :rtype: [np.ndarray (N*, Q ,D), np.ndarray (N*,Q) ]
 
         """
-        dmu_dX = np.empty((Xnew.shape[0],Xnew.shape[1],self.output_dim))
+        if kern is None:
+            kern = self.kern
+        mean_jac = np.empty((Xnew.shape[0],Xnew.shape[1],self.output_dim))
+
         for i in range(self.output_dim):
-            dmu_dX[:,:,i] = self.kern.gradients_X(self.posterior.woodbury_vector[:,i:i+1].T, Xnew, self.X)
+            mean_jac[:,:,i] = kern.gradients_X(self.posterior.woodbury_vector[:,i:i+1].T, Xnew, self._predictive_variable)
 
         # gradients wrt the diagonal part k_{xx}
-        dv_dX = self.kern.gradients_X(np.eye(Xnew.shape[0]), Xnew)
+        dv_dX = kern.gradients_X(np.eye(Xnew.shape[0]), Xnew)
         #grads wrt 'Schur' part K_{xf}K_{ff}^{-1}K_{fx}
-        alpha = -2.*np.dot(self.kern.K(Xnew, self.X),self.posterior.woodbury_inv)
-        dv_dX += self.kern.gradients_X(alpha, Xnew, self.X)
-        return dmu_dX, dv_dX
+        alpha = -2.*np.dot(kern.K(Xnew, self._predictive_variable), self.posterior.woodbury_inv)
+        dv_dX += kern.gradients_X(alpha, Xnew, self._predictive_variable)
+        return mean_jac, dv_dX
 
-
-    def predict_jacobian(self, Xnew, kern=None, full_cov=True):
+    def predict_jacobian(self, Xnew, kern=None, full_cov=False):
         """
         Compute the derivatives of the posterior of the GP.
 
@@ -337,15 +361,11 @@ class GP(Model):
         :param X: The points at which to get the predictive gradients.
         :type X: np.ndarray (Xnew x self.input_dim)
         :param kern: The kernel to compute the jacobian for.
-        :param boolean full_cov: whether to return the full covariance of the jacobian.
+        :param boolean full_cov: whether to return the cross-covariance terms between
+        the N* Jacobian vectors
 
         :returns: dmu_dX, dv_dX
         :rtype: [np.ndarray (N*, Q ,D), np.ndarray (N*,Q,(D)) ]
-
-        Note: We always return sum in input_dim gradients, as the off-diagonals
-        in the input_dim are not needed for further calculations.
-        This is a compromise for increase in speed. Mathematically the jacobian would
-        have another dimension in Q.
         """
         if kern is None:
             kern = self.kern
@@ -356,38 +376,41 @@ class GP(Model):
             mean_jac[:,:,i] = kern.gradients_X(self.posterior.woodbury_vector[:,i:i+1].T, Xnew, self._predictive_variable)
 
         dK_dXnew_full = np.empty((self._predictive_variable.shape[0], Xnew.shape[0], Xnew.shape[1]))
+        one = np.ones((1,1))
         for i in range(self._predictive_variable.shape[0]):
-            dK_dXnew_full[i] = kern.gradients_X([[1.]], Xnew, self._predictive_variable[[i]])
+            dK_dXnew_full[i] = kern.gradients_X(one, Xnew, self._predictive_variable[[i]])
 
         if full_cov:
-            dK2_dXdX = kern.gradients_XX([[1.]], Xnew)
+            dK2_dXdX = kern.gradients_XX(one, Xnew)
         else:
-            dK2_dXdX = kern.gradients_XX_diag([[1.]], Xnew)
+            dK2_dXdX = kern.gradients_XX_diag(one, Xnew)
+            #dK2_dXdX = np.zeros((Xnew.shape[0], Xnew.shape[1], Xnew.shape[1]))
+            #for i in range(Xnew.shape[0]):
+            #    dK2_dXdX[i:i+1,:,:] = kern.gradients_XX(one, Xnew[i:i+1,:])
 
         def compute_cov_inner(wi):
             if full_cov:
-                # full covariance gradients:
-                var_jac = dK2_dXdX - np.einsum('qnm,miq->niq', dK_dXnew_full.T.dot(wi), dK_dXnew_full)
+                var_jac = dK2_dXdX - np.einsum('qnm,msr->nsqr', dK_dXnew_full.T.dot(wi), dK_dXnew_full) # n,s = Xnew.shape[0], m = pred_var.shape[0]
             else:
-                var_jac = dK2_dXdX - np.einsum('qim,miq->iq', dK_dXnew_full.T.dot(wi), dK_dXnew_full)
+                var_jac = dK2_dXdX - np.einsum('qnm,mnr->nqr', dK_dXnew_full.T.dot(wi), dK_dXnew_full)
             return var_jac
 
         if self.posterior.woodbury_inv.ndim == 3: # Missing data:
             if full_cov:
-                var_jac = np.empty((Xnew.shape[0],Xnew.shape[0],Xnew.shape[1],self.output_dim))
+                var_jac = np.empty((Xnew.shape[0],Xnew.shape[0],Xnew.shape[1],Xnew.shape[1],self.output_dim))
+                for d in range(self.posterior.woodbury_inv.shape[2]):
+                    var_jac[:, :, :, :, d] = compute_cov_inner(self.posterior.woodbury_inv[:, :, d])
+            else:
+                var_jac = np.empty((Xnew.shape[0],Xnew.shape[1],Xnew.shape[1],self.output_dim))
                 for d in range(self.posterior.woodbury_inv.shape[2]):
                     var_jac[:, :, :, d] = compute_cov_inner(self.posterior.woodbury_inv[:, :, d])
-            else:
-                var_jac = np.empty((Xnew.shape[0],Xnew.shape[1],self.output_dim))
-                for d in range(self.posterior.woodbury_inv.shape[2]):
-                    var_jac[:, :, d] = compute_cov_inner(self.posterior.woodbury_inv[:, :, d])
         else:
             var_jac = compute_cov_inner(self.posterior.woodbury_inv)
         return mean_jac, var_jac
 
-    def predict_wishard_embedding(self, Xnew, kern=None, mean=True, covariance=True):
+    def predict_wishart_embedding(self, Xnew, kern=None, mean=True, covariance=True):
         """
-        Predict the wishard embedding G of the GP. This is the density of the
+        Predict the wishart embedding G of the GP. This is the density of the
         input of the GP defined by the probabilistic function mapping f.
         G = J_mean.T*J_mean + output_dim*J_cov.
 
@@ -404,10 +427,11 @@ class GP(Model):
         mu_jac, var_jac = self.predict_jacobian(Xnew, kern, full_cov=False)
         mumuT = np.einsum('iqd,ipd->iqp', mu_jac, mu_jac)
         Sigma = np.zeros(mumuT.shape)
-        if var_jac.ndim == 3:
-            Sigma[(slice(None), )+np.diag_indices(Xnew.shape[1], 2)] = var_jac.sum(-1)
+        if var_jac.ndim == 4: # Missing data
+            Sigma = var_jac.sum(-1)
         else:
-            Sigma[(slice(None), )+np.diag_indices(Xnew.shape[1], 2)] = self.output_dim*var_jac
+            Sigma = self.output_dim*var_jac
+
         G = 0.
         if mean:
             G += mumuT
@@ -415,15 +439,26 @@ class GP(Model):
             G += Sigma
         return G
 
-    def predict_magnification(self, Xnew, kern=None, mean=True, covariance=True):
+    def predict_wishard_embedding(self, Xnew, kern=None, mean=True, covariance=True):
+        warnings.warn("Wrong naming, use predict_wishart_embedding instead. Will be removed in future versions!", DeprecationWarning)
+        return self.predict_wishart_embedding(Xnew, kern, mean, covariance)
+
+    def predict_magnification(self, Xnew, kern=None, mean=True, covariance=True, dimensions=None):
         """
         Predict the magnification factor as
 
         sqrt(det(G))
 
-        for each point N in Xnew
+        for each point N in Xnew.
+
+        :param bool mean: whether to include the mean of the wishart embedding.
+        :param bool covariance: whether to include the covariance of the wishart embedding.
+        :param array-like dimensions: which dimensions of the input space to use [defaults to self.get_most_significant_input_dimensions()[:2]]
         """
-        G = self.predict_wishard_embedding(Xnew, kern, mean, covariance)
+        G = self.predict_wishart_embedding(Xnew, kern, mean, covariance)
+        if dimensions is None:
+            dimensions = self.get_most_significant_input_dimensions()[:2]
+        G = G[:, dimensions][:,:,dimensions]
         from ..util.linalg import jitchol
         mag = np.empty(Xnew.shape[0])
         for n in range(Xnew.shape[0]):
@@ -433,7 +468,7 @@ class GP(Model):
                 mag[n] = np.sqrt(np.linalg.det(G[n, :, :]))
         return mag
 
-    def posterior_samples_f(self,X,size=10, full_cov=True):
+    def posterior_samples_f(self,X, size=10, full_cov=True, **predict_kwargs):
         """
         Samples the posterior GP at the points X.
 
@@ -444,20 +479,32 @@ class GP(Model):
         :param full_cov: whether to return the full covariance matrix, or just the diagonal.
         :type full_cov: bool.
         :returns: fsim: set of simulations
-        :rtype: np.ndarray (N x samples)
+        :rtype: np.ndarray (D x N x samples) (if D==1 we flatten out the first dimension)
         """
-        m, v = self._raw_predict(X,  full_cov=full_cov)
+        m, v = self._raw_predict(X,  full_cov=full_cov, **predict_kwargs)
         if self.normalizer is not None:
             m, v = self.normalizer.inverse_mean(m), self.normalizer.inverse_variance(v)
-        v = v.reshape(m.size,-1) if len(v.shape)==3 else v
-        if not full_cov:
-            fsim = np.random.multivariate_normal(m.flatten(), np.diag(v.flatten()), size).T
-        else:
-            fsim = np.random.multivariate_normal(m.flatten(), v, size).T
 
+        def sim_one_dim(m, v):
+            if not full_cov:
+                return np.random.multivariate_normal(m.flatten(), np.diag(v.flatten()), size).T
+            else:
+                return np.random.multivariate_normal(m.flatten(), v, size).T
+
+        if self.output_dim == 1:
+            return sim_one_dim(m, v)
+        else:
+            fsim = np.empty((self.output_dim, self.num_data, size))
+            for d in range(self.output_dim):
+                if full_cov and v.ndim == 3:
+                    fsim[d] = sim_one_dim(m[:, d], v[:, :, d])
+                elif (not full_cov) and v.ndim == 2:
+                    fsim[d] = sim_one_dim(m[:, d], v[:, d])
+                else:
+                    fsim[d] = sim_one_dim(m[:, d], v)
         return fsim
 
-    def posterior_samples(self, X, size=10, full_cov=False, Y_metadata=None):
+    def posterior_samples(self, X, size=10, full_cov=False, Y_metadata=None, likelihood=None, **predict_kwargs):
         """
         Samples the posterior GP at the points X.
 
@@ -469,226 +516,18 @@ class GP(Model):
         :type full_cov: bool.
         :param noise_model: for mixed noise likelihood, the noise model to use in the samples.
         :type noise_model: integer.
-        :returns: Ysim: set of simulations, a Numpy array (N x samples).
+        :returns: Ysim: set of simulations,
+        :rtype: np.ndarray (D x N x samples) (if D==1 we flatten out the first dimension)
         """
-        fsim = self.posterior_samples_f(X, size, full_cov=full_cov)
-        Ysim = self.likelihood.samples(fsim, Y_metadata=Y_metadata)
-        return Ysim
-
-    def plot_f(self, plot_limits=None, which_data_rows='all',
-        which_data_ycols='all', fixed_inputs=[],
-        levels=20, samples=0, fignum=None, ax=None, resolution=None,
-        plot_raw=True,
-        linecol=None,fillcol=None, Y_metadata=None, data_symbol='kx',
-        apply_link=False):
-        """
-        Plot the GP's view of the world, where the data is normalized and before applying a likelihood.
-        This is a call to plot with plot_raw=True.
-        Data will not be plotted in this, as the GP's view of the world
-        may live in another space, or units then the data.
-
-        Can plot only part of the data and part of the posterior functions
-        using which_data_rowsm which_data_ycols.
-
-        :param plot_limits: The limits of the plot. If 1D [xmin,xmax], if 2D [[xmin,ymin],[xmax,ymax]]. Defaluts to data limits
-        :type plot_limits: np.array
-        :param which_data_rows: which of the training data to plot (default all)
-        :type which_data_rows: 'all' or a slice object to slice model.X, model.Y
-        :param which_data_ycols: when the data has several columns (independant outputs), only plot these
-        :type which_data_ycols: 'all' or a list of integers
-        :param fixed_inputs: a list of tuple [(i,v), (i,v)...], specifying that input index i should be set to value v.
-        :type fixed_inputs: a list of tuples
-        :param resolution: the number of intervals to sample the GP on. Defaults to 200 in 1D and 50 (a 50x50 grid) in 2D
-        :type resolution: int
-        :param levels: number of levels to plot in a contour plot.
-        :param levels: for 2D plotting, the number of contour levels to use is ax is None, create a new figure
-        :type levels: int
-        :param samples: the number of a posteriori samples to plot
-        :type samples: int
-        :param fignum: figure to plot on.
-        :type fignum: figure number
-        :param ax: axes to plot on.
-        :type ax: axes handle
-        :param linecol: color of line to plot [Tango.colorsHex['darkBlue']]
-        :type linecol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) as is standard in matplotlib
-        :param fillcol: color of fill [Tango.colorsHex['lightBlue']]
-        :type fillcol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) as is standard in matplotlib
-        :param Y_metadata: additional data associated with Y which may be needed
-        :type Y_metadata: dict
-        :param data_symbol: symbol as used matplotlib, by default this is a black cross ('kx')
-        :type data_symbol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) alongside marker type, as is standard in matplotlib.
-        :param apply_link: if there is a link function of the likelihood, plot the link(f*) rather than f*
-        :type apply_link: boolean
-        """
-        assert "matplotlib" in sys.modules, "matplotlib package has not been imported."
-        from ..plotting.matplot_dep import models_plots
-        kw = {}
-        if linecol is not None:
-            kw['linecol'] = linecol
-        if fillcol is not None:
-            kw['fillcol'] = fillcol
-        return models_plots.plot_fit(self, plot_limits, which_data_rows,
-                                     which_data_ycols, fixed_inputs,
-                                     levels, samples, fignum, ax, resolution,
-                                     plot_raw=plot_raw, Y_metadata=Y_metadata,
-                                     data_symbol=data_symbol, apply_link=apply_link, **kw)
-
-    def plot(self, plot_limits=None, which_data_rows='all',
-        which_data_ycols='all', fixed_inputs=[],
-        levels=20, samples=0, fignum=None, ax=None, resolution=None,
-        plot_raw=False, linecol=None,fillcol=None, Y_metadata=None,
-        data_symbol='kx', predict_kw=None, plot_training_data=True, samples_y=0, apply_link=False):
-        """
-        Plot the posterior of the GP.
-          - In one dimension, the function is plotted with a shaded region identifying two standard deviations.
-          - In two dimsensions, a contour-plot shows the mean predicted function
-          - In higher dimensions, use fixed_inputs to plot the GP  with some of the inputs fixed.
-
-        Can plot only part of the data and part of the posterior functions
-        using which_data_rowsm which_data_ycols.
-
-        :param plot_limits: The limits of the plot. If 1D [xmin,xmax], if 2D [[xmin,ymin],[xmax,ymax]]. Defaluts to data limits
-        :type plot_limits: np.array
-        :param which_data_rows: which of the training data to plot (default all)
-        :type which_data_rows: 'all' or a slice object to slice model.X, model.Y
-        :param which_data_ycols: when the data has several columns (independant outputs), only plot these
-        :type which_data_ycols: 'all' or a list of integers
-        :param fixed_inputs: a list of tuple [(i,v), (i,v)...], specifying that input index i should be set to value v.
-        :type fixed_inputs: a list of tuples
-        :param resolution: the number of intervals to sample the GP on. Defaults to 200 in 1D and 50 (a 50x50 grid) in 2D
-        :type resolution: int
-        :param levels: number of levels to plot in a contour plot.
-        :param levels: for 2D plotting, the number of contour levels to use is ax is None, create a new figure
-        :type levels: int
-        :param samples: the number of a posteriori samples to plot, p(f*|y)
-        :type samples: int
-        :param fignum: figure to plot on.
-        :type fignum: figure number
-        :param ax: axes to plot on.
-        :type ax: axes handle
-        :param linecol: color of line to plot [Tango.colorsHex['darkBlue']]
-        :type linecol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) as is standard in matplotlib
-        :param fillcol: color of fill [Tango.colorsHex['lightBlue']]
-        :type fillcol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) as is standard in matplotlib
-        :param Y_metadata: additional data associated with Y which may be needed
-        :type Y_metadata: dict
-        :param data_symbol: symbol as used matplotlib, by default this is a black cross ('kx')
-        :type data_symbol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) alongside marker type, as is standard in matplotlib.
-        :param plot_training_data: whether or not to plot the training points
-        :type plot_training_data: boolean
-        :param samples_y: the number of a posteriori samples to plot, p(y*|y)
-        :type samples_y: int
-        :param apply_link: if there is a link function of the likelihood, plot the link(f*) rather than f*, when plotting posterior samples f
-        :type apply_link: boolean
-        """
-        assert "matplotlib" in sys.modules, "matplotlib package has not been imported."
-        from ..plotting.matplot_dep import models_plots
-        kw = {}
-        if linecol is not None:
-            kw['linecol'] = linecol
-        if fillcol is not None:
-            kw['fillcol'] = fillcol
-        return models_plots.plot_fit(self, plot_limits, which_data_rows,
-                                     which_data_ycols, fixed_inputs,
-                                     levels, samples, fignum, ax, resolution,
-                                     plot_raw=plot_raw, Y_metadata=Y_metadata,
-                                     data_symbol=data_symbol, predict_kw=predict_kw,
-                                     plot_training_data=plot_training_data, samples_y=samples_y, apply_link=apply_link, **kw)
-
-
-    def plot_data(self, which_data_rows='all',
-        which_data_ycols='all', visible_dims=None,
-        fignum=None, ax=None, data_symbol='kx'):
-        """
-        Plot the training data
-          - For higher dimensions than two, use fixed_inputs to plot the data points with some of the inputs fixed.
-
-        Can plot only part of the data
-        using which_data_rows and which_data_ycols.
-
-        :param plot_limits: The limits of the plot. If 1D [xmin,xmax], if 2D [[xmin,ymin],[xmax,ymax]]. Defaluts to data limits
-        :type plot_limits: np.array
-        :param which_data_rows: which of the training data to plot (default all)
-        :type which_data_rows: 'all' or a slice object to slice model.X, model.Y
-        :param which_data_ycols: when the data has several columns (independant outputs), only plot these
-        :type which_data_ycols: 'all' or a list of integers
-        :param visible_dims: an array specifying the input dimensions to plot (maximum two)
-        :type visible_dims: a numpy array
-        :param resolution: the number of intervals to sample the GP on. Defaults to 200 in 1D and 50 (a 50x50 grid) in 2D
-        :type resolution: int
-        :param levels: number of levels to plot in a contour plot.
-        :param levels: for 2D plotting, the number of contour levels to use is ax is None, create a new figure
-        :type levels: int
-        :param samples: the number of a posteriori samples to plot, p(f*|y)
-        :type samples: int
-        :param fignum: figure to plot on.
-        :type fignum: figure number
-        :param ax: axes to plot on.
-        :type ax: axes handle
-        :param linecol: color of line to plot [Tango.colorsHex['darkBlue']]
-        :type linecol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) as is standard in matplotlib
-        :param fillcol: color of fill [Tango.colorsHex['lightBlue']]
-        :type fillcol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) as is standard in matplotlib
-        :param data_symbol: symbol as used matplotlib, by default this is a black cross ('kx')
-        :type data_symbol: color either as Tango.colorsHex object or character ('r' is red, 'g' is green) alongside marker type, as is standard in matplotlib.
-        """
-        assert "matplotlib" in sys.modules, "matplotlib package has not been imported."
-        from ..plotting.matplot_dep import models_plots
-        kw = {}
-        return models_plots.plot_data(self, which_data_rows,
-                                     which_data_ycols, visible_dims,
-                                     fignum, ax, data_symbol, **kw)
-
-
-    def errorbars_trainset(self, which_data_rows='all',
-            which_data_ycols='all', fixed_inputs=[], fignum=None, ax=None,
-            linecol=None, data_symbol='kx', predict_kw=None, plot_training_data=True,lw=None):
-
-        """
-        Plot the posterior error bars corresponding to the training data
-          - For higher dimensions than two, use fixed_inputs to plot the data points with some of the inputs fixed.
-
-        Can plot only part of the data
-        using which_data_rows and which_data_ycols.
-
-        :param which_data_rows: which of the training data to plot (default all)
-        :type which_data_rows: 'all' or a slice object to slice model.X, model.Y
-        :param which_data_ycols: when the data has several columns (independant outputs), only plot these
-        :type which_data_rows: 'all' or a list of integers
-        :param fixed_inputs: a list of tuple [(i,v), (i,v)...], specifying that input index i should be set to value v.
-        :type fixed_inputs: a list of tuples
-        :param fignum: figure to plot on.
-        :type fignum: figure number
-        :param ax: axes to plot on.
-        :type ax: axes handle
-        :param plot_training_data: whether or not to plot the training points
-        :type plot_training_data: boolean
-        """
-        assert "matplotlib" in sys.modules, "matplotlib package has not been imported."
-        from ..plotting.matplot_dep import models_plots
-        kw = {}
-        if lw is not None:
-            kw['lw'] = lw
-        return models_plots.errorbars_trainset(self, which_data_rows, which_data_ycols, fixed_inputs,
-                                    fignum, ax, linecol, data_symbol,
-                                    predict_kw, plot_training_data, **kw)
-
-
-    def plot_magnification(self, labels=None, which_indices=None,
-                resolution=50, ax=None, marker='o', s=40,
-                fignum=None, legend=True,
-                plot_limits=None,
-                aspect='auto', updates=False, plot_inducing=True, kern=None, **kwargs):
-
-        import sys
-        assert "matplotlib" in sys.modules, "matplotlib package has not been imported."
-        from ..plotting.matplot_dep import dim_reduction_plots
-
-        return dim_reduction_plots.plot_magnification(self, labels, which_indices,
-                resolution, ax, marker, s,
-                fignum, plot_inducing, legend,
-                plot_limits, aspect, updates, **kwargs)
-
+        fsim = self.posterior_samples_f(X, size, full_cov=full_cov, **predict_kwargs)
+        if likelihood is None:
+            likelihood = self.likelihood
+        if fsim.ndim == 3:
+            for d in range(fsim.shape[0]):
+                fsim[d] = likelihood.samples(fsim[d], Y_metadata=Y_metadata)
+        else:
+            fsim = likelihood.samples(fsim, Y_metadata=Y_metadata)
+        return fsim
 
     def input_sensitivity(self, summarize=True):
         """
@@ -696,21 +535,26 @@ class GP(Model):
         """
         return self.kern.input_sensitivity(summarize=summarize)
 
-    def optimize(self, optimizer=None, start=None, **kwargs):
+    def get_most_significant_input_dimensions(self, which_indices=None):
+        return self.kern.get_most_significant_input_dimensions(which_indices)
+
+    def optimize(self, optimizer=None, start=None, messages=False, max_iters=1000, ipython_notebook=True, clear_after_finish=False, **kwargs):
         """
         Optimize the model using self.log_likelihood and self.log_likelihood_gradient, as well as self.priors.
         kwargs are passed to the optimizer. They can be:
 
-        :param max_f_eval: maximum number of function evaluations
-        :type max_f_eval: int
+        :param max_iters: maximum number of function evaluations
+        :type max_iters: int
         :messages: whether to display during optimisation
         :type messages: bool
         :param optimizer: which optimizer to use (defaults to self.preferred optimizer), a range of optimisers can be found in :module:`~GPy.inference.optimization`, they include 'scg', 'lbfgs', 'tnc'.
         :type optimizer: string
+        :param bool ipython_notebook: whether to use ipython notebook widgets or not.
+        :param bool clear_after_finish: if in ipython notebook, we can clear the widgets after optimization.
         """
         self.inference_method.on_optimization_start()
         try:
-            super(GP, self).optimize(optimizer, start, **kwargs)
+            super(GP, self).optimize(optimizer, start, messages, max_iters, ipython_notebook, clear_after_finish, **kwargs)
         except KeyboardInterrupt:
             print("KeyboardInterrupt caught, calling on_optimization_end() to round things up")
             self.inference_method.on_optimization_end()

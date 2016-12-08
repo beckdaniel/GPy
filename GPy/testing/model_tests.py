@@ -22,6 +22,44 @@ class MiscTests(unittest.TestCase):
         self.assertTrue(m.checkgrad())
         m.predict(m.X)
 
+    def test_raw_predict_numerical_stability(self):
+        """
+        Test whether the predicted variance of normal GP goes negative under numerical unstable situation.
+        Thanks simbartonels@github for reporting the bug and providing the following example.
+        """
+
+        # set seed for reproducability
+        np.random.seed(3)
+        # Definition of the Branin test function
+        def branin(X):
+            y = (X[:,1]-5.1/(4*np.pi**2)*X[:,0]**2+5*X[:,0]/np.pi-6)**2
+            y += 10*(1-1/(8*np.pi))*np.cos(X[:,0])+10
+            return(y)
+        # Training set defined as a 5*5 grid:
+        xg1 = np.linspace(-5,10,5)
+        xg2 = np.linspace(0,15,5)
+        X = np.zeros((xg1.size * xg2.size,2))
+        for i,x1 in enumerate(xg1):
+            for j,x2 in enumerate(xg2):
+                X[i+xg1.size*j,:] = [x1,x2]
+        Y = branin(X)[:,None]
+        # Fit a GP
+        # Create an exponentiated quadratic plus bias covariance function
+        k = GPy.kern.RBF(input_dim=2, ARD = True)
+        # Build a GP model
+        m = GPy.models.GPRegression(X,Y,k)
+        # fix the noise variance
+        m.likelihood.variance.fix(1e-5)
+        # Randomize the model and optimize
+        m.randomize()
+        m.optimize()
+        # Compute the mean of model prediction on 1e5 Monte Carlo samples
+        Xp = np.random.uniform(size=(1e5,2))
+        Xp[:,0] = Xp[:,0]*15-5
+        Xp[:,1] = Xp[:,1]*15
+        _, var = m.predict(Xp)
+        self.assertTrue(np.all(var>=0.))
+
     def test_raw_predict(self):
         k = GPy.kern.RBF(1)
         m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
@@ -31,13 +69,13 @@ class MiscTests(unittest.TestCase):
         K_hat = k.K(self.X_new) - k.K(self.X_new, self.X).dot(Kinv).dot(k.K(self.X, self.X_new))
         mu_hat = k.K(self.X_new, self.X).dot(Kinv).dot(m.Y_normalized)
 
-        mu, covar = m._raw_predict(self.X_new, full_cov=True)
+        mu, covar = m.predict_noiseless(self.X_new, full_cov=True)
         self.assertEquals(mu.shape, (self.N_new, self.D))
         self.assertEquals(covar.shape, (self.N_new, self.N_new))
         np.testing.assert_almost_equal(K_hat, covar)
         np.testing.assert_almost_equal(mu_hat, mu)
 
-        mu, var = m._raw_predict(self.X_new)
+        mu, var = m.predict_noiseless(self.X_new)
         self.assertEquals(mu.shape, (self.N_new, self.D))
         self.assertEquals(var.shape, (self.N_new, 1))
         np.testing.assert_almost_equal(np.diag(K_hat)[:, None], var)
@@ -48,23 +86,37 @@ class MiscTests(unittest.TestCase):
         Y = self.Y
         mu, std = Y.mean(0), Y.std(0)
         m = GPy.models.GPRegression(self.X, Y, kernel=k, normalizer=True)
-        m.optimize()
+        m.optimize(messages=True)
         assert(m.checkgrad())
         k = GPy.kern.RBF(1)
         m2 = GPy.models.GPRegression(self.X, (Y-mu)/std, kernel=k, normalizer=False)
         m2[:] = m[:]
+        
         mu1, var1 = m.predict(m.X, full_cov=True)
         mu2, var2 = m2.predict(m2.X, full_cov=True)
         np.testing.assert_allclose(mu1, (mu2*std)+mu)
-        np.testing.assert_allclose(var1, var2)
+        np.testing.assert_allclose(var1, var2*std**2)
+        
         mu1, var1 = m.predict(m.X, full_cov=False)
         mu2, var2 = m2.predict(m2.X, full_cov=False)
+        
         np.testing.assert_allclose(mu1, (mu2*std)+mu)
-        np.testing.assert_allclose(var1, var2)
+        np.testing.assert_allclose(var1, var2*std**2)
 
         q50n = m.predict_quantiles(m.X, (50,))
         q50 = m2.predict_quantiles(m2.X, (50,))
+        
         np.testing.assert_allclose(q50n[0], (q50[0]*std)+mu)
+        
+        # Test variance component:
+        qs = np.array([2.5, 97.5])
+        # The quantiles get computed before unormalization
+        # And transformed using the mean transformation:
+        c = np.random.choice(self.X.shape[0])
+        q95 = m2.predict_quantiles(self.X[[c]], qs)
+        mu, var = m2.predict(self.X[[c]])
+        from scipy.stats import norm
+        np.testing.assert_allclose((mu+(norm.ppf(qs/100.)*np.sqrt(var))).flatten(), np.array(q95).flatten())
 
     def check_jacobian(self):
         try:
@@ -110,6 +162,28 @@ class MiscTests(unittest.TestCase):
         assert(gc.checkgrad())
         assert(gc2.checkgrad())
 
+    def test_predict_uncertain_inputs(self):
+        """ Projection of Gaussian through a linear function is still gaussian, and moments are analytical to compute, so we can check this case for predictions easily """
+        X = np.linspace(-5,5, 10)[:, None]
+        Y = 2*X + np.random.randn(*X.shape)*1e-3
+        m = GPy.models.BayesianGPLVM(Y, 1, X=X, kernel=GPy.kern.Linear(1), num_inducing=1)
+        m.Gaussian_noise[:] = 1e-4
+        m.X.mean[:] = X[:]
+        m.X.variance[:] = 1e-5
+        m.X.fix()
+        m.optimize()
+        X_pred_mu = np.random.randn(5, 1)
+        X_pred_var = np.random.rand(5, 1) + 1e-5
+        from GPy.core.parameterization.variational import NormalPosterior
+        X_pred = NormalPosterior(X_pred_mu, X_pred_var)
+        # mu = \int f(x)q(x|mu,S) dx = \int 2x.q(x|mu,S) dx = 2.mu
+        # S = \int (f(x) - m)^2q(x|mu,S) dx = \int f(x)^2 q(x) dx - mu**2 = 4(mu^2 + S) - (2.mu)^2 = 4S
+        Y_mu_true = 2*X_pred_mu
+        Y_var_true = 4*X_pred_var
+        Y_mu_pred, Y_var_pred = m.predict_noiseless(X_pred)
+        np.testing.assert_allclose(Y_mu_true, Y_mu_pred, rtol=1e-4)
+        np.testing.assert_allclose(Y_var_true, Y_var_pred, rtol=1e-4)
+
     def test_sparse_raw_predict(self):
         k = GPy.kern.RBF(1)
         m = GPy.models.SparseGPRegression(self.X, self.Y, kernel=k)
@@ -119,14 +193,15 @@ class MiscTests(unittest.TestCase):
         # Not easy to check if woodbury_inv is correct in itself as it requires a large derivation and expression
         Kinv = m.posterior.woodbury_inv
         K_hat = k.K(self.X_new) - k.K(self.X_new, Z).dot(Kinv).dot(k.K(Z, self.X_new))
+        K_hat = np.clip(K_hat, 1e-15, np.inf)
 
-        mu, covar = m._raw_predict(self.X_new, full_cov=True)
+        mu, covar = m.predict_noiseless(self.X_new, full_cov=True)
         self.assertEquals(mu.shape, (self.N_new, self.D))
         self.assertEquals(covar.shape, (self.N_new, self.N_new))
         np.testing.assert_almost_equal(K_hat, covar)
         # np.testing.assert_almost_equal(mu_hat, mu)
 
-        mu, var = m._raw_predict(self.X_new)
+        mu, var = m.predict_noiseless(self.X_new)
         self.assertEquals(mu.shape, (self.N_new, self.D))
         self.assertEquals(var.shape, (self.N_new, 1))
         np.testing.assert_almost_equal(np.diag(K_hat)[:, None], var)
@@ -289,6 +364,108 @@ class MiscTests(unittest.TestCase):
         m.optimize()
         print(m)
 
+    def test_warped_gp_identity(self):
+        """
+        A WarpedGP with the identity warping function should be
+        equal to a standard GP.
+        """
+        k = GPy.kern.RBF(1)
+        m = GPy.models.GPRegression(self.X, self.Y, kernel=k)
+        m.optimize()
+        preds = m.predict(self.X)
+
+        warp_k = GPy.kern.RBF(1)
+        warp_f = GPy.util.warping_functions.IdentityFunction(closed_inverse=False)
+        warp_m = GPy.models.WarpedGP(self.X, self.Y, kernel=warp_k, 
+                                     warping_function=warp_f)
+        warp_m.optimize()
+        warp_preds = warp_m.predict(self.X)
+
+        warp_k_exact = GPy.kern.RBF(1)
+        warp_f_exact = GPy.util.warping_functions.IdentityFunction()
+        warp_m_exact = GPy.models.WarpedGP(self.X, self.Y, kernel=warp_k_exact, 
+                                           warping_function=warp_f_exact)
+        warp_m_exact.optimize()
+        warp_preds_exact = warp_m_exact.predict(self.X)
+ 
+        np.testing.assert_almost_equal(preds, warp_preds, decimal=4)
+        np.testing.assert_almost_equal(preds, warp_preds_exact, decimal=4)
+
+    def test_warped_gp_log(self):
+        """
+        A WarpedGP with the log warping function should be
+        equal to a standard GP with log labels.
+        Note that we predict the median here.
+        """
+        k = GPy.kern.RBF(1)
+        Y = np.abs(self.Y)
+        logY = np.log(Y)
+        m = GPy.models.GPRegression(self.X, logY, kernel=k)
+        m.optimize()
+        preds = m.predict(self.X)[0]
+
+        warp_k = GPy.kern.RBF(1)
+        warp_f = GPy.util.warping_functions.LogFunction(closed_inverse=False)
+        warp_m = GPy.models.WarpedGP(self.X, Y, kernel=warp_k, 
+                                     warping_function=warp_f)
+        warp_m.optimize()
+        warp_preds = warp_m.predict(self.X, median=True)[0]
+
+        warp_k_exact = GPy.kern.RBF(1)
+        warp_f_exact = GPy.util.warping_functions.LogFunction()
+        warp_m_exact = GPy.models.WarpedGP(self.X, Y, kernel=warp_k_exact, 
+                                           warping_function=warp_f_exact)
+        warp_m_exact.optimize(messages=True)
+        warp_preds_exact = warp_m_exact.predict(self.X, median=True)[0]
+ 
+        np.testing.assert_almost_equal(np.exp(preds), warp_preds, decimal=4)
+        np.testing.assert_almost_equal(np.exp(preds), warp_preds_exact, decimal=4)
+
+    def test_warped_gp_cubic_sine(self, max_iters=100):
+        """
+        A test replicating the cubic sine regression problem from
+        Snelson's paper. This test doesn't have any assertions, it's
+        just to ensure coverage of the tanh warping function code.
+        """
+        X = (2 * np.pi) * np.random.random(151) - np.pi
+        Y = np.sin(X) + np.random.normal(0,0.2,151)
+        Y = np.array([np.power(abs(y),float(1)/3) * (1,-1)[y<0] for y in Y])
+        X = X[:, None]
+        Y = Y[:, None]
+
+        warp_m = GPy.models.WarpedGP(X, Y)#, kernel=warp_k)#, warping_function=warp_f)
+        warp_m['.*\.d'].constrain_fixed(1.0)
+        warp_m.optimize_restarts(parallel=False, robust=False, num_restarts=5, 
+                                 max_iters=max_iters)
+        warp_m.predict(X)
+        warp_m.predict_quantiles(X)
+        warp_m.log_predictive_density(X, Y)
+        warp_m.predict_in_warped_space = False
+        warp_m.plot()
+        warp_m.predict_in_warped_space = True
+        warp_m.plot()
+        
+    def test_offset_regression(self):
+        #Tests GPy.models.GPOffsetRegression. Using two small time series
+        #from a sine wave, we confirm the algorithm determines that the
+        #likelihood is maximised when the offset hyperparameter is approximately
+        #equal to the actual offset in X between the two time series.
+        offset = 3
+        X1 = np.arange(0,50,5.0)[:,None]
+        X2 = np.arange(0+offset,50+offset,5.0)[:,None]
+        X = np.vstack([X1,X2])
+        ind = np.vstack([np.zeros([10,1]),np.ones([10,1])])
+        X = np.hstack([X,ind])
+        Y = np.sin((X[0:10,0])/30.0)[:,None]
+        Y = np.vstack([Y,Y])
+
+        m = GPy.models.GPOffsetRegression(X,Y)
+        m.rbf.lengthscale=5.0 #make it something other than one to check our gradients properly!
+        assert m.checkgrad(), "Gradients of offset parameters don't match numerical approximations."
+        m.optimize()
+        assert np.abs(m.offset[0]-offset)<0.1, ("GPOffsetRegression model failing to estimate correct offset (value estimated = %0.2f instead of %0.2f)" % (m.offset[0], offset))
+
+
 class GradientTests(np.testing.TestCase):
     def setUp(self):
         ######################################
@@ -447,26 +624,35 @@ class GradientTests(np.testing.TestCase):
         rbflin = GPy.kern.RBF(2) + GPy.kern.Linear(2)
         self.check_model(rbflin, model_type='SparseGPRegression', dimension=2)
 
-    def test_SparseGPRegression_rbf_linear_white_kern_2D_uncertain_inputs(self):
+    def test_SparseGPRegression_rbf_white_kern_2D_uncertain_inputs(self):
         ''' Testing the sparse GP regression with rbf, linear kernel on 2d data with uncertain inputs'''
-        rbflin = GPy.kern.RBF(2) + GPy.kern.Linear(2)
-        raise unittest.SkipTest("This is not implemented yet!")
+        rbflin = GPy.kern.RBF(2) + GPy.kern.White(2)
         self.check_model(rbflin, model_type='SparseGPRegression', dimension=2, uncertain_inputs=1)
 
-    def test_SparseGPRegression_rbf_linear_white_kern_1D_uncertain_inputs(self):
+    def test_SparseGPRegression_rbf_white_kern_1D_uncertain_inputs(self):
         ''' Testing the sparse GP regression with rbf, linear kernel on 1d data with uncertain inputs'''
-        rbflin = GPy.kern.RBF(1) + GPy.kern.Linear(1)
-        raise unittest.SkipTest("This is not implemented yet!")
+        rbflin = GPy.kern.RBF(1) + GPy.kern.White(1)
         self.check_model(rbflin, model_type='SparseGPRegression', dimension=1, uncertain_inputs=1)
+
 
     def test_GPLVM_rbf_bias_white_kern_2D(self):
         """ Testing GPLVM with rbf + bias kernel """
         N, input_dim, D = 50, 1, 2
         X = np.random.rand(N, input_dim)
-        k = GPy.kern.RBF(input_dim, 0.5, 0.9 * np.ones((1,))) + GPy.kern.Bias(input_dim, 0.1) + GPy.kern.White(input_dim, 0.05)
+        k = GPy.kern.RBF(input_dim, 0.5, 0.9 * np.ones((1,))) + GPy.kern.Bias(input_dim, 0.1) + GPy.kern.White(input_dim, 0.05) + GPy.kern.Matern32(input_dim) + GPy.kern.Matern52(input_dim)
         K = k.K(X)
         Y = np.random.multivariate_normal(np.zeros(N), K, input_dim).T
         m = GPy.models.GPLVM(Y, input_dim, kernel=k)
+        self.assertTrue(m.checkgrad())
+
+    def test_SparseGPLVM_rbf_bias_white_kern_2D(self):
+        """ Testing GPLVM with rbf + bias kernel """
+        N, input_dim, D = 50, 1, 2
+        X = np.random.rand(N, input_dim)
+        k = GPy.kern.RBF(input_dim, 0.5, 0.9 * np.ones((1,))) + GPy.kern.Bias(input_dim, 0.1) + GPy.kern.White(input_dim, 0.05) + GPy.kern.Matern32(input_dim) + GPy.kern.Matern52(input_dim)
+        K = k.K(X)
+        Y = np.random.multivariate_normal(np.zeros(N), K, input_dim).T
+        m = GPy.models.SparseGPLVM(Y, input_dim, kernel=k)
         self.assertTrue(m.checkgrad())
 
     def test_BCGPLVM_rbf_bias_white_kern_2D(self):
@@ -505,6 +691,17 @@ class GradientTests(np.testing.TestCase):
         kernel = GPy.kern.RBF(1)
         m = GPy.models.SparseGPClassification(X, Y, kernel=kernel, Z=Z)
         self.assertTrue(m.checkgrad())
+
+    def test_sparse_EP_DTC_probit_uncertain_inputs(self):
+        N = 20
+        X = np.hstack([np.random.normal(5, 2, N / 2), np.random.normal(10, 2, N / 2)])[:, None]
+        Y = np.hstack([np.ones(N / 2), np.zeros(N / 2)])[:, None]
+        Z = np.linspace(0, 15, 4)[:, None]
+        X_var = np.random.uniform(0.1, 0.2, X.shape)
+        kernel = GPy.kern.RBF(1)
+        m = GPy.models.SparseGPClassificationUncertainInput(X, X_var, Y, kernel=kernel, Z=Z)
+        self.assertTrue(m.checkgrad())
+
 
     def test_multioutput_regression_1D(self):
         X1 = np.random.rand(50, 1) * 8
@@ -591,6 +788,7 @@ class GradientTests(np.testing.TestCase):
         self.assertTrue( np.allclose(var1, var2) )
 
     def test_gp_VGPC(self):
+        np.random.seed(10)
         num_obs = 25
         X = np.random.randint(0, 140, num_obs)
         X = X[:, None]
@@ -598,8 +796,23 @@ class GradientTests(np.testing.TestCase):
         kern = GPy.kern.Bias(1) + GPy.kern.RBF(1)
         lik = GPy.likelihoods.Gaussian()
         m = GPy.models.GPVariationalGaussianApproximation(X, Y, kernel=kern, likelihood=lik)
+        m.randomize()
         self.assertTrue(m.checkgrad())
 
+    def test_ssgplvm(self):
+        from GPy import kern
+        from GPy.models import SSGPLVM
+        from GPy.examples.dimensionality_reduction import _simulate_matern
+
+        np.random.seed(10)
+        D1, D2, D3, N, num_inducing, Q = 13, 5, 8, 45, 3, 9
+        _, _, Ylist = _simulate_matern(D1, D2, D3, N, num_inducing, False)
+        Y = Ylist[0]
+        k = kern.Linear(Q, ARD=True)  # + kern.white(Q, _np.exp(-2)) # + kern.bias(Q)
+        # k = kern.RBF(Q, ARD=True, lengthscale=10.)
+        m = SSGPLVM(Y, Q, init="rand", num_inducing=num_inducing, kernel=k, group_spike=True)
+        m.randomize()
+        self.assertTrue(m.checkgrad())
 
 if __name__ == "__main__":
     print("Running unit tests, please be (very) patient...")

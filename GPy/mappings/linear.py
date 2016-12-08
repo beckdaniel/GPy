@@ -25,7 +25,7 @@ class Linear(Mapping):
     """
 
     def __init__(self, input_dim, output_dim, name='linmap'):
-        Mapping.__init__(self, input_dim=input_dim, output_dim=output_dim, name=name)
+        super(Linear, self).__init__(input_dim=input_dim, output_dim=output_dim, name=name)
         self.A = Param('A', np.random.randn(self.input_dim, self.output_dim))
         self.link_parameter(self.A)
 
@@ -33,7 +33,7 @@ class Linear(Mapping):
         return np.dot(X, self.A)
 
     def update_gradients(self, dL_dF, X):
-        self.A.gradient = np.dot( X.T, dL_dF)
+        self.A.gradient = np.dot(X.T, dL_dF)
 
     def gradients_X(self, dL_dF, X):
         return np.dot(dL_dF, self.A.T)

@@ -1,27 +1,68 @@
-language: python
-python:
-  - "2.7"
+sudo: false
 
-# command to install dependencies, e.g. pip install -r requirements.txt --use-mirrors
+os:
+- osx
+- linux
+
+addons:
+  apt_packages:
+    - pandoc
+
+#cache:
+#  directories:
+#  - "$HOME/download/"
+#  - "$HOME/install/"
+
+env:
+  - PYTHON_VERSION=2.7
+  #- PYTHON_VERSION=3.3
+  - PYTHON_VERSION=3.4
+  - PYTHON_VERSION=3.5
+
 before_install:
-  #Install a mini version of anaconda such that we can easily install our dependencies
-  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
-  - chmod +x miniconda.sh
-  - ./miniconda.sh -b
-  - export PATH=/home/travis/miniconda/bin:$PATH
-  - conda update --yes conda
-  # Workaround for a permissions issue with Travis virtual machine images
-  # that breaks Python's multiprocessing:
-  # https://github.com/travis-ci/travis-cookbooks/issues/155
-  - sudo rm -rf /dev/shm
-  - sudo ln -s /run/shm /dev/shm
+- wget https://github.com/mzwiessele/travis_scripts/raw/master/download_miniconda.sh
+- wget https://github.com/mzwiessele/travis_scripts/raw/master/install_retry.sh
+- source download_miniconda.sh
+- echo $PATH
 
 install:
-  - conda install --yes python=$TRAVIS_PYTHON_VERSION atlas numpy=1.9 scipy=0.16 matplotlib nose sphinx pip nose
-  #- pip install . 
-  - python setup.py build_ext --inplace
-  #--use-mirrors
-  #
-# command to run tests, e.g. python setup.py test
-script: 
-  - nosetests GPy/testing
+- echo $PATH
+- source install_retry.sh
+- pip install codecov
+- pip install coveralls
+- pip install pypandoc
+- pip install git+git://github.com/BRML/climin.git
+- pip install autograd
+- pip install nose-show-skipped
+- python setup.py develop
+
+script:
+  - coverage run travis_tests.py
+
+after_success:
+  - codecov
+  - coveralls
+
+before_deploy:
+  - cd doc
+  - pip install sphinx_rtd_theme
+  - sphinx-apidoc -o source/ ../GPy
+  - make html
+  - cd ../
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]];
+    then
+      export DIST='sdist';
+    elif [[ "$TRAVIS_OS_NAME" == "osx" ]];
+    then
+      export DIST='bdist_wheel';
+    fi;
+
+deploy:
+  provider: pypi
+  user: maxz
+  password:
+    secure: "vMEOlP7DQhFJ7hQAKtKC5hrJXFl5BkUt4nXdosWWiw//Kg8E+PPLg88XPI2gqIosir9wwgtbSBBbbwCxkM6uxRNMpoNR8Ixyv9fmSXp4rLl7bbBY768W7IRXKIBjpuEy2brQjoT+CwDDSzUkckHvuUjJDNRvUv8ab4P/qYO1LG4="
+  on:
+    branch: deploy
+  distributions: $DIST
+  skip_cleanup: true

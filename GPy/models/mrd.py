@@ -5,17 +5,14 @@ import numpy as np
 import itertools, logging
 
 from ..kern import Kern
-from ..core.parameterization.variational import NormalPosterior, NormalPrior
-from ..core.parameterization import Param, Parameterized
-from ..core.parameterization.observable_array import ObsAr
+from ..core.parameterization.variational import NormalPrior
+from ..core.parameterization import Param
+from paramz import ObsAr
 from ..inference.latent_function_inference.var_dtc import VarDTC
 from ..inference.latent_function_inference import InferenceMethodList
 from ..likelihoods import Gaussian
 from ..util.initialization import initialize_latent
-from ..core.sparse_gp import SparseGP, GP
-from GPy.core.parameterization.variational import VariationalPosterior
-from GPy.models.bayesian_gplvm_minibatch import BayesianGPLVMMiniBatch
-from GPy.models.sparse_gp_minibatch import SparseGPMiniBatch
+from ..models.bayesian_gplvm_minibatch import BayesianGPLVMMiniBatch
 
 class MRD(BayesianGPLVMMiniBatch):
     """
@@ -130,8 +127,6 @@ class MRD(BayesianGPLVMMiniBatch):
 
         self.unlink_parameter(self.likelihood)
         self.unlink_parameter(self.kern)
-        del self.kern
-        del self.likelihood
 
         self.num_data = Ylist[0].shape[0]
         if isinstance(batchsize, int):
@@ -159,7 +154,11 @@ class MRD(BayesianGPLVMMiniBatch):
             self.link_parameter(spgp, i+2)
             self.bgplvms.append(spgp)
 
-        self.posterior = None
+        b = self.bgplvms[0]
+        self.posterior = b.posterior
+        self.kern = b.kern
+        self.likelihood = b.likelihood
+
         self.logger.info("init done")
 
     def parameters_changed(self):
@@ -170,7 +169,8 @@ class MRD(BayesianGPLVMMiniBatch):
             self._log_marginal_likelihood += b._log_marginal_likelihood
 
             self.logger.info('working on im <{}>'.format(hex(id(i))))
-            self.Z.gradient[:] += b.Z.gradient#full_values['Zgrad']
+            self.Z.gradient[:] += b._Zgrad  # b.Z.gradient  # full_values['Zgrad']
+
             #grad_dict = b.full_values
 
             if self.has_uncertain_inputs():
@@ -217,40 +217,6 @@ class MRD(BayesianGPLVMMiniBatch):
             Z = np.random.randn(self.num_inducing, self.input_dim) * X.var()
         return Z
 
-    def _handle_plotting(self, fignum, axes, plotf, sharex=False, sharey=False):
-        import matplotlib.pyplot as plt
-        if axes is None:
-            fig = plt.figure(num=fignum)
-        sharex_ax = None
-        sharey_ax = None
-        plots = []
-        for i, g in enumerate(self.bgplvms):
-            try:
-                if sharex:
-                    sharex_ax = ax # @UndefinedVariable
-                    sharex = False # dont set twice
-                if sharey:
-                    sharey_ax = ax # @UndefinedVariable
-                    sharey = False # dont set twice
-            except:
-                pass
-            if axes is None:
-                ax = fig.add_subplot(1, len(self.bgplvms), i + 1, sharex=sharex_ax, sharey=sharey_ax)
-            elif isinstance(axes, (tuple, list, np.ndarray)):
-                ax = axes[i]
-            else:
-                raise ValueError("Need one axes per latent dimension input_dim")
-            plots.append(plotf(i, g, ax))
-            if sharey_ax is not None:
-                plt.setp(ax.get_yticklabels(), visible=False)
-        plt.draw()
-        if axes is None:
-            try:
-                fig.tight_layout()
-            except:
-                pass
-        return plots
-
     def predict(self, Xnew, full_cov=False, Y_metadata=None, kern=None, Yindex=0):
         """
         Prediction for data set Yindex[default=0].
@@ -272,59 +238,50 @@ class MRD(BayesianGPLVMMiniBatch):
     #                                     sharex=sharex, sharey=sharey)
     #         return fig
 
-    def plot_scales(self, fignum=None, ax=None, titles=None, sharex=False, sharey=True, *args, **kwargs):
+    def plot_scales(self, titles=None, fig_kwargs={}, **kwargs):
         """
-
-        TODO: Explain other parameters
+        Plot input sensitivity for all datasets, to see which input dimensions are
+        significant for which dataset.
 
         :param titles: titles for axes of datasets
 
+        kwargs go into plot_ARD for each kernel.
         """
+        from ..plotting import plotting_library as pl
+
         if titles is None:
             titles = [r'${}$'.format(name) for name in self.names]
-        ymax = reduce(max, [np.ceil(max(g.kern.input_sensitivity())) for g in self.bgplvms])
-        def plotf(i, g, ax):
-            #ax.set_ylim([0,ymax])
-            return g.kern.plot_ARD(ax=ax, title=titles[i], *args, **kwargs)
-        fig = self._handle_plotting(fignum, ax, plotf, sharex=sharex, sharey=sharey)
-        return fig
+
+        M = len(self.bgplvms)
+        fig = pl().figure(rows=1, cols=M, **fig_kwargs)
+        for c in range(M):
+            canvas = self.bgplvms[c].kern.plot_ARD(title=titles[c], figure=fig, col=c+1, **kwargs)
+        return canvas
 
     def plot_latent(self, labels=None, which_indices=None,
-                resolution=50, ax=None, marker='o', s=40,
-                fignum=None, plot_inducing=True, legend=True,
+                resolution=60, legend=True,
                 plot_limits=None,
-                aspect='auto', updates=False, predict_kwargs={}, imshow_kwargs={}):
+                updates=False,
+                kern=None, marker='<>^vsd',
+                num_samples=1000, projection='2d',
+                predict_kwargs={},
+                scatter_kwargs=None, **imshow_kwargs):
         """
         see plotting.matplot_dep.dim_reduction_plots.plot_latent
         if predict_kwargs is None, will plot latent spaces for 0th dataset (and kernel), otherwise give
         predict_kwargs=dict(Yindex='index') for plotting only the latent space of dataset with 'index'.
         """
-        import sys
-        assert "matplotlib" in sys.modules, "matplotlib package has not been imported."
-        from matplotlib import pyplot as plt
-        from ..plotting.matplot_dep import dim_reduction_plots
+        from ..plotting.gpy_plot.latent_plots import plot_latent
+
         if "Yindex" not in predict_kwargs:
             predict_kwargs['Yindex'] = 0
 
         Yindex = predict_kwargs['Yindex']
-        if ax is None:
-            fig = plt.figure(num=fignum)
-            ax = fig.add_subplot(111)
-        else:
-            fig = ax.figure
+
         self.kern = self.bgplvms[Yindex].kern
         self.likelihood = self.bgplvms[Yindex].likelihood
-        plot = dim_reduction_plots.plot_latent(self, labels, which_indices,
-                                        resolution, ax, marker, s,
-                                        fignum, plot_inducing, legend,
-                                        plot_limits, aspect, updates, predict_kwargs, imshow_kwargs)
-        ax.set_title(self.bgplvms[Yindex].name)
-        try:
-            fig.tight_layout()
-        except:
-            pass
 
-        return plot
+        return plot_latent(self, labels, which_indices, resolution, legend, plot_limits, updates, kern, marker, num_samples, projection, scatter_kwargs)
 
     def __getstate__(self):
         state = super(MRD, self).__getstate__()
@@ -340,3 +297,60 @@ class MRD(BayesianGPLVMMiniBatch):
         self.kern = self.bgplvms[0].kern
         self.likelihood = self.bgplvms[0].likelihood
         self.parameters_changed()
+
+    def factorize_space(self, threshold=0.005, printOut=False, views=None):
+        """
+        Given a trained MRD model, this function looks at the optimized ARD weights (lengthscales)
+        and decides which part of the latent space is shared across views or private, according to a threshold.
+        The threshold is applied after all weights are normalized so that the maximum value is 1.
+        """
+        M = len(self.bgplvms)
+        if views is None:
+            # There are some small modifications needed to make this work for M > 2 (currently the code
+            # takes account of this, but it's not right there)
+            if M is not 2:
+                raise NotImplementedError("Not implemented for M > 2")
+            obsMod = [0]
+            infMod = 1
+        else:
+            obsMod = views[0]
+            infMod = views[1]
+
+        scObs = [None] * len(obsMod)
+        for i in range(0,len(obsMod)):
+            # WARNING: the [0] in the end assumes that the ARD kernel (if there's addition) is the 1st one
+            scObs[i] = np.atleast_2d(self.bgplvms[obsMod[i]].kern.input_sensitivity(summarize=False))[0]
+            # Normalise to have max 1
+            scObs[i] /= np.max(scObs[i])
+        scInf = np.atleast_2d(self.bgplvms[infMod].kern.input_sensitivity(summarize=False))[0]
+        scInf /= np.max(scInf)
+
+        retainedScales = [None]*(len(obsMod)+1)
+        for i in range(0,len(obsMod)):
+            retainedScales[obsMod[i]] = np.where(scObs[i] > threshold)[0]
+        retainedScales[infMod] = np.where(scInf > threshold)[0]
+
+        for i in range(len(retainedScales)):
+            retainedScales[i] = [k for k in retainedScales[i]] # Transform array to list
+
+        sharedDims = set(retainedScales[obsMod[0]]).intersection(set(retainedScales[infMod]))
+        for i in range(1,len(obsMod)):
+            sharedDims = sharedDims.intersection(set(retainedScales[obsMod[i]]))
+        privateDims = [None]*M
+        for i in range(0,len(retainedScales)):
+            privateDims[i] = set(retainedScales[i]).difference(sharedDims)
+            privateDims[i] = [k for k in privateDims[i]]        # Transform set to list
+        sharedDims = [k for k in sharedDims]                    # Transform set to list
+
+        sharedDims.sort()
+        for i in range(len(privateDims)):
+            privateDims[i].sort()
+
+        if printOut:
+            print('# Shared dimensions: ' + str(sharedDims))
+            for i in range(len(retainedScales)):
+                print('# Private dimensions model ' + str(i) + ':' + str(privateDims[i]))
+
+        return sharedDims, privateDims
+
+

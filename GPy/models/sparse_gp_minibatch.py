@@ -4,18 +4,15 @@
 from __future__ import print_function
 import numpy as np
 from ..core.parameterization.param import Param
+from GPy.core.parameterization.variational import VariationalPosterior
 from ..core.sparse_gp import SparseGP
 from ..core.gp import GP
 from ..inference.latent_function_inference import var_dtc
 from .. import likelihoods
-from ..core.parameterization.variational import VariationalPosterior
 
 import logging
-from GPy.inference.latent_function_inference.posterior import Posterior
-from GPy.inference.optimization.stochastics import SparseGPStochastics,\
-    SparseGPMissing
-#no stochastics.py file added! from GPy.inference.optimization.stochastics import SparseGPStochastics,\
-    #SparseGPMissing
+from ..inference.latent_function_inference.posterior import Posterior
+from ..inference.optimization.stochastics import SparseGPStochastics, SparseGPMissing
 logger = logging.getLogger("sparse gp")
 
 class SparseGPMiniBatch(SparseGP):
@@ -44,11 +41,12 @@ class SparseGPMiniBatch(SparseGP):
     def __init__(self, X, Y, Z, kernel, likelihood, inference_method=None,
                  name='sparse gp', Y_metadata=None, normalizer=False,
                  missing_data=False, stochastic=False, batchsize=1):
+        self._update_stochastics = False
 
         # pick a sensible inference method
         if inference_method is None:
             if isinstance(likelihood, likelihoods.Gaussian):
-                inference_method = var_dtc.VarDTC(limit=1 if not missing_data else Y.shape[1])
+                inference_method = var_dtc.VarDTC(limit=3 if not missing_data else Y.shape[1])
             else:
                 #inference_method = ??
                 raise NotImplementedError("what to do what to do?")
@@ -76,7 +74,14 @@ class SparseGPMiniBatch(SparseGP):
         logger.info("Adding Z as parameter")
         self.link_parameter(self.Z, index=0)
         self.posterior = None
-
+        
+    def optimize(self, optimizer=None, start=None, **kwargs):
+        try:
+            self._update_stochastics = True
+            SparseGP.optimize(self, optimizer=optimizer, start=start, **kwargs)
+        finally:
+            self._update_stochastics = False
+            
     def has_uncertain_inputs(self):
         return isinstance(self.X, VariationalPosterior)
 
@@ -99,13 +104,8 @@ class SparseGPMiniBatch(SparseGP):
         like them into this dictionary for inner use of the indices inside the
         algorithm.
         """
-        if psi2 is None:
-            psi2_sum_n = None
-        else:
-            psi2_sum_n = psi2.sum(axis=0)
-        posterior, log_marginal_likelihood, grad_dict = self.inference_method.inference(kern, X, Z, likelihood, Y, Y_metadata, Lm=Lm,
-                                                                                        dL_dKmm=dL_dKmm, psi0=psi0, psi1=psi1, psi2=psi2_sum_n, **kwargs)
-        return posterior, log_marginal_likelihood, grad_dict
+        return self.inference_method.inference(kern, X, Z, likelihood, Y, Y_metadata, Lm=Lm,
+                                               dL_dKmm=dL_dKmm, psi0=psi0, psi1=psi1, psi2=psi2, **kwargs)
 
     def _inner_take_over_or_update(self, full_values=None, current_values=None, value_indices=None):
         """
@@ -234,16 +234,16 @@ class SparseGPMiniBatch(SparseGP):
             woodbury_inv = self.posterior._woodbury_inv
             woodbury_vector = self.posterior._woodbury_vector
 
-        if not self.stochastics:
-            m_f = lambda i: "Inference with missing_data: {: >7.2%}".format(float(i+1)/self.output_dim)
-            message = m_f(-1)
-            print(message, end=' ')
+        #if not self.stochastics:
+        #    m_f = lambda i: "Inference with missing_data: {: >7.2%}".format(float(i+1)/self.output_dim)
+        #    message = m_f(-1)
+        #    print(message, end=' ')
 
         for d, ninan in self.stochastics.d:
-            if not self.stochastics:
-                print(' '*(len(message)) + '\r', end=' ')
-                message = m_f(d)
-                print(message, end=' ')
+            #if not self.stochastics:
+            #    print(' '*(len(message)) + '\r', end=' ')
+            #    message = m_f(d)
+            #    print(message, end=' ')
 
             psi0ni = self.psi0[ninan]
             psi1ni = self.psi1[ninan]
@@ -270,8 +270,8 @@ class SparseGPMiniBatch(SparseGP):
             woodbury_vector[:, d] = posterior.woodbury_vector
             self._log_marginal_likelihood += log_marginal_likelihood
 
-        if not self.stochastics:
-            print('')
+        #if not self.stochastics:
+        #    print('')
 
         if self.posterior is None:
             self.posterior = Posterior(woodbury_inv=woodbury_inv, woodbury_vector=woodbury_vector,
@@ -322,7 +322,10 @@ class SparseGPMiniBatch(SparseGP):
         if self.missing_data:
             self._outer_loop_for_missing_data()
         elif self.stochastics:
+            if self._update_stochastics:
+                self.stochastics.do_stochastics()
             self._outer_loop_without_missing_data()
         else:
             self.posterior, self._log_marginal_likelihood, self.grad_dict = self._inner_parameters_changed(self.kern, self.X, self.Z, self.likelihood, self.Y_normalized, self.Y_metadata)
             self._outer_values_update(self.grad_dict)
+        self._Zgrad = self.Z.gradient.copy()

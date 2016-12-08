@@ -22,24 +22,25 @@ class Test(unittest.TestCase):
 
     def test_setxy_bgplvm(self):
         k = GPy.kern.RBF(1)
-        m = GPy.models.BayesianGPLVM(self.Y, 2, kernel=k)
+        m = GPy.models.BayesianGPLVM(self.Y, 1, kernel=k)
         mu, var = m.predict(m.X)
-        X = m.X.copy()
+        X = m.X
         Xnew = NormalPosterior(m.X.mean[:10].copy(), m.X.variance[:10].copy())
-        m.set_XY(Xnew, m.Y[:10])
+        m.set_XY(Xnew, m.Y[:10].copy())
         assert(m.checkgrad())
         m.set_XY(X, self.Y)
         mu2, var2 = m.predict(m.X)
         np.testing.assert_allclose(mu, mu2)
         np.testing.assert_allclose(var, var2)
+        
 
     def test_setxy_gplvm(self):
         k = GPy.kern.RBF(1)
-        m = GPy.models.GPLVM(self.Y, 2, kernel=k)
+        m = GPy.models.GPLVM(self.Y, 1, kernel=k)
         mu, var = m.predict(m.X)
         X = m.X.copy()
         Xnew = X[:10].copy()
-        m.set_XY(Xnew, m.Y[:10])
+        m.set_XY(Xnew, m.Y[:10].copy())
         assert(m.checkgrad())
         m.set_XY(X, self.Y)
         mu2, var2 = m.predict(m.X)
