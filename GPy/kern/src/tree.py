@@ -92,8 +92,8 @@ class SymbolAwareSubsetTreeKernel(Kern):
         super(SymbolAwareSubsetTreeKernel, self).__init__(1, active_dims, 'sasstk')
         self.normalize = normalize
         # SASST will be parallel by default.
-        self._lambda = Param('lambda', _lambda)
-        self._sigma = Param('sigma', _sigma)
+        self._lambda = Param('lambda', _lambda, Logexp())
+        self._sigma = Param('sigma', _sigma, Logexp())
         self.link_parameters(self._lambda, self._sigma)
         self.kernel = cy_sa_tree.SymbolAwareSubsetTreeKernel(_lambda, _sigma, lambda_buckets, sigma_buckets,
                                                              normalize, num_threads=num_threads, parallel=parallel,
